@@ -9,50 +9,49 @@ export async function GET(req: NextRequest) {
   const periode = req.nextUrl.searchParams.get('periode') ?? '30d';
   const jours   = periode === '7d' ? 7 : periode === '90d' ? 90 : 30;
 
-  
+  // Paramétrisé : $1 = intervalle courant (ex: '30 days'), $2 = intervalle double (ex: '60 days')
+  const intervalCur  = `${jours} days`;
+  const intervalPrev = `${jours * 2} days`;
 
   const [visitesRow, visitesPrevRow, leadsRow, leadsPrevRow, emailsRow, topPagesRow, serieVisitesRow, serieLeadsRow] =
     await Promise.all([
-      // Visites période courante
       db(`SELECT COUNT(*)::int AS visites, COUNT(DISTINCT visitor_hash)::int AS visiteurs_uniques
-          FROM page_views WHERE created_at >= NOW() - INTERVAL '${jours} days'`),
+          FROM page_views WHERE created_at >= NOW() - $1::interval`, [intervalCur]),
 
-      // Visites période précédente
       db(`SELECT COUNT(*)::int AS visites, COUNT(DISTINCT visitor_hash)::int AS visiteurs_uniques
           FROM page_views
-          WHERE created_at >= NOW() - INTERVAL '${jours * 2} days'
-            AND created_at  < NOW() - INTERVAL '${jours} days'`),
+          WHERE created_at >= NOW() - $1::interval AND created_at < NOW() - $2::interval`,
+        [intervalPrev, intervalCur]),
 
-      // Leads courants
-      db(`SELECT COUNT(*)::int AS total FROM submissions WHERE created_at >= NOW() - INTERVAL '${jours} days'`),
+      db(`SELECT COUNT(*)::int AS total FROM submissions WHERE created_at >= NOW() - $1::interval`,
+        [intervalCur]),
 
-      // Leads précédents
       db(`SELECT COUNT(*)::int AS total FROM submissions
-          WHERE created_at >= NOW() - INTERVAL '${jours * 2} days'
-            AND created_at  < NOW() - INTERVAL '${jours} days'`),
+          WHERE created_at >= NOW() - $1::interval AND created_at < NOW() - $2::interval`,
+        [intervalPrev, intervalCur]),
 
-      // Emails ouverts
       db(`SELECT COUNT(*)::int AS total FROM email_logs
-          WHERE statut IN ('opened','clicked') AND created_at >= NOW() - INTERVAL '${jours} days'`),
+          WHERE statut IN ('opened','clicked') AND created_at >= NOW() - $1::interval`,
+        [intervalCur]),
 
-      // Top pages
       db(`SELECT url_path, COUNT(*)::int AS vues FROM page_views
-          WHERE created_at >= NOW() - INTERVAL '${jours} days'
-          GROUP BY url_path ORDER BY vues DESC LIMIT 10`),
+          WHERE created_at >= NOW() - $1::interval
+          GROUP BY url_path ORDER BY vues DESC LIMIT 10`,
+        [intervalCur]),
 
-      // Série visites par jour
-      db(`SELECT DATE(created_at) AS date, COUNT(*)::int AS visites, COUNT(DISTINCT visitor_hash)::int AS visiteurs
-          FROM page_views WHERE created_at >= NOW() - INTERVAL '${jours} days'
-          GROUP BY DATE(created_at) ORDER BY date ASC`),
+      db(`SELECT DATE(created_at)::text AS date, COUNT(*)::int AS visites, COUNT(DISTINCT visitor_hash)::int AS visiteurs
+          FROM page_views WHERE created_at >= NOW() - $1::interval
+          GROUP BY DATE(created_at) ORDER BY date ASC`,
+        [intervalCur]),
 
-      // Série leads par semaine
       db(`SELECT TO_CHAR(DATE_TRUNC('week', created_at), 'YYYY-"W"IW') AS semaine, COUNT(*)::int AS leads
-          FROM submissions WHERE created_at >= NOW() - INTERVAL '${jours} days'
-          GROUP BY DATE_TRUNC('week', created_at) ORDER BY DATE_TRUNC('week', created_at) ASC`),
+          FROM submissions WHERE created_at >= NOW() - $1::interval
+          GROUP BY DATE_TRUNC('week', created_at) ORDER BY DATE_TRUNC('week', created_at) ASC`,
+        [intervalCur]),
     ]);
 
-  const v  = (visitesRow[0]     as { visites: number; visiteurs_uniques: number });
-  const vp = (visitesPrevRow[0] as { visites: number; visiteurs_uniques: number });
+  const v  = visitesRow[0]     as { visites: number; visiteurs_uniques: number };
+  const vp = visitesPrevRow[0] as { visites: number; visiteurs_uniques: number };
   const l  = (leadsRow[0]       as { total: number }).total;
   const lp = (leadsPrevRow[0]   as { total: number }).total;
 

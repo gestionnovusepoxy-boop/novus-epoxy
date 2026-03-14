@@ -48,17 +48,6 @@ export async function POST(req: NextRequest) {
   return new NextResponse(null, { status: 204 });
 }
 
-// Autoriser les requêtes cross-origin depuis novusepoxy.ca
-export async function OPTIONS() {
-  return new NextResponse(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin':  'https://novusepoxy.ca',
-      'Access-Control-Allow-Methods': 'POST',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    },
-  });
-}
 
 async function sha256(str: string): Promise<string> {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
