@@ -1,6 +1,13 @@
 {
   "headers": [
     {
+      "source": "/tracker.js",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Cache-Control", "value": "public, max-age=3600" }
+      ]
+    },
+    {
       "source": "/api/track",
       "headers": [
         { "key": "Access-Control-Allow-Origin",  "value": "https://novusepoxy.ca" },
