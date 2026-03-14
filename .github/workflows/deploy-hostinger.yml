@@ -1,0 +1,31 @@
+name: Deploy PHP vers Hostinger
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'hostinger/**'
+      - 'database/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Déployer via FTP
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server:    ${{ secrets.FTP_SERVER }}
+          username:  ${{ secrets.FTP_USERNAME }}
+          password:  ${{ secrets.FTP_PASSWORD }}
+          local-dir: ./hostinger/
+          server-dir: ${{ secrets.FTP_REMOTE_DIR || '/public_html/api-novus/' }}
+          exclude: |
+            **/.git*
+            **/.env
+            **/node_modules/**

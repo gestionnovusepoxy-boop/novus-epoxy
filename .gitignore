@@ -1,0 +1,13 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Next.js
+dashboard/.next/
+dashboard/out/
+dashboard/node_modules/
+
+# Misc
+.DS_Store
+*.log
