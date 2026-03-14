@@ -1,0 +1,45 @@
+name: Claude Maintenance
+
+on:
+  schedule:
+    - cron: '0 3 * * 1'  # Every Monday at 3am UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  id-token: write
+
+jobs:
+  maintenance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: hashFiles('package.json') != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+
+      - name: Install dependencies
+        if: hashFiles('package.json') != ''
+        run: npm ci
+
+      - name: Run npm audit
+        if: hashFiles('package.json') != ''
+        run: npm audit --json > audit-report.json 2>/dev/null || true
+
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            Perform a weekly maintenance review for the novus-epoxy project:
+
+            1. **Dependencies**: Check package.json (if present) for outdated or vulnerable dependencies. If audit-report.json exists, summarize security findings.
+            2. **Stale issues**: List open GitHub issues older than 30 days that have no recent activity and suggest closing or prioritizing them.
+            3. **TODOs**: Search the codebase for TODO/FIXME/HACK comments and create a summary issue if there are more than 5 unresolved ones.
+            4. **General health**: Report on overall repository health.
+
+            Create a GitHub issue titled "Weekly Maintenance Report - [date]" with your findings.

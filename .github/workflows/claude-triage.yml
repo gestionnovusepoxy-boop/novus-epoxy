@@ -1,0 +1,36 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  id-token: write
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          direct_prompt: |
+            Triage this new GitHub issue for the novus-epoxy project.
+
+            Your tasks:
+            1. **Label** the issue with the most appropriate label(s):
+               - Type: `bug`, `enhancement`, `question`, `documentation`
+               - Component: `frontend`, `backend`, `database`, `ci`, `deps`
+            2. **Assign priority**:
+               - `P0` — Critical: production broken, data loss, security vulnerability
+               - `P1` — High: major feature broken, significant user impact
+               - `P2` — Medium: minor feature issue, workaround available
+               - `P3` — Low: cosmetic, nice-to-have, future improvement
+            3. **Add a triage comment** explaining:
+               - The priority assigned and why
+               - Suggested next steps
+               - Any clarifying questions if the issue is unclear
+
+            Be concise and helpful. If the issue is a duplicate, say so.
