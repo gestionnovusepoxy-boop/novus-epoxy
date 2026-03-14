@@ -1,0 +1,12 @@
+{
+  "headers": [
+    {
+      "source": "/api/track",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin",  "value": "https://novusepoxy.ca" },
+        { "key": "Access-Control-Allow-Methods", "value": "POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" }
+      ]
+    }
+  ]
+}

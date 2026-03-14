@@ -1,12 +1,11 @@
 (function () {
   'use strict';
 
-  var ENDPOINT = 'https://novusepoxy.ca/api/track.php';
+  // Pointe vers le dashboard Vercel (pas Hostinger)
+  var ENDPOINT = 'https://novus-epoxy.vercel.app/api/track';
 
-  // Durée de visite
-  var startTime = Date.now();
-  var hidden = false;
-  var hiddenAt = 0;
+  var startTime  = Date.now();
+  var hiddenAt   = 0;
   var totalHidden = 0;
 
   function getDuration() {
@@ -22,55 +21,30 @@
     }
   }
 
-  // Pageview initial
-  send({
-    type: 'pageview',
-    path: location.pathname,
-    referrer: document.referrer || null,
-  });
+  send({ type: 'pageview', path: location.pathname, referrer: document.referrer || null });
 
-  // Durée de visite à la fermeture
   document.addEventListener('visibilitychange', function () {
     if (document.hidden) {
-      hidden = true;
       hiddenAt = Date.now();
-    } else {
-      if (hidden) {
-        totalHidden += Date.now() - hiddenAt;
-        hidden = false;
-      }
+    } else if (hiddenAt) {
+      totalHidden += Date.now() - hiddenAt;
+      hiddenAt = 0;
     }
   });
 
   window.addEventListener('beforeunload', function () {
-    send({
-      type: 'pageview',
-      path: location.pathname,
-      duration: getDuration(),
-    });
+    send({ type: 'pageview', path: location.pathname, duration: getDuration() });
   });
 
-  // Tracking d'événements via [data-track] attributes
   document.addEventListener('click', function (e) {
     var el = e.target.closest('[data-track]');
     if (!el) return;
-    send({
-      type: 'event',
-      name: el.getAttribute('data-track'),
-      path: location.pathname,
-      value: el.getAttribute('data-track-value') || null,
-    });
+    send({ type: 'event', name: el.getAttribute('data-track'), path: location.pathname, value: el.getAttribute('data-track-value') || null });
   });
 
-  // API publique
   window.NovusTrack = {
     event: function (name, value) {
-      send({
-        type: 'event',
-        name: name,
-        path: location.pathname,
-        value: value || null,
-      });
+      send({ type: 'event', name: name, path: location.pathname, value: value || null });
     },
   };
 })();
