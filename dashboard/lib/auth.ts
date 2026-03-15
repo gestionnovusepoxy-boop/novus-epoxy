@@ -1,21 +1,30 @@
 import NextAuth from 'next-auth';
-import Resend from 'next-auth/providers/resend';
+import Credentials from 'next-auth/providers/credentials';
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    Resend({
-      apiKey: process.env.RESEND_API_KEY,
-      from:   process.env.EMAIL_FROM ?? 'dashboard@novusepoxy.ca',
+    Credentials({
+      name: 'Connexion',
+      credentials: {
+        email:    { label: 'Courriel',    type: 'email' },
+        password: { label: 'Mot de passe', type: 'password' },
+      },
+      async authorize(credentials) {
+        const email = (credentials?.email as string)?.toLowerCase().trim();
+        const password = credentials?.password as string;
+        const adminEmail = process.env.ADMIN_EMAIL?.toLowerCase().trim();
+        const adminPassword = process.env.ADMIN_PASSWORD;
+
+        if (!email || !password || !adminEmail || !adminPassword) return null;
+        if (email !== adminEmail || password !== adminPassword) return null;
+
+        return { id: '1', email: adminEmail, name: 'Admin' };
+      },
     }),
   ],
-  callbacks: {
-    async signIn({ user }) {
-      // Un seul admin autorisé
-      return user.email === process.env.ADMIN_EMAIL;
-    },
-  },
+  session: { strategy: 'jwt' },
+  trustHost: true,
   pages: {
-    signIn:  '/auth/signin',
-    error:   '/auth/signin',
+    signIn: '/auth/signin',
   },
 });
