@@ -18,9 +18,29 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ error: 'Verification failed' }, { status: 403 });
 }
 
+// Verify Meta webhook signature (X-Hub-Signature-256)
+function verifyMetaSignature(payload: string, signature: string | null): boolean {
+  const appSecret = process.env.META_APP_SECRET;
+  if (!appSecret) return true; // Skip verification if secret not configured
+  if (!signature) return false;
+
+  const crypto = require('crypto');
+  const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(payload).digest('hex');
+  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+}
+
 // POST — Receive events from Meta (leadgen + messaging)
 export async function POST(req: NextRequest) {
-  const body = await req.json();
+  const rawBody = await req.text();
+
+  // Verify signature if META_APP_SECRET is configured
+  const signature = req.headers.get('x-hub-signature-256');
+  if (!verifyMetaSignature(rawBody, signature)) {
+    console.error('Meta webhook signature verification failed');
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
+  }
+
+  const body = JSON.parse(rawBody);
 
   if (body.object === 'page') {
     for (const entry of body.entry ?? []) {
@@ -182,7 +202,7 @@ async function handleMessengerMessage(event: Record<string, unknown>) {
           }
         }
       }
-    } catch { /* profile fetch failed */ }
+    } catch (err) { console.error('Failed to fetch Messenger profile:', err); }
   }
 
   // Process message through agent

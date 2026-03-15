@@ -92,6 +92,24 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Auth — rate limit login attempts (5/min per IP)
+  if (pathname.startsWith('/api/auth') && req.method === 'POST') {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    if (isRateLimited(`auth:${ip}`, 5, 60_000)) {
+      return NextResponse.json({ error: 'Trop de tentatives' }, { status: 429 });
+    }
+    return NextResponse.next();
+  }
+
+  // OpenClaw webhook (Telegram/Nova bot)
+  if (pathname === '/api/openclaw/webhook' && req.method === 'POST') {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    if (isRateLimited(`openclaw:${ip}`, 60, 60_000)) {
+      return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+    }
+    return NextResponse.next();
+  }
+
   // Meta webhook
   if (pathname === '/api/meta/webhook') {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
@@ -105,5 +123,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/chat', '/api/chat/history', '/api/chat/email'],
+  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/email', '/api/auth/:path*'],
 };

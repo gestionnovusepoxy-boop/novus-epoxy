@@ -3,10 +3,12 @@
 .env.local
 .env.*.local
 
+# Dependencies
+node_modules/
+
 # Next.js
 dashboard/.next/
 dashboard/out/
-dashboard/node_modules/
 
 # Misc
 .DS_Store

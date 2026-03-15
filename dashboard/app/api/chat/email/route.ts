@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
             </div>`,
         }),
       });
-    } catch { /* email send failed */ }
+    } catch (err) { console.error('Failed to send email reply:', err); }
   }
 
   return NextResponse.json({ reply, conversation_id: conversationId });

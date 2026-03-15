@@ -51,13 +51,13 @@ IMPORTANT:
 
 interface ConversationContext {
   conversationId: number;
-  channel: 'web' | 'messenger' | 'email';
+  channel: 'web' | 'messenger' | 'email' | 'telegram';
   visitorId: string;
 }
 
 // Get or create a conversation
 export async function getOrCreateConversation(
-  channel: 'web' | 'messenger' | 'email',
+  channel: 'web' | 'messenger' | 'email' | 'telegram',
   visitorId: string
 ): Promise<number> {
   // Check for existing active conversation
@@ -210,7 +210,7 @@ async function createQuoteFromConversation(conversationId: number, data: {
             </div>`,
         }),
       });
-    } catch { /* notification failed */ }
+    } catch (err) { console.error('Failed to send admin notification email:', err); }
   }
 
   return { quoteId, total: calc.total, depot: calc.depot_requis };
@@ -279,8 +279,8 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
       if (result) {
         responseText += `\n\nMerci! Votre soumission a ete preparee. Notre equipe va la verifier et vous l'envoyer par email a ${quoteData.email} tres bientot.`;
       }
-    } catch {
-      // JSON parse failed — continue with text response
+    } catch (err) {
+      console.error('Failed to parse quote data from agent response:', err);
     }
   }
 
