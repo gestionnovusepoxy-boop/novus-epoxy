@@ -96,3 +96,64 @@ export async function updateSubmissionStatus(id: number, statut: Submission['sta
     body:   JSON.stringify({ statut }),
   });
 }
+
+// --- Devis (Quotes) ---
+
+export type QuoteStatut = 'brouillon' | 'en_attente' | 'approuve' | 'envoye' | 'depot_paye' | 'planifie' | 'complete' | 'refuse';
+export type ServiceType = 'flake' | 'metallique' | 'commercial';
+
+export interface Quote {
+  id:              number;
+  client_nom:      string;
+  client_email:    string;
+  client_tel:      string | null;
+  client_adresse:  string | null;
+  type_service:    ServiceType;
+  superficie:      number;
+  etat_plancher:   string | null;
+  notes:           string | null;
+  prix_pied_carre: number;
+  sous_total:      number;
+  tps:             number;
+  tvq:             number;
+  total:           number;
+  depot_requis:    number;
+  statut:          QuoteStatut;
+  submission_id:   number | null;
+  approved_at:     string | null;
+  sent_at:         string | null;
+  paid_at:         string | null;
+  created_at:      string;
+  updated_at:      string;
+}
+
+export function fetchQuotes(params: {
+  page?: number; limit?: number; statut?: string; search?: string;
+}): Promise<PaginatedResponse<Quote>> {
+  const qs = new URLSearchParams();
+  if (params.page)   qs.set('page',   String(params.page));
+  if (params.limit)  qs.set('limit',  String(params.limit));
+  if (params.statut) qs.set('statut', params.statut);
+  if (params.search) qs.set('search', params.search);
+  return apiFetch(`/api/quotes?${qs}`);
+}
+
+export function fetchQuote(id: number): Promise<Quote> {
+  return apiFetch(`/api/quotes/${id}`);
+}
+
+export async function createQuote(data: {
+  client_nom: string; client_email: string; client_tel?: string; client_adresse?: string;
+  type_service: ServiceType; superficie: number; etat_plancher?: string; notes?: string;
+  submission_id?: number;
+}): Promise<Quote> {
+  return apiFetch('/api/quotes', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateQuote(id: number, data: Partial<Quote>): Promise<Quote> {
+  return apiFetch(`/api/quotes/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+}
+
+export async function sendQuote(id: number): Promise<{ success: boolean; email_id: string }> {
+  return apiFetch(`/api/quotes/${id}/send`, { method: 'POST' });
+}

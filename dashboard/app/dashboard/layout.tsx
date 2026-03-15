@@ -18,10 +18,17 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
         <nav className="flex-1 p-4 space-y-1">
           {[
-            { href: '/dashboard',             label: 'Vue d\'ensemble', icon: '📊' },
-            { href: '/dashboard/soumissions', label: 'Soumissions',     icon: '📋' },
-            { href: '/dashboard/emails',      label: 'Emails',          icon: '📧' },
-            { href: '/dashboard/stats',       label: 'Statistiques',    icon: '📈' },
+            { href: '/dashboard',              label: 'Vue d\'ensemble', icon: '📊' },
+            { href: '/dashboard/devis',        label: 'Devis',           icon: '📝' },
+            { href: '/dashboard/factures',     label: 'Factures',        icon: '🧾' },
+            { href: '/dashboard/clients',      label: 'Clients',         icon: '👥' },
+            { href: '/dashboard/depenses',      label: 'Dépenses',        icon: '💳' },
+            { href: '/dashboard/comptabilite', label: 'Comptabilité',    icon: '💰' },
+            { href: '/dashboard/banque',       label: 'Banque',          icon: '🏦' },
+            { href: '/dashboard/conversations', label: 'Agent IA',        icon: '🤖' },
+            { href: '/dashboard/soumissions',  label: 'Soumissions',     icon: '📋' },
+            { href: '/dashboard/emails',       label: 'Emails',          icon: '📧' },
+            { href: '/dashboard/stats',        label: 'Statistiques',    icon: '📈' },
           ].map(({ href, label, icon }) => (
             <Link
               key={href}

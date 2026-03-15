@@ -78,3 +78,39 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS idx_events_type    ON events(type);
 CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
+
+-- ----
+
+CREATE TABLE IF NOT EXISTS quotes (
+  id              SERIAL PRIMARY KEY,
+  client_nom      VARCHAR(120) NOT NULL,
+  client_email    VARCHAR(255) NOT NULL,
+  client_tel      VARCHAR(30),
+  client_adresse  TEXT,
+  type_service    VARCHAR(40) NOT NULL CHECK (type_service IN ('flake','metallique','commercial')),
+  superficie      NUMERIC(10,2) NOT NULL,
+  etat_plancher   TEXT,
+  notes           TEXT,
+  prix_pied_carre NUMERIC(6,2) NOT NULL,
+  sous_total      NUMERIC(10,2) NOT NULL,
+  tps             NUMERIC(10,2) NOT NULL,
+  tvq             NUMERIC(10,2) NOT NULL,
+  total           NUMERIC(10,2) NOT NULL,
+  depot_requis    NUMERIC(10,2) NOT NULL,
+  statut          VARCHAR(20) NOT NULL DEFAULT 'brouillon'
+                    CHECK (statut IN ('brouillon','en_attente','approuve','envoye','depot_paye','planifie','complete','refuse')),
+  submission_id   INT REFERENCES submissions(id) ON DELETE SET NULL,
+  approved_at     TIMESTAMPTZ,
+  sent_at         TIMESTAMPTZ,
+  paid_at         TIMESTAMPTZ,
+  created_at      TIMESTAMPTZ DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_quotes_statut  ON quotes(statut);
+CREATE INDEX IF NOT EXISTS idx_quotes_created ON quotes(created_at);
+CREATE INDEX IF NOT EXISTS idx_quotes_email   ON quotes(client_email);
+
+CREATE OR REPLACE TRIGGER trg_quotes_updated_at
+  BEFORE UPDATE ON quotes
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();

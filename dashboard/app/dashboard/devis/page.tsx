@@ -1,0 +1,176 @@
+'use client';
+
+import { useState, useCallback } from 'react';
+import Link from 'next/link';
+import { PollingProvider } from '@/components/polling-provider';
+import { fetchQuotes, updateQuote, type Quote, type QuoteStatut } from '@/lib/api';
+import { formatDate } from '@/lib/utils';
+import { formatMoney } from '@/lib/pricing';
+
+const STATUTS: QuoteStatut[] = ['brouillon', 'en_attente', 'approuve', 'envoye', 'depot_paye', 'planifie', 'complete', 'refuse'];
+
+const BADGE: Record<QuoteStatut, string> = {
+  brouillon:  'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  en_attente: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  approuve:   'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  envoye:     'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  depot_paye: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  planifie:   'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  complete:   'bg-green-500/20 text-green-300 border-green-500/30',
+  refuse:     'bg-red-500/20 text-red-300 border-red-500/30',
+};
+
+const LABEL: Record<QuoteStatut, string> = {
+  brouillon:  'Brouillon',
+  en_attente: 'En attente',
+  approuve:   'Approuvé',
+  envoye:     'Envoyé',
+  depot_paye: 'Dépôt payé',
+  planifie:   'Planifié',
+  complete:   'Complété',
+  refuse:     'Refusé',
+};
+
+const SERVICE_LABEL: Record<string, string> = {
+  flake: 'Flocon',
+  metallique: 'Métallique',
+  commercial: 'Commercial',
+};
+
+function QuoteRow({ q, onUpdate }: { q: Quote; onUpdate: () => void }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleStatut(statut: QuoteStatut) {
+    setLoading(true);
+    await updateQuote(q.id, { statut });
+    onUpdate();
+    setLoading(false);
+  }
+
+  return (
+    <tr className="border-b border-slate-700 hover:bg-slate-750 transition">
+      <td className="px-4 py-3">
+        <Link href={`/dashboard/devis/${q.id}`} className="hover:underline">
+          <p className="text-white text-sm font-medium">{q.client_nom}</p>
+          <p className="text-slate-400 text-xs">{q.client_email}</p>
+        </Link>
+      </td>
+      <td className="px-4 py-3 text-slate-300 text-sm">{SERVICE_LABEL[q.type_service]}</td>
+      <td className="px-4 py-3 text-slate-300 text-sm">{q.superficie} pi²</td>
+      <td className="px-4 py-3 text-white text-sm font-medium">{formatMoney(Number(q.total))}</td>
+      <td className="px-4 py-3">
+        <select
+          value={q.statut}
+          disabled={loading}
+          onChange={e => handleStatut(e.target.value as QuoteStatut)}
+          className={`text-xs font-medium px-2 py-1 rounded border bg-transparent cursor-pointer ${BADGE[q.statut]}`}
+        >
+          {STATUTS.map(st => (
+            <option key={st} value={st} className="bg-slate-800 text-white">
+              {LABEL[st]}
+            </option>
+          ))}
+        </select>
+      </td>
+      <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{formatDate(q.created_at)}</td>
+    </tr>
+  );
+}
+
+function PageContent() {
+  const [data, setData]     = useState<Quote[]>([]);
+  const [total, setTotal]   = useState(0);
+  const [page, setPage]     = useState(1);
+  const [statut, setStatut] = useState('');
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async () => {
+    const res = await fetchQuotes({ page, limit: 25, statut: statut || undefined, search: search || undefined });
+    setData(res.data);
+    setTotal(res.total);
+  }, [page, statut, search]);
+
+  return (
+    <PollingProvider onRefresh={load}>
+      <div className="p-6 space-y-5">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold text-white">Devis</h2>
+          <div className="flex items-center gap-3">
+            <span className="text-slate-400 text-sm">{total} au total</span>
+            <Link
+              href="/dashboard/devis/nouveau"
+              className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-4 py-2 text-sm transition"
+            >
+              + Nouveau devis
+            </Link>
+          </div>
+        </div>
+
+        <div className="flex gap-3 flex-wrap">
+          <input
+            type="text"
+            placeholder="Rechercher nom ou email..."
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1); }}
+            className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-64"
+          />
+          <select
+            value={statut}
+            onChange={e => { setStatut(e.target.value); setPage(1); }}
+            className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+          >
+            <option value="">Tous les statuts</option>
+            {STATUTS.map(st => <option key={st} value={st}>{LABEL[st]}</option>)}
+          </select>
+        </div>
+
+        <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-700 bg-slate-900/50">
+                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Client</th>
+                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Service</th>
+                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Superficie</th>
+                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Total</th>
+                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Statut</th>
+                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.length === 0 && (
+                <tr><td colSpan={6} className="text-center py-8 text-slate-500 text-sm">Aucun devis</td></tr>
+              )}
+              {data.map(q => <QuoteRow key={q.id} q={q} onUpdate={load} />)}
+            </tbody>
+          </table>
+        </div>
+
+        {total > 25 && (
+          <div className="flex gap-2 justify-end">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40"
+            >
+              Precedent
+            </button>
+            <span className="px-3 py-1.5 text-slate-400 text-sm">
+              Page {page} / {Math.ceil(total / 25)}
+            </span>
+            <button
+              onClick={() => setPage(p => p + 1)}
+              disabled={page >= Math.ceil(total / 25)}
+              className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40"
+            >
+              Suivant
+            </button>
+          </div>
+        )}
+      </div>
+    </PollingProvider>
+  );
+}
+
+export default function DevisPage() {
+  return <PageContent />;
+}
