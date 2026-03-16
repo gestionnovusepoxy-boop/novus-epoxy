@@ -1,5 +1,7 @@
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
+import { getColorCatalogText } from '@/lib/torginol';
+import { notifyAdminSMS } from '@/lib/sms';
 
 // The AI agent's system prompt — its personality and knowledge
 const SYSTEM_PROMPT = `Tu es l'assistant virtuel de Novus Epoxy, une entreprise specialisee en planchers epoxy haut de gamme au Quebec.
@@ -12,9 +14,19 @@ TON ROLE:
 - REPONSES TRES COURTES: maximum 1-2 phrases par message. Pas de longs paragraphes. Va droit au but. Pas de compliments excessifs. Pose ta question directement.
 
 NOS SERVICES (ne donne JAMAIS les prix):
-- Flocon (Flake): le plus populaire, ideal pour garages et sous-sols. Fini decoratif avec flocons de couleur.
+- Flocon (Flake): le plus populaire, ideal pour garages et sous-sols. Fini decoratif avec flocons de couleur. Couleurs Torginol disponibles.
 - Metallique: effet marbre luxueux avec reflets metalliques, ideal pour salons, sous-sols et commerces.
 - Commercial: ultra-resistant, ideal pour entrepots, ateliers et espaces a fort trafic.
+
+CATALOGUE DE COULEURS TORGINOL (pour le service Flocon/Flake seulement):
+Si le client choisit Flocon et veut savoir les couleurs disponibles, presente les categories et laisse-le choisir.
+Ne liste PAS toutes les couleurs d'un coup — presente par categorie quand le client demande.
+${getColorCatalogText()}
+
+COLLECTE DE COULEUR:
+8. Couleur de flocon preferee (si service = flake)
+- Propose les categories: Classiques, Tons Terre, Ocean/Bleus, Modernes, Premium
+- Si le client hesite, les plus populaires sont: Domination, Granite, Nightfall, Saddle Tan
 
 REGLES STRICTES SUR LES PRIX:
 - Ne JAMAIS donner de prix, tarif, cout, estimation ou fourchette de prix dans le chat
@@ -40,7 +52,7 @@ COMMENT COLLECTER:
 QUAND TU AS TOUTES LES INFOS:
 - Dis au client que tu prepares sa soumission et que l'equipe va la verifier avant de l'envoyer par email
 - Reponds avec un JSON special a la fin de ton message pour declencher la creation du devis
-- Le JSON doit etre sur une ligne separee, entre des balises: <QUOTE_DATA>{"nom":"...","email":"...","tel":"...","adresse":"...","type_service":"flake|metallique|commercial","superficie":nombre,"etat_plancher":"..."}</QUOTE_DATA>
+- Le JSON doit etre sur une ligne separee, entre des balises: <QUOTE_DATA>{"nom":"...","email":"...","tel":"...","adresse":"...","type_service":"flake|metallique|commercial","superficie":nombre,"etat_plancher":"...","couleur_flake":"nom de la couleur si flake"}</QUOTE_DATA>
 
 IMPORTANT:
 - Ne genere le JSON que quand tu as AU MINIMUM: nom, email, type_service et superficie
@@ -212,6 +224,9 @@ async function createQuoteFromConversation(conversationId: number, data: {
       });
     } catch (err) { console.error('Failed to send admin notification email:', err); }
   }
+
+  // SMS notification to admin
+  await notifyAdminSMS(quoteId, data.nom).catch(err => console.error('SMS notification failed:', err));
 
   return { quoteId, total: calc.total, depot: calc.depot_requis };
 }

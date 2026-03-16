@@ -1,4 +1,10 @@
 {
+  "crons": [
+    {
+      "path": "/api/cron/relance",
+      "schedule": "0 */6 * * *"
+    }
+  ],
   "headers": [
     {
       "source": "/tracker.js",
