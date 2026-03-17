@@ -42,12 +42,13 @@ export async function sendSMS(to: string, body: string): Promise<boolean> {
   }
 }
 
-// Notify admin of new quote
+// Notify admins of new quote (Luca + Jason)
 export async function notifyAdminSMS(quoteId: number, clientName: string) {
-  const adminPhone = process.env.ADMIN_PHONE;
-  if (!adminPhone) return;
+  const phones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];
+  if (phones.length === 0) return;
 
-  await sendSMS(adminPhone, `Novus Epoxy: Nouveau devis #${quoteId} de ${clientName} a approuver. https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}`);
+  const msg = `Novus Epoxy: Nouveau devis #${quoteId} de ${clientName} a approuver. https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}`;
+  await Promise.all(phones.map(phone => sendSMS(phone, msg)));
 }
 
 // Send follow-up SMS to client

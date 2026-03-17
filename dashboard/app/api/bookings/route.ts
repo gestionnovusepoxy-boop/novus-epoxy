@@ -65,25 +65,42 @@ export async function POST(req: NextRequest) {
   if (apiKey && adminEmail) {
     const slotLabel = jour2Slot === 'matin' ? '8h-12h' : '12h-16h';
     try {
+      const j1 = new Date(jour1Date + 'T12:00:00');
+      const j2 = new Date(jour2Date + 'T12:00:00');
+      const fmt = (d: Date) => d.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
+
       await fetch('https://api.resend.com/emails', {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           from,
           to: [adminEmail],
-          subject: `Reservation confirmee — Devis #${quoteId} — ${q.client_nom}`,
-          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-            <h2 style="color:#1e293b;">Nouvelle reservation!</h2>
-            <p><strong>Client:</strong> ${q.client_nom} (${q.client_email})</p>
-            <p><strong>Devis #${quoteId}</strong> — ${formatMoney(Number(q.total))}</p>
-            <p><strong>Jour 1:</strong> ${jour1Date} — Matin (8h-12h)</p>
-            <p><strong>Jour 2:</strong> ${jour2Date} — ${slotLabel}</p>
-            <p style="margin-top:20px;">
-              <a href="https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}"
+          subject: `📅 Nouvelle reservation — ${q.client_nom} — ${fmt(j1)}`,
+          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;background:#fefce8;border-radius:12px;">
+            <h2 style="color:#1e293b;margin-bottom:4px;">📅 Nouvelle reservation!</h2>
+            <p style="color:#64748b;margin-top:0;">Un client vient de confirmer ses dates de travaux.</p>
+            <div style="background:white;padding:16px;border-radius:8px;border-left:4px solid #f59e0b;margin:16px 0;">
+              <p style="margin:4px 0;"><strong>Client:</strong> ${q.client_nom}</p>
+              <p style="margin:4px 0;"><strong>Tel:</strong> ${q.client_tel || 'N/A'}</p>
+              <p style="margin:4px 0;"><strong>Email:</strong> ${q.client_email || 'N/A'}</p>
+              <p style="margin:4px 0;"><strong>Service:</strong> ${q.type_service} — ${q.superficie} pi²</p>
+              <p style="margin:4px 0;"><strong>Total:</strong> ${formatMoney(Number(q.total))}</p>
+              <p style="margin:4px 0;"><strong>Adresse:</strong> ${q.client_adresse || 'N/A'}</p>
+            </div>
+            <div style="background:white;padding:16px;border-radius:8px;margin:16px 0;">
+              <p style="margin:4px 0;font-size:16px;"><strong>Jour 1 (prep):</strong> ${fmt(j1)} — 8h à 12h</p>
+              <p style="margin:4px 0;font-size:16px;"><strong>Jour 2 (finition):</strong> ${fmt(j2)} — ${slotLabel}</p>
+            </div>
+            <div style="margin-top:20px;display:flex;gap:12px;">
+              <a href="https://novus-epoxy.vercel.app/dashboard/calendrier"
                  style="background:#f59e0b;color:#0f172a;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">
+                Voir le calendrier
+              </a>
+              <a href="https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}"
+                 style="background:#1e293b;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">
                 Voir le devis
               </a>
-            </p>
+            </div>
           </div>`,
         }),
       });
