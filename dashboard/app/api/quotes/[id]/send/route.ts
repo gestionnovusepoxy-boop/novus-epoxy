@@ -62,6 +62,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 <p style="margin:0 0 6px;color:#78716c;font-size:12px;">Le dépôt confirme votre réservation. Nous vous contacterons pour planifier les travaux.</p>
 <p style="margin:0;color:#64748b;font-size:13px;border-top:1px dashed #d6d3d1;padding-top:6px;">Solde (70%) à la fin des travaux : <strong>${solde70}</strong></p>
 </div>
+<div style="text-align:center;margin:0 0 12px;">
+<a href="https://novus-epoxy.vercel.app/reservation/${quote.id}"
+   style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
+  Planifier mes travaux
+</a>
+</div>
 <div style="background:#f1f5f9;border-radius:6px;padding:10px;margin:0 0 12px;font-size:12px;color:#475569;">
 <strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
 <strong>Travaux :</strong> Jason Lanthier — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>

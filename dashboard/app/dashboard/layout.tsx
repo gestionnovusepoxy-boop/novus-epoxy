@@ -20,6 +20,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {[
             { href: '/dashboard',              label: 'Vue d\'ensemble', icon: '📊' },
             { href: '/dashboard/devis',        label: 'Devis',           icon: '📝' },
+            { href: '/dashboard/calendrier',   label: 'Calendrier',      icon: '📅' },
             { href: '/dashboard/factures',     label: 'Factures',        icon: '🧾' },
             { href: '/dashboard/clients',      label: 'Clients',         icon: '👥' },
             { href: '/dashboard/depenses',      label: 'Dépenses',        icon: '💳' },

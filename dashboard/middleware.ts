@@ -110,6 +110,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Bookings — public endpoints (rate limit: 20/min per IP)
+  if (pathname.startsWith('/api/bookings')) {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    if (isRateLimited(`booking:${ip}`, 20, 60_000)) {
+      return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+    }
+    return NextResponse.next();
+  }
+
   // Meta webhook
   if (pathname === '/api/meta/webhook') {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
@@ -123,5 +132,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/email', '/api/auth/:path*'],
+  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*'],
 };

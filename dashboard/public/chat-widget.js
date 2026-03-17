@@ -70,7 +70,12 @@
   function addMsg(role, text) {
     var div = document.createElement('div');
     div.className = 'ne-msg ' + role;
-    div.textContent = text;
+    // Make links clickable in assistant messages
+    if (role === 'assistant' && text.match(/https?:\/\//)) {
+      div.innerHTML = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:#f59e0b;text-decoration:underline;word-break:break-all;">$1</a>');
+    } else {
+      div.textContent = text;
+    }
     msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
     return div;

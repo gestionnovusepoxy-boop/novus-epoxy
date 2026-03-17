@@ -18,6 +18,12 @@ NOS SERVICES (ne donne JAMAIS les prix):
 - Metallique: effet marbre luxueux avec reflets metalliques, ideal pour salons, sous-sols et commerces.
 - Commercial: ultra-resistant, ideal pour entrepots, ateliers et espaces a fort trafic.
 
+SURFACES ACCEPTEES:
+- Beton (le plus courant)
+- Bois (oui, Novus Epoxy installe sur le bois!)
+- Peinture existante (necessite preparation)
+- Ne JAMAIS dire qu'on ne fait pas le bois — c'est FAUX. On installe sur le bois.
+
 CATALOGUE DE COULEURS TORGINOL (pour le service Flocon/Flake seulement):
 Si le client choisit Flocon et veut savoir les couleurs disponibles, presente les categories et laisse-le choisir.
 Ne liste PAS toutes les couleurs d'un coup — presente par categorie quand le client demande.
@@ -25,7 +31,9 @@ ${getColorCatalogText()}
 
 COLLECTE DE COULEUR:
 8. Couleur de flocon preferee (si service = flake)
-- Propose les categories: Classiques, Tons Terre, Ocean/Bleus, Modernes, Premium
+- Envoie TOUJOURS ce lien pour que le client choisisse visuellement: https://novus-epoxy.vercel.app/couleurs?vid={VISITOR_ID}
+- Dis quelque chose comme: "Voici notre catalogue de couleurs, cliquez sur celle qui vous plait!" suivi du lien
+- Le client va cliquer sur une couleur et son choix sera envoye automatiquement dans le chat
 - Si le client hesite, les plus populaires sont: Domination, Granite, Nightfall, Saddle Tan
 
 REGLES STRICTES SUR LES PRIX:
@@ -156,19 +164,19 @@ async function updateLeadTemp(conversationId: number) {
 // Create a quote from conversation data and send email
 async function createQuoteFromConversation(conversationId: number, data: {
   nom: string; email: string; tel?: string; adresse?: string;
-  type_service: string; superficie: number; etat_plancher?: string;
+  type_service: string; superficie: number; etat_plancher?: string; couleur_flake?: string;
 }): Promise<{ quoteId: number; total: number; depot: number } | null> {
   if (!(data.type_service in SERVICES)) return null;
 
   const calc = calculateQuote(data.type_service as ServiceType, data.superficie);
 
   const rows = await query(
-    `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, prix_pied_carre, sous_total, tps, tvq, total, depot_requis, statut)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'brouillon')
+    `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, couleur_flake, prix_pied_carre, sous_total, tps, tvq, total, depot_requis, statut)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'brouillon')
      RETURNING id`,
     [
       data.nom, data.email, data.tel ?? null, data.adresse ?? null,
-      data.type_service, data.superficie, data.etat_plancher ?? null,
+      data.type_service, data.superficie, data.etat_plancher ?? null, data.couleur_flake ?? null,
       calc.prix_pied_carre, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
     ]
   );
@@ -264,7 +272,7 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 800,
-      system: SYSTEM_PROMPT,
+      system: SYSTEM_PROMPT.replace('{VISITOR_ID}', ctx.visitorId),
       messages: claudeMessages,
     }),
   });
