@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   }
 
   const convRows = await query(
-    `SELECT id FROM conversations WHERE visitor_id = $1 AND channel = 'web' AND status = 'active' ORDER BY created_at DESC LIMIT 1`,
+    `SELECT id FROM conversations WHERE visitor_id = $1 AND channel = 'web' AND status IN ('active', 'handoff') ORDER BY created_at DESC LIMIT 1`,
     [visitorId]
   );
 

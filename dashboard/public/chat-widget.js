@@ -123,6 +123,7 @@
       .then(function(data) {
         if (data.messages && data.messages.length > 0) {
           data.messages.forEach(function(m) { addMsg(m.role, m.content); });
+          knownMsgCount = data.messages.length;
         } else {
           showWelcome();
         }
@@ -218,6 +219,27 @@
   field.addEventListener('keydown', function(e) {
     if (e.key === 'Enter') sendMessage();
   });
+
+  // Poll for new admin replies every 8s when chat is open
+  var knownMsgCount = 0;
+  setInterval(function() {
+    if (!isOpen || sending) return;
+    fetch(API + '/api/chat/history?visitor_id=' + encodeURIComponent(visitorId))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data.messages) return;
+        if (knownMsgCount === 0) {
+          knownMsgCount = data.messages.length;
+          return;
+        }
+        if (data.messages.length > knownMsgCount) {
+          var newMsgs = data.messages.slice(knownMsgCount);
+          newMsgs.forEach(function(m) { addMsg(m.role, m.content); });
+          knownMsgCount = data.messages.length;
+        }
+      })
+      .catch(function() {});
+  }, 8000);
 
   // Auto-open after 3 seconds (only once per session)
   if (!sessionStorage.getItem('ne_chat_opened')) {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { PollingProvider } from '@/components/polling-provider';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -15,13 +15,17 @@ interface ConvDetail {
   superficie: number | null; status: string; quote_id: number | null; created_at: string;
 }
 
-const CHANNEL_LABEL: Record<string, string> = { web: 'Site web', messenger: 'Messenger', email: 'Email' };
+const CHANNEL_LABEL: Record<string, string> = { web: 'Site web', messenger: 'Messenger', email: 'Email', telegram: 'Telegram' };
+const STATUS_LABEL: Record<string, string> = { active: 'Active', handoff: 'Handoff', pending_approval: 'A approuver', quote_sent: 'Devis envoye', closed: 'Fermee' };
 
 function PageContent() {
   const params = useParams();
   const id = params.id as string;
   const [conv, setConv] = useState<ConvDetail | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [reply, setReply] = useState('');
+  const [sending, setSending] = useState(false);
+  const msgsEndRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     const res = await fetch(`/api/conversations/${id}`);
@@ -29,6 +33,27 @@ function PageContent() {
     setConv(json.conversation ?? null);
     setMessages(json.messages ?? []);
   }, [id]);
+
+  useEffect(() => {
+    msgsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  async function sendReply() {
+    if (!reply.trim() || sending) return;
+    setSending(true);
+    try {
+      const res = await fetch(`/api/conversations/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: reply.trim() }),
+      });
+      if (res.ok) {
+        setReply('');
+        await load();
+      }
+    } catch { /* ignore */ }
+    setSending(false);
+  }
 
   return (
     <PollingProvider onRefresh={load}>
@@ -40,6 +65,15 @@ function PageContent() {
           <h2 className="text-2xl font-bold text-white">
             Conversation #{id}
           </h2>
+          {conv && (
+            <span className={`text-xs px-2 py-1 rounded font-medium ${
+              conv.status === 'handoff' ? 'bg-yellow-500/20 text-yellow-400 animate-pulse' :
+              conv.status === 'active' ? 'bg-green-500/20 text-green-400' :
+              'bg-slate-500/20 text-slate-400'
+            }`}>
+              {STATUS_LABEL[conv.status] ?? conv.status}
+            </span>
+          )}
         </div>
 
         {conv && (
@@ -75,7 +109,7 @@ function PageContent() {
         {/* Messages */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
           <h3 className="text-white font-semibold mb-4">Conversation</h3>
-          <div className="space-y-4 max-h-[500px] overflow-y-auto">
+          <div className="space-y-4 max-h-[400px] overflow-y-auto">
             {messages.map(msg => (
               <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div className={`max-w-[75%] rounded-xl px-4 py-3 ${
@@ -93,6 +127,26 @@ function PageContent() {
             {messages.length === 0 && (
               <p className="text-slate-500 text-center text-sm">Aucun message</p>
             )}
+            <div ref={msgsEndRef} />
+          </div>
+
+          {/* Reply box */}
+          <div className="mt-4 flex gap-3 border-t border-slate-700 pt-4">
+            <input
+              type="text"
+              value={reply}
+              onChange={e => setReply(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') sendReply(); }}
+              placeholder="Repondre au client..."
+              className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"
+            />
+            <button
+              onClick={sendReply}
+              disabled={!reply.trim() || sending}
+              className="bg-amber-500 text-slate-900 font-bold px-6 py-3 rounded-lg hover:bg-amber-400 transition disabled:opacity-50"
+            >
+              {sending ? '...' : 'Envoyer'}
+            </button>
           </div>
         </div>
       </div>
