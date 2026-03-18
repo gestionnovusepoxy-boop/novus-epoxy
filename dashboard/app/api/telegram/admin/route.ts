@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { sendSMS, notifyAdminSMS } from '@/lib/sms';
+import { timingSafeEqual } from 'crypto';
+
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
 
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
 const ADMIN_CHAT_IDS = () => (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
@@ -211,12 +217,19 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
     case 'liste_devis': {
       const statut = input.statut as string;
       const limit = Math.min(Number(input.limit) || 5, 20);
-      const where = statut ? `WHERE statut = '${statut.replace(/'/g, '')}'` : '';
-      const rows = await query(
-        `SELECT id, client_nom, client_tel, type_service, superficie, total, statut, created_at
-         FROM quotes ${where} ORDER BY id DESC LIMIT $1`,
-        [limit]
-      );
+      const validStatuts = ['brouillon','en_attente','approuve','envoye','depot_paye','planifie','complete','refuse'];
+      const safeStatut = statut && validStatuts.includes(statut) ? statut : '';
+      const rows = safeStatut
+        ? await query(
+            `SELECT id, client_nom, client_tel, type_service, superficie, total, statut, created_at
+             FROM quotes WHERE statut = $1 ORDER BY id DESC LIMIT $2`,
+            [safeStatut, limit]
+          )
+        : await query(
+            `SELECT id, client_nom, client_tel, type_service, superficie, total, statut, created_at
+             FROM quotes ORDER BY id DESC LIMIT $1`,
+            [limit]
+          );
       return JSON.stringify(rows);
     }
 
@@ -299,6 +312,15 @@ IMPORTANT:
 
 // POST — Telegram webhook for admin bot
 export async function POST(req: NextRequest) {
+  // Verify Telegram webhook secret token
+  const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (telegramSecret) {
+    const headerSecret = req.headers.get('x-telegram-bot-api-secret-token') ?? '';
+    if (!safeCompare(telegramSecret, headerSecret)) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+  }
+
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ ok: true });
 

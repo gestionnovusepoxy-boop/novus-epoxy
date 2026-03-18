@@ -2,13 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getOrCreateConversation } from '@/lib/agent';
 
+import { timingSafeEqual } from 'crypto';
+
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 const WEBHOOK_SECRET = process.env.OPENCLAW_WEBHOOK_SECRET ?? '';
 
 // POST — Receive events from OpenClaw (Telegram bot Nova)
 export async function POST(req: NextRequest) {
-  // Verify shared secret
-  const authHeader = req.headers.get('authorization');
-  if (WEBHOOK_SECRET && authHeader !== `Bearer ${WEBHOOK_SECRET}`) {
+  // Verify shared secret — reject if not configured or mismatch
+  const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
+  if (!WEBHOOK_SECRET || !authHeader || !safeCompare(WEBHOOK_SECRET, authHeader)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

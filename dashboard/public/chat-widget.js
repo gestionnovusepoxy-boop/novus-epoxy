@@ -70,9 +70,22 @@
   function addMsg(role, text) {
     var div = document.createElement('div');
     div.className = 'ne-msg ' + role;
-    // Make links clickable in assistant messages
+    // Make links clickable in assistant messages (safe DOM manipulation)
     if (role === 'assistant' && text.match(/https?:\/\//)) {
-      div.innerHTML = text.replace(/(https?:\/\/[^\s]+)/g, '<a href="$1" target="_blank" rel="noopener" style="color:#f59e0b;text-decoration:underline;word-break:break-all;">$1</a>');
+      var parts = text.split(/(https?:\/\/[^\s]+)/g);
+      parts.forEach(function(part) {
+        if (part.match(/^https?:\/\//)) {
+          var a = document.createElement('a');
+          a.href = part;
+          a.textContent = part;
+          a.target = '_blank';
+          a.rel = 'noopener';
+          a.style.cssText = 'color:#f59e0b;text-decoration:underline;word-break:break-all;';
+          div.appendChild(a);
+        } else {
+          div.appendChild(document.createTextNode(part));
+        }
+      });
     } else {
       div.textContent = text;
     }

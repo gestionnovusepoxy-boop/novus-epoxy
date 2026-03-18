@@ -1,15 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { timingSafeEqual } from 'crypto';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { sendSMS, notifyAdminSMS } from '@/lib/sms';
 
+function safeCompare(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(Buffer.from(a), Buffer.from(b));
+}
+
 // POST — Quick create + send quote via SMS
 // Protected by ADMIN_API_KEY for use from Telegram bot or CLI
 export async function POST(req: NextRequest) {
-  const apiKey = req.headers.get('x-api-key') ?? req.headers.get('authorization')?.replace('Bearer ', '');
+  const apiKey = req.headers.get('x-api-key') ?? req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
   const expectedKey = process.env.ADMIN_API_KEY;
 
-  if (!expectedKey || apiKey !== expectedKey) {
+  if (!expectedKey || !apiKey || !safeCompare(expectedKey, apiKey)) {
     return NextResponse.json({ error: 'Non autorise' }, { status: 401 });
   }
 

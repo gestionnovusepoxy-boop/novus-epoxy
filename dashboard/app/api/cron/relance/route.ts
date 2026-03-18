@@ -7,10 +7,10 @@ import { sendFollowUpSMS } from '@/lib/sms';
 // Relance 1: 48h after sent
 // Relance 2: 5 days after sent (SMS + email)
 export async function GET(req: NextRequest) {
-  // Verify cron secret (Vercel sets this automatically)
-  const authHeader = req.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+  // Verify cron secret (Vercel sets CRON_SECRET automatically for cron jobs)
+  const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
+  const cronSecret = process.env.CRON_SECRET ?? '';
+  if (!cronSecret || !authHeader || cronSecret !== authHeader) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
