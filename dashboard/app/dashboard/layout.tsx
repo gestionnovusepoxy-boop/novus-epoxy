@@ -27,6 +27,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
             { href: '/dashboard/comptabilite', label: 'Comptabilité',    icon: '💰' },
             { href: '/dashboard/banque',       label: 'Banque',          icon: '🏦' },
             { href: '/dashboard/conversations', label: 'Agent IA',        icon: '🤖' },
+            { href: '/dashboard/contenu',      label: 'Contenu',         icon: '✍️' },
             { href: '/dashboard/soumissions',  label: 'Soumissions',     icon: '📋' },
             { href: '/dashboard/emails',       label: 'Emails',          icon: '📧' },
             { href: '/dashboard/stats',        label: 'Statistiques',    icon: '📈' },

@@ -11,9 +11,9 @@ interface Conversation {
   created_at: string; updated_at: string;
 }
 
-const CHANNEL_LABEL: Record<string, string> = { web: 'Site web', messenger: 'Messenger', email: 'Email' };
-const CHANNEL_COLOR: Record<string, string> = { web: 'bg-blue-500/20 text-blue-400', messenger: 'bg-purple-500/20 text-purple-400', email: 'bg-green-500/20 text-green-400' };
-const STATUS_LABEL: Record<string, string> = { active: 'Active', pending_approval: 'A approuver', quote_sent: 'Devis envoye', closed: 'Fermee' };
+const CHANNEL_LABEL: Record<string, string> = { web: 'Site web', messenger: 'Messenger', email: 'Email', telegram: 'Telegram' };
+const CHANNEL_COLOR: Record<string, string> = { web: 'bg-blue-500/20 text-blue-400', messenger: 'bg-purple-500/20 text-purple-400', email: 'bg-green-500/20 text-green-400', telegram: 'bg-cyan-500/20 text-cyan-400' };
+const STATUS_LABEL: Record<string, string> = { active: 'Active', pending_approval: 'A approuver', quote_sent: 'Devis envoye', closed: 'Fermee', handoff: '🖐 Handoff' };
 
 function PageContent() {
   const [data, setData]       = useState<Conversation[]>([]);
@@ -35,6 +35,7 @@ function PageContent() {
   const activeCount = data.filter(c => c.status === 'active').length;
   const pendingCount = data.filter(c => c.status === 'pending_approval').length;
   const quoteCount = data.filter(c => c.status === 'quote_sent').length;
+  const handoffCount = data.filter(c => c.status === 'handoff').length;
 
   return (
     <PollingProvider onRefresh={load}>
@@ -45,7 +46,7 @@ function PageContent() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-6 gap-4">
           <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-white">{total}</p>
             <p className="text-slate-400 text-xs">Total</p>
@@ -53,6 +54,10 @@ function PageContent() {
           <div className="bg-slate-800 border border-green-500/30 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-green-400">{activeCount}</p>
             <p className="text-slate-400 text-xs">Actives</p>
+          </div>
+          <div className="bg-slate-800 border border-yellow-500/30 rounded-xl p-4 text-center cursor-pointer" onClick={() => { setStatus('handoff'); setPage(1); }}>
+            <p className="text-2xl font-bold text-yellow-400">{handoffCount}</p>
+            <p className="text-slate-400 text-xs">Handoff</p>
           </div>
           <div className="bg-slate-800 border border-red-500/30 rounded-xl p-4 text-center">
             <p className="text-2xl font-bold text-red-400">{pendingCount}</p>
@@ -83,6 +88,7 @@ function PageContent() {
             className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
             <option value="">Tous les statuts</option>
             <option value="active">Active</option>
+            <option value="handoff">Handoff</option>
             <option value="pending_approval">A approuver</option>
             <option value="quote_sent">Devis envoye</option>
             <option value="closed">Fermee</option>
@@ -124,6 +130,7 @@ function PageContent() {
                   )}
                   <span className={`text-xs px-2 py-1 rounded ${
                     conv.status === 'active' ? 'bg-green-500/20 text-green-400' :
+                    conv.status === 'handoff' ? 'bg-yellow-500/20 text-yellow-400 animate-pulse' :
                     conv.status === 'pending_approval' ? 'bg-red-500/20 text-red-400' :
                     conv.status === 'quote_sent' ? 'bg-amber-500/20 text-amber-400' :
                     'bg-slate-500/20 text-slate-400'
