@@ -1,7 +1,11 @@
-name: Deploy Dashboard vers Vercel
+name: CI Dashboard
 
 on:
   push:
+    branches: [main]
+    paths:
+      - 'dashboard/**'
+  pull_request:
     branches: [main]
     paths:
       - 'dashboard/**'
@@ -11,7 +15,7 @@ permissions:
   contents: read
 
 jobs:
-  deploy:
+  ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -34,20 +38,10 @@ jobs:
         working-directory: ./dashboard
         run: npm run build
         env:
-          NEXTAUTH_URL:           ${{ secrets.NEXTAUTH_URL }}
-          NEXTAUTH_SECRET:        ${{ secrets.NEXTAUTH_SECRET }}
-          AUTH_SECRET:            ${{ secrets.NEXTAUTH_SECRET }}
-          ADMIN_EMAIL:            ${{ secrets.ADMIN_EMAIL }}
-          RESEND_API_KEY:         ${{ secrets.RESEND_API_KEY }}
-          EMAIL_FROM:             ${{ secrets.EMAIL_FROM }}
-          API_SECRET_TOKEN:       ${{ secrets.API_SECRET_TOKEN }}
-          NEXT_PUBLIC_API_BASE_URL: https://novusepoxy.ca
-
-      - name: Déployer sur Vercel
-        uses: amondnet/vercel-action@v25
-        with:
-          vercel-token:      ${{ secrets.VERCEL_TOKEN }}
-          vercel-org-id:     ${{ secrets.VERCEL_ORG_ID }}
-          vercel-project-id: ${{ secrets.VERCEL_PROJECT_ID }}
-          working-directory: ./dashboard
-          vercel-args:       '--prod'
+          NEXTAUTH_URL:              ${{ secrets.NEXTAUTH_URL }}
+          NEXTAUTH_SECRET:           ${{ secrets.NEXTAUTH_SECRET }}
+          AUTH_SECRET:               ${{ secrets.NEXTAUTH_SECRET }}
+          ADMIN_EMAIL:               ${{ secrets.ADMIN_EMAIL }}
+          RESEND_API_KEY:            ${{ secrets.RESEND_API_KEY }}
+          EMAIL_FROM:                ${{ secrets.EMAIL_FROM }}
+          NEXT_PUBLIC_API_BASE_URL:   https://novusepoxy.ca
