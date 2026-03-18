@@ -13,8 +13,11 @@ export async function GET(req: NextRequest) {
   const intervalCur  = `${jours} days`;
   const intervalPrev = `${jours * 2} days`;
 
-  const [visitesRow, visitesPrevRow, leadsRow, leadsPrevRow, emailsRow, topPagesRow, serieVisitesRow, serieLeadsRow] =
-    await Promise.all([
+  const [
+    visitesRow, visitesPrevRow, leadsRow, leadsPrevRow, emailsRow,
+    topPagesRow, serieVisitesRow, serieLeadsRow,
+    revenusRow, revenusPrevRow, pipelineRow, prochainRdvRow, serieRevenusRow,
+  ] = await Promise.all([
       db(`SELECT COUNT(*)::int AS visites, COUNT(DISTINCT visitor_hash)::int AS visiteurs_uniques
           FROM page_views WHERE created_at >= NOW() - $1::interval`, [intervalCur]),
 
@@ -48,12 +51,48 @@ export async function GET(req: NextRequest) {
           FROM submissions WHERE created_at >= NOW() - $1::interval
           GROUP BY DATE_TRUNC('week', created_at) ORDER BY DATE_TRUNC('week', created_at) ASC`,
         [intervalCur]),
+
+      // Revenue current period
+      db(`SELECT COALESCE(SUM(total), 0)::numeric AS revenus
+          FROM quotes
+          WHERE statut NOT IN ('brouillon','refuse') AND created_at >= NOW() - $1::interval`,
+        [intervalCur]),
+
+      // Revenue previous period
+      db(`SELECT COALESCE(SUM(total), 0)::numeric AS revenus
+          FROM quotes
+          WHERE statut NOT IN ('brouillon','refuse')
+            AND created_at >= NOW() - $1::interval AND created_at < NOW() - $2::interval`,
+        [intervalPrev, intervalCur]),
+
+      // Pipeline — count of quotes by statut
+      db(`SELECT statut, COUNT(*)::int AS count
+          FROM quotes
+          GROUP BY statut
+          ORDER BY count DESC`),
+
+      // Upcoming bookings
+      db(`SELECT *
+          FROM bookings
+          WHERE jour1_date >= CURRENT_DATE
+          ORDER BY jour1_date ASC
+          LIMIT 5`),
+
+      // Revenue series (daily)
+      db(`SELECT DATE(created_at)::text AS date, COALESCE(SUM(total), 0)::numeric AS revenus
+          FROM quotes
+          WHERE statut NOT IN ('brouillon','refuse') AND created_at >= NOW() - $1::interval
+          GROUP BY DATE(created_at)
+          ORDER BY date ASC`,
+        [intervalCur]),
     ]);
 
   const v  = visitesRow[0]     as { visites: number; visiteurs_uniques: number };
   const vp = visitesPrevRow[0] as { visites: number; visiteurs_uniques: number };
   const l  = (leadsRow[0]       as { total: number }).total;
   const lp = (leadsPrevRow[0]   as { total: number }).total;
+  const r  = Number((revenusRow[0]     as { revenus: string }).revenus);
+  const rp = Number((revenusPrevRow[0] as { revenus: string }).revenus);
 
   function variation(a: number, b: number) {
     if (b === 0) return a > 0 ? 100 : 0;
@@ -75,9 +114,14 @@ export async function GET(req: NextRequest) {
       taux_conversion:      taux,
       taux_variation:       Math.round((taux - tauxPrev) * 10) / 10,
       emails_ouverts:       (emailsRow[0] as { total: number }).total,
+      revenus:              r,
+      revenus_variation:    variation(r, rp),
     },
     top_pages:      topPagesRow,
     serie_visites:  serieVisitesRow,
     serie_leads:    serieLeadsRow,
+    pipeline:       pipelineRow,
+    prochains_rdv:  prochainRdvRow,
+    serie_revenus:  serieRevenusRow,
   });
 }

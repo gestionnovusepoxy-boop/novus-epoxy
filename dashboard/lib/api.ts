@@ -49,14 +49,37 @@ export interface Metriques {
   taux_conversion:     number;
   taux_variation:      number;
   emails_ouverts:      number;
+  revenus:             number;
+  revenus_variation:   number;
+}
+
+export interface PipelineItem {
+  statut: string;
+  count:  number;
+}
+
+export interface Booking {
+  id: number;
+  quote_id: number | null;
+  client_nom: string;
+  client_tel: string | null;
+  jour1_date: string;
+  jour1_slot: string | null;
+  jour2_date: string | null;
+  jour2_slot: string | null;
+  statut: string;
+  created_at: string;
 }
 
 export interface StatsResponse {
-  periode:       string;
-  metriques:     Metriques;
-  top_pages:     { url_path: string; vues: number }[];
-  serie_visites: { date: string; visites: number; visiteurs: number }[];
-  serie_leads:   { semaine: string; leads: number }[];
+  periode:        string;
+  metriques:      Metriques;
+  top_pages:      { url_path: string; vues: number }[];
+  serie_visites:  { date: string; visites: number; visiteurs: number }[];
+  serie_leads:    { semaine: string; leads: number }[];
+  pipeline:       PipelineItem[];
+  prochains_rdv:  Booking[];
+  serie_revenus:  { date: string; revenus: number }[];
 }
 
 export interface PaginatedResponse<T> {

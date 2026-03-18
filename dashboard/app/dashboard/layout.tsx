@@ -2,6 +2,7 @@ import { auth } from '@/lib/auth';
 import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { signOut } from '@/lib/auth';
+import { NotificationProvider } from '@/components/notification-provider';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
@@ -52,8 +53,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
           <p className="text-slate-500 text-[10px] uppercase tracking-widest font-semibold px-3 pt-4 pb-1.5">Agents IA</p>
           {[
-            { href: '/dashboard/conversations', label: 'Nova',      icon: '🤖' },
-            { href: '/dashboard/contenu',        label: 'Marketing', icon: '✍️' },
+            { href: '/dashboard/conversations', label: 'Nova',        icon: '🤖' },
+            { href: '/dashboard/contenu',        label: 'Marketing',  icon: '✍️' },
+            { href: '/dashboard/leadhunter',     label: 'Lead Hunter', icon: '🎯' },
           ].map(({ href, label, icon }) => (
             <Link key={href} href={href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition text-sm">
               <span>{icon}</span><span>{label}</span>
@@ -64,6 +66,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           {[
             { href: '/dashboard/emails', label: 'Emails',       icon: '📧' },
             { href: '/dashboard/stats',  label: 'Statistiques', icon: '📈' },
+            { href: '/dashboard/portfolio', label: 'Portfolio', icon: '📸' },
           ].map(({ href, label, icon }) => (
             <Link key={href} href={href} className="flex items-center gap-3 px-3 py-2 rounded-lg text-slate-300 hover:text-white hover:bg-slate-700 transition text-sm">
               <span>{icon}</span><span>{label}</span>
@@ -86,7 +89,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
       {/* Contenu principal */}
       <main className="flex-1 overflow-auto">
-        {children}
+        <NotificationProvider>
+          {children}
+        </NotificationProvider>
       </main>
     </div>
   );
