@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
@@ -29,7 +30,7 @@
     "typescript": "^5.9.3"
   },
   "optionalDependencies": {
-    "@next/swc-linux-x64-gnu": "^16.1.7",
-    "@next/swc-linux-x64-musl": "^16.1.7"
+    "@next/swc-linux-x64-gnu": "^16.1.6",
+    "@next/swc-linux-x64-musl": "^16.1.6"
   }
 }
