@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
-import { fetchQuote, updateQuote, sendQuote, type Quote, type QuoteStatut } from '@/lib/api';
+import { fetchQuote, updateQuote, sendQuote, sendQuoteSMS, type Quote, type QuoteStatut } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { SERVICES, formatMoney, type ServiceType } from '@/lib/pricing';
 
@@ -61,6 +61,20 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       setQuote(updated);
     } catch (e) {
       setError(`Erreur lors de l'envoi: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setAction('');
+  }
+
+  async function handleSendSMS() {
+    if (!quote) return;
+    setAction('sms');
+    setError('');
+    try {
+      await sendQuoteSMS(quote.id);
+      const updated = await fetchQuote(quote.id);
+      setQuote(updated);
+    } catch (e) {
+      setError(`Erreur SMS: ${e instanceof Error ? e.message : String(e)}`);
     }
     setAction('');
   }
@@ -217,11 +231,29 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           </button>
         )}
         {quote.statut === 'approuve' && (
+          <>
+            <button
+              onClick={handleSend} disabled={!!action}
+              className="bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition"
+            >
+              {action === 'send' ? 'Envoi...' : 'Envoyer par email'}
+            </button>
+            {quote.client_tel && (
+              <button
+                onClick={handleSendSMS} disabled={!!action}
+                className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition"
+              >
+                {action === 'sms' ? 'Envoi SMS...' : 'Envoyer par SMS'}
+              </button>
+            )}
+          </>
+        )}
+        {['brouillon', 'en_attente', 'envoye', 'depot_paye', 'planifie'].includes(quote.statut) && quote.client_tel && (
           <button
-            onClick={handleSend} disabled={!!action}
-            className="bg-purple-500 hover:bg-purple-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition"
+            onClick={handleSendSMS} disabled={!!action}
+            className="bg-green-500/20 hover:bg-green-500/30 disabled:opacity-50 text-green-400 font-semibold rounded-lg px-6 py-2.5 text-sm transition border border-green-500/30"
           >
-            {action === 'send' ? 'Envoi...' : 'Envoyer au client'}
+            {action === 'sms' ? 'Envoi SMS...' : 'Renvoyer par SMS'}
           </button>
         )}
         {(quote.statut === 'brouillon' || quote.statut === 'en_attente') && (

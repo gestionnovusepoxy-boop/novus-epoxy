@@ -128,9 +128,27 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Telegram admin bot webhook
+  if (pathname === '/api/telegram/admin' && req.method === 'POST') {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    if (isRateLimited(`tgadmin:${ip}`, 60, 60_000)) {
+      return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+    }
+    return NextResponse.next();
+  }
+
+  // SMS devis API
+  if (pathname === '/api/sms/devis' && req.method === 'POST') {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    if (isRateLimited(`smsdevis:${ip}`, 10, 60_000)) {
+      return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+    }
+    return NextResponse.next();
+  }
+
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*'],
+  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis'],
 };

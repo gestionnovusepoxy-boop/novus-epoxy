@@ -157,3 +157,7 @@ export async function updateQuote(id: number, data: Partial<Quote>): Promise<Quo
 export async function sendQuote(id: number): Promise<{ success: boolean; email_id: string }> {
   return apiFetch(`/api/quotes/${id}/send`, { method: 'POST' });
 }
+
+export async function sendQuoteSMS(id: number): Promise<{ success: boolean; method: string }> {
+  return apiFetch(`/api/quotes/${id}/send-sms`, { method: 'POST' });
+}
