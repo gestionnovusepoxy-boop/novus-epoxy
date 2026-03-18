@@ -47,7 +47,7 @@
   box.id = 'ne-chat-box';
   box.innerHTML = `
     <div id="ne-chat-header">
-      <div><h3>Novus Epoxy</h3><span>Assistant en ligne</span></div>
+      <div><h3>Nova — Novus Epoxy</h3><span>En ligne</span></div>
       <div style="display:flex;align-items:center;gap:8px;">
         <button id="ne-chat-reset" style="background:none;border:none;color:#475569;cursor:pointer;font-size:11px;padding:0;">↺</button>
         <button id="ne-chat-close">&times;</button>
@@ -112,8 +112,8 @@
   }
 
   function showWelcome() {
-    addMsg('assistant', 'Bonjour! Quel type de plancher epoxy vous interesse?');
-    addQuickReplies(['Flocon (Flake)', 'Metallique', 'Commercial', 'Je ne sais pas encore']);
+    addMsg('assistant', 'Salut! Moi c\'est Nova. C\'est pour quel espace que tu regardes de l\'epoxy?');
+    addQuickReplies(['Garage', 'Sous-sol', 'Commercial / Entrepot', 'Autre']);
   }
 
   // Load history
@@ -158,14 +158,18 @@
       var reply = data.reply || 'Desolee, une erreur est survenue.';
       addMsg('assistant', reply);
 
-      // Show quick replies based on context
+      // Show contextual quick replies
       var lower = reply.toLowerCase();
-      if (lower.includes('quel espace') || lower.includes('quelle piece') || lower.includes('quel endroit') || lower.includes('garage') && lower.includes('sous-sol') && lower.includes('?')) {
+      if (lower.includes('quel espace') || lower.includes('quelle piece') || lower.includes('quel endroit') || (lower.includes('garage') && lower.includes('sous-sol') && lower.includes('?'))) {
         addQuickReplies(['Garage', 'Sous-sol', 'Commercial / Entrepot', 'Autre']);
       } else if (lower.includes('etat') && (lower.includes('plancher') || lower.includes('beton') || lower.includes('sol'))) {
         addQuickReplies(['Beton brut', 'Peinture existante', 'Epoxy a refaire', 'Je ne sais pas']);
       } else if ((lower.includes('quel type') || lower.includes('quel style') || lower.includes('quel fini')) && !lower.includes('espace')) {
         addQuickReplies(['Flocon (Flake)', 'Metallique', 'Commercial']);
+      } else if (lower.includes('superficie') || lower.includes('pi²') || lower.includes('pieds carr') || lower.includes('grandeur') || lower.includes('taille')) {
+        addQuickReplies(['~400 pi² (garage simple)', '~600 pi² (garage double)', '~700 pi² (sous-sol)', 'Je ne sais pas']);
+      } else if (lower.includes('parler') && (lower.includes('humain') || lower.includes('quelqu'))) {
+        addQuickReplies(['Oui, parler a quelqu\'un', 'Non ca va, continue']);
       }
     })
     .catch(function() {

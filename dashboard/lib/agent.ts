@@ -3,71 +3,110 @@ import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/p
 import { getColorCatalogText } from '@/lib/torginol';
 import { notifyAdminSMS } from '@/lib/sms';
 
-// The AI agent's system prompt — its personality and knowledge
-const SYSTEM_PROMPT = `Tu es l'assistant virtuel de Novus Epoxy, une entreprise specialisee en planchers epoxy haut de gamme au Quebec.
+// Send notification to Telegram admins when bot needs human help
+async function notifyTelegramHandoff(conversationId: number, visitorName: string, reason: string) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  if (!botToken || chatIds.length === 0) return;
 
-TON ROLE:
-- Repondre aux questions des clients potentiels
-- Collecter les informations necessaires pour generer un devis personnalise
-- Etre professionnel, chaleureux et efficace
-- Repondre en francais (Quebec)
-- REPONSES TRES COURTES: maximum 1-2 phrases par message. Pas de longs paragraphes. Va droit au but. Pas de compliments excessifs. Pose ta question directement.
+  const msg = `🔔 *Handoff requis*\n\nClient: ${visitorName || 'Anonyme'}\nRaison: ${reason}\nConversation: [#${conversationId}](https://novus-epoxy.vercel.app/dashboard/conversations/${conversationId})\n\nLe client attend une réponse humaine.`;
+
+  await Promise.all(chatIds.map(chatId =>
+    fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId.trim(), text: msg, parse_mode: 'Markdown' }),
+    }).catch(() => {})
+  ));
+}
+
+// The AI agent's system prompt — its personality and knowledge
+const SYSTEM_PROMPT = `Tu es Nova, l'assistante virtuelle de Novus Epoxy, specialistes en planchers epoxy haut de gamme au Quebec.
+
+TA PERSONNALITE:
+- Chaleureuse et naturelle, comme une vraie quebecoise. Utilise un ton amical mais professionnel.
+- Tutoyement ok si le client tutoie en premier, sinon vouvoyer.
+- REPONSES COURTES: 1-3 phrases max. Droit au but. Pas de blabla.
+- Utilise des expressions quebecoises quand ca fit naturellement (ex: "Super!", "Parfait!", "C'est beau!")
+- Ne sois JAMAIS robotique. Pas de "En tant qu'assistant..." ou "Je suis la pour vous aider..."
+- Montre de l'enthousiasme pour les projets des clients.
+
+MEMOIRE CLIENT:
+- Si le contexte de conversation montre que le client est revenu (messages precedents), accueille-le par son prenom s'il l'a donne.
+- Ex: "Content de te revoir [prenom]! Comment je peux t'aider aujourd'hui?"
+- Si tu as deja des infos sur son projet (type, superficie, etc.), fais-y reference.
 
 NOS SERVICES (ne donne JAMAIS les prix):
-- Flocon (Flake): le plus populaire, ideal pour garages et sous-sols. Fini decoratif avec flocons de couleur. Couleurs Torginol disponibles.
-- Metallique: effet marbre luxueux avec reflets metalliques, ideal pour salons, sous-sols et commerces.
-- Commercial: ultra-resistant, ideal pour entrepots, ateliers et espaces a fort trafic.
+- Flocon (Flake): le plus populaire, ideal pour garages et sous-sols. Fini decoratif avec flocons de couleur Torginol. Tres durable.
+- Metallique: effet marbre luxueux avec reflets metalliques, ideal pour salons et sous-sols qui veulent du wow.
+- Commercial: ultra-resistant, ideal pour entrepots, ateliers et espaces a fort trafic. Le plus tough.
 
 SURFACES ACCEPTEES:
 - Beton (le plus courant)
-- Bois (oui, Novus Epoxy installe sur le bois!)
+- Bois (oui, on installe sur le bois! C'est notre specialite.)
 - Peinture existante (necessite preparation)
-- Ne JAMAIS dire qu'on ne fait pas le bois — c'est FAUX. On installe sur le bois.
+- Ne JAMAIS dire qu'on ne fait pas le bois — c'est FAUX.
 
-CATALOGUE DE COULEURS TORGINOL (pour le service Flocon/Flake seulement):
-Si le client choisit Flocon et veut savoir les couleurs disponibles, presente les categories et laisse-le choisir.
-Ne liste PAS toutes les couleurs d'un coup — presente par categorie quand le client demande.
+CATALOGUE DE COULEURS TORGINOL (pour Flocon/Flake seulement):
+Si le client choisit Flocon, envoie-lui le lien du catalogue visuel pour choisir sa couleur.
+Ne liste PAS toutes les couleurs — envoie le lien.
 ${getColorCatalogText()}
 
 COLLECTE DE COULEUR:
-8. Couleur de flocon preferee (si service = flake)
-- Envoie TOUJOURS ce lien pour que le client choisisse visuellement: https://novus-epoxy.vercel.app/couleurs?vid={VISITOR_ID}
-- Dis quelque chose comme: "Voici notre catalogue de couleurs, cliquez sur celle qui vous plait!" suivi du lien
-- Le client va cliquer sur une couleur et son choix sera envoye automatiquement dans le chat
-- Si le client hesite, les plus populaires sont: Domination, Granite, Nightfall, Saddle Tan
+- Envoie TOUJOURS ce lien pour choisir visuellement: https://novus-epoxy.vercel.app/couleurs?vid={VISITOR_ID}
+- Ex: "Voici notre catalogue de couleurs, clique sur celle qui te plait!" suivi du lien
+- Le client clique sur une couleur et son choix est envoye automatiquement dans le chat
+- Si le client hesite, les plus populaires: Domination, Granite, Nightfall, Saddle Tan
+
+REFERENCES DE SUPERFICIE (aide le client a estimer):
+- Garage simple (1 auto): ~250-400 pi²
+- Garage double (2 autos): ~450-600 pi²
+- Garage triple: ~700-900 pi²
+- Sous-sol moyen: ~500-800 pi²
+- Sous-sol grand: ~800-1200 pi²
+- Entrepot/commercial: variable, demande au client
 
 REGLES STRICTES SUR LES PRIX:
-- Ne JAMAIS donner de prix, tarif, cout, estimation ou fourchette de prix dans le chat
-- Si le client demande combien ca coute, repondre: "Chaque projet est unique! Je vais preparer une soumission detaillee adaptee a votre projet. Je vais avoir besoin de quelques informations."
+- Ne JAMAIS donner de prix, tarif, cout, estimation ou fourchette de prix
+- Si le client demande combien: "Chaque projet est unique! On va te preparer une soumission detaillee. J'ai besoin de quelques infos."
 - Ne JAMAIS mentionner de prix au pied carre, prix total, depot, ou pourcentage
-- Le prix est UNIQUEMENT communique dans le devis officiel envoye par email apres verification par l'equipe
+- Le prix est communique seulement dans le devis officiel envoye par email
 
 INFORMATIONS A COLLECTER POUR UN DEVIS:
 1. Nom complet
 2. Email
 3. Telephone
 4. Adresse du projet
-5. Type de service souhaite (flake, metallique ou commercial)
+5. Type de service (flake, metallique ou commercial)
 6. Superficie approximative en pieds carres
 7. Etat actuel du plancher (beton brut, peinture existante, etc.)
 
-COMMENT COLLECTER:
-- Ne demande PAS toutes les infos d'un coup. Pose 1-2 questions a la fois.
-- Commence par comprendre le besoin du client, puis collecte les infos progressivement.
-- Si le client ne connait pas sa superficie, aide-le a estimer (ex: garage simple = ~400pi², garage double = ~600pi²)
-- Si le client hesite entre les types, explique les differences sans mentionner les prix
+COMMENT COLLECTER (strategie de closing):
+- Commence par le besoin: "C'est pour quel espace?" → type de service → superficie
+- Ensuite collecte les coordonnees: "Pour te preparer une belle soumission, c'est quoi ton nom?"
+- Pose 1-2 questions max a la fois. Jamais tout d'un coup.
+- Si le client hesite, aide-le: "Un garage simple c'est environ 400 pi². Le tien est-tu pas mal cette taille-la?"
+- Si le client semble pret mais hesite a donner ses infos, rassure-le: "C'est sans engagement, on veut juste te donner un prix exact!"
+- TOUJOURS relancer poliment si le client n'a pas repondu a une question — reformule autrement.
 
 QUAND TU AS TOUTES LES INFOS:
-- Dis au client que tu prepares sa soumission et que l'equipe va la verifier avant de l'envoyer par email
-- Reponds avec un JSON special a la fin de ton message pour declencher la creation du devis
-- Le JSON doit etre sur une ligne separee, entre des balises: <QUOTE_DATA>{"nom":"...","email":"...","tel":"...","adresse":"...","type_service":"flake|metallique|commercial","superficie":nombre,"etat_plancher":"...","couleur_flake":"nom de la couleur si flake"}</QUOTE_DATA>
+- Confirme un resume rapide et dis que l'equipe va verifier et envoyer le devis par email
+- Reponds avec un JSON special pour creer le devis automatiquement
+- Le JSON doit etre sur une ligne separee: <QUOTE_DATA>{"nom":"...","email":"...","tel":"...","adresse":"...","type_service":"flake|metallique|commercial","superficie":nombre,"etat_plancher":"...","couleur_flake":"nom si flake"}</QUOTE_DATA>
+
+HANDOFF HUMAIN:
+- Si le client pose une question technique complexe que tu ne peux pas repondre, ou s'il est frustre/insatisfait
+- Si le client demande explicitement de parler a un humain
+- Si le client a une plainte ou un probleme avec un travail existant
+- Reponds avec: <HANDOFF>raison courte</HANDOFF> a la fin de ton message
+- Ex: "Je vais transferer ta question a notre equipe, quelqu'un va te repondre rapidement! <HANDOFF>Question technique sur preparation plancher abime</HANDOFF>"
 
 IMPORTANT:
 - Ne genere le JSON que quand tu as AU MINIMUM: nom, email, type_service et superficie
-- Sois naturel dans la conversation, ne sois pas un robot
+- Sois naturelle et engageante — tu veux que le client se sente bien et ait envie de faire affaire avec Novus
 - Si le client pose une question hors sujet, reponds brievement et ramene la conversation
-- Ne donne JAMAIS de prix, meme approximatif — dis toujours que ca sera dans le devis
-- Mentionne toujours que la soumission detaillee sera envoyee par email`;
+- Ne donne JAMAIS de prix — dis toujours que ca sera dans le devis
+- Apres avoir cree le devis, mentionne qu'on peut aussi planifier les travaux une fois le devis approuve`;
 
 interface ConversationContext {
   conversationId: number;
@@ -135,28 +174,33 @@ async function updateConversationData(conversationId: number, data: Record<strin
   }
 }
 
-// Auto-classify lead temperature based on collected data
+// Auto-classify lead temperature based on collected data and engagement
 async function updateLeadTemp(conversationId: number) {
-  const rows = await query(`SELECT visitor_name, visitor_email, visitor_tel, visitor_adresse, type_service, superficie FROM conversations WHERE id = $1`, [conversationId]);
+  const rows = await query(
+    `SELECT c.visitor_name, c.visitor_email, c.visitor_tel, c.visitor_adresse, c.type_service, c.superficie,
+            (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id AND role = 'user') as msg_count
+     FROM conversations c WHERE c.id = $1`,
+    [conversationId]
+  );
   if (rows.length === 0) return;
   const c = rows[0];
 
-  // Hot: has name + email + service + superficie (ready for quote)
-  // Warm: has at least name or email + service type
-  // Cold: just started
-  let temp = 'cold';
-  const hasName = !!c.visitor_name;
-  const hasEmail = !!c.visitor_email;
-  const hasService = !!c.type_service;
-  const hasSuperficie = !!c.superficie;
+  // Score-based lead qualification
+  let score = 0;
+  if (c.visitor_name) score += 2;
+  if (c.visitor_email) score += 3;
+  if (c.visitor_tel) score += 2;
+  if (c.type_service) score += 2;
+  if (c.superficie) score += 2;
+  if (c.visitor_adresse) score += 1;
 
-  if (hasName && hasEmail && hasService && hasSuperficie) {
-    temp = 'hot';
-  } else if ((hasName || hasEmail) && hasService) {
-    temp = 'warm';
-  } else if (hasName || hasEmail || hasService) {
-    temp = 'warm';
-  }
+  // Engagement bonus: more messages = more interested
+  const msgCount = Number(c.msg_count ?? 0);
+  if (msgCount >= 6) score += 2;
+  else if (msgCount >= 3) score += 1;
+
+  // hot >= 9 (ready for quote), warm >= 4 (engaged), cold < 4
+  const temp = score >= 9 ? 'hot' : score >= 4 ? 'warm' : 'cold';
 
   await query(`UPDATE conversations SET lead_temp = $1 WHERE id = $2`, [temp, conversationId]);
 }
@@ -239,6 +283,47 @@ async function createQuoteFromConversation(conversationId: number, data: {
   return { quoteId, total: calc.total, depot: calc.depot_requis };
 }
 
+// Load returning client context for memory
+async function getClientContext(conversationId: number, visitorId: string): Promise<string> {
+  // Check if this visitor has previous conversations
+  const prevConvos = await query(
+    `SELECT c.visitor_name, c.visitor_email, c.type_service, c.superficie, c.created_at,
+            (SELECT COUNT(*) FROM messages WHERE conversation_id = c.id) as msg_count
+     FROM conversations c
+     WHERE c.visitor_id = $1 AND c.id != $2
+     ORDER BY c.created_at DESC LIMIT 3`,
+    [visitorId, conversationId]
+  );
+
+  // Check current conversation data
+  const current = await query(
+    `SELECT visitor_name, visitor_email, type_service, superficie, visitor_adresse, etat_plancher
+     FROM conversations WHERE id = $1`,
+    [conversationId]
+  );
+
+  const parts: string[] = [];
+
+  if (prevConvos.length > 0) {
+    const prev = prevConvos[0];
+    parts.push(`CLIENT DE RETOUR: Ce client est deja venu chatter.`);
+    if (prev.visitor_name) parts.push(`Prenom/nom connu: ${prev.visitor_name}`);
+    if (prev.type_service) parts.push(`Interesse par: ${prev.type_service}`);
+    if (prev.superficie) parts.push(`Superficie mentionnee: ${prev.superficie} pi²`);
+    parts.push(`Nombre de visites precedentes: ${prevConvos.length}`);
+  }
+
+  if (current.length > 0) {
+    const c = current[0];
+    if (c.visitor_name) parts.push(`Nom actuel: ${c.visitor_name}`);
+    if (c.type_service) parts.push(`Service choisi: ${c.type_service}`);
+    if (c.superficie) parts.push(`Superficie: ${c.superficie} pi²`);
+    if (c.visitor_adresse) parts.push(`Adresse: ${c.visitor_adresse}`);
+  }
+
+  return parts.length > 0 ? `\n\nCONTEXTE CLIENT:\n${parts.join('\n')}` : '';
+}
+
 // Main agent function — process a user message and return response
 export async function processMessage(ctx: ConversationContext, userMessage: string): Promise<string> {
   const { conversationId } = ctx;
@@ -246,8 +331,11 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
   // Save user message
   await saveMessage(conversationId, 'user', userMessage);
 
-  // Load conversation history
-  const history = await loadHistory(conversationId);
+  // Load conversation history and client context in parallel
+  const [history, clientContext] = await Promise.all([
+    loadHistory(conversationId),
+    getClientContext(conversationId, ctx.visitorId),
+  ]);
 
   // Call Claude API
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -262,6 +350,8 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
     content: m.content,
   }));
 
+  const systemPrompt = SYSTEM_PROMPT.replace('{VISITOR_ID}', ctx.visitorId) + clientContext;
+
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -272,13 +362,13 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 800,
-      system: SYSTEM_PROMPT.replace('{VISITOR_ID}', ctx.visitorId),
+      system: systemPrompt,
       messages: claudeMessages,
     }),
   });
 
   if (!claudeRes.ok) {
-    const fallback = 'Desolee, je rencontre un probleme technique. Vous pouvez nous joindre directement a gestionnovusepoxy@gmail.com ou remplir le formulaire sur novusepoxy.ca';
+    const fallback = 'Desolee, je rencontre un probleme technique. Tu peux nous joindre directement a gestionnovusepoxy@gmail.com ou au 581-307-2678!';
     await saveMessage(conversationId, 'assistant', fallback);
     return fallback;
   }
@@ -286,9 +376,20 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
   const claudeData = await claudeRes.json();
   const assistantText = claudeData.content?.[0]?.text ?? '';
 
+  // Check for handoff request
+  const handoffMatch = assistantText.match(/<HANDOFF>([\s\S]*?)<\/HANDOFF>/);
+  let responseText = assistantText.replace(/<HANDOFF>[\s\S]*?<\/HANDOFF>/, '').trim();
+
+  if (handoffMatch) {
+    const current = await query(`SELECT visitor_name FROM conversations WHERE id = $1`, [conversationId]);
+    const name = current[0]?.visitor_name ?? '';
+    await notifyTelegramHandoff(conversationId, name as string, handoffMatch[1]);
+    await query(`UPDATE conversations SET status = 'handoff' WHERE id = $1`, [conversationId]);
+  }
+
   // Check if the agent wants to create a quote
-  const quoteMatch = assistantText.match(/<QUOTE_DATA>([\s\S]*?)<\/QUOTE_DATA>/);
-  let responseText = assistantText.replace(/<QUOTE_DATA>[\s\S]*?<\/QUOTE_DATA>/, '').trim();
+  const quoteMatch = responseText.match(/<QUOTE_DATA>([\s\S]*?)<\/QUOTE_DATA>/);
+  responseText = responseText.replace(/<QUOTE_DATA>[\s\S]*?<\/QUOTE_DATA>/, '').trim();
 
   if (quoteMatch) {
     try {
@@ -300,7 +401,7 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
       // Create the quote
       const result = await createQuoteFromConversation(conversationId, quoteData);
       if (result) {
-        responseText += `\n\nMerci! Votre soumission a ete preparee. Notre equipe va la verifier et vous l'envoyer par email a ${quoteData.email} tres bientot.`;
+        responseText += `\n\nC'est beau! Ta soumission est en preparation. L'equipe va la verifier et te l'envoyer par email a ${quoteData.email} tres bientot!`;
       }
     } catch (err) {
       console.error('Failed to parse quote data from agent response:', err);
