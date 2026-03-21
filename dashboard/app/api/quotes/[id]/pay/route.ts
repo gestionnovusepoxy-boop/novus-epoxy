@@ -104,8 +104,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     return NextResponse.redirect(session.url);
-  } catch (err) {
+  } catch (err: unknown) {
     console.error('Stripe session creation error:', err);
-    return NextResponse.json({ error: 'Erreur lors de la creation de la session de paiement' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Unknown error';
+    return NextResponse.json({ error: 'Erreur lors de la creation de la session de paiement', details: message }, { status: 500 });
   }
 }
