@@ -28,7 +28,6 @@ function formatMoney(n: number) {
 }
 
 export default function CalendrierClient({ bookings, calendarToken }: { bookings: Booking[]; calendarToken: string }) {
-  const [view, setView] = useState<'list' | 'week'>('list');
   const [showSync, setShowSync] = useState(false);
 
   const today = new Date().toISOString().split('T')[0];
@@ -104,6 +103,7 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {bookings.map(b => {
             const isPast = b.jour2_date < today;
+            const isProvisoire = b.statut === 'en_attente';
             return (
               <div
                 key={b.id}
@@ -111,13 +111,24 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
                   background: '#1e293b',
                   borderRadius: '12px',
                   padding: '16px',
-                  border: isPast ? '1px solid #334155' : '1px solid #475569',
+                  border: isProvisoire ? '1px dashed #f59e0b' : isPast ? '1px solid #334155' : '1px solid #475569',
                   opacity: isPast ? 0.6 : 1,
                 }}
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '8px' }}>
                   <div>
-                    <div style={{ fontSize: '16px', fontWeight: 700 }}>{b.client_nom}</div>
+                    <div style={{ fontSize: '16px', fontWeight: 700 }}>
+                      {b.client_nom}
+                      {isProvisoire && (
+                        <span style={{
+                          marginLeft: '8px', fontSize: '11px', fontWeight: 600,
+                          background: '#f59e0b20', color: '#f59e0b', padding: '2px 8px',
+                          borderRadius: '4px', border: '1px solid #f59e0b40',
+                        }}>
+                          Provisoire
+                        </span>
+                      )}
+                    </div>
                     <div style={{ color: '#94a3b8', fontSize: '13px', marginTop: '2px' }}>
                       {b.type_service} — {b.superficie} pi² — {formatMoney(b.total)}
                     </div>
@@ -148,7 +159,9 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
                   }}>
                     <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase' as const }}>Jour 1</div>
                     <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '2px' }}>{formatDate(b.jour1_date)}</div>
-                    <div style={{ color: '#64748b', fontSize: '12px' }}>Matin: 8h-12h</div>
+                    <div style={{ color: '#64748b', fontSize: '12px' }}>
+                      {b.jour1_slot === 'matin' ? 'Matin: 8h-12h' : 'PM: 12h-16h'}
+                    </div>
                   </div>
                   <div style={{
                     flex: 1, background: '#0f172a', borderRadius: '8px', padding: '10px',

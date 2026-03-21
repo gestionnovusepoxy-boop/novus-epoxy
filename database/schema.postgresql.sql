@@ -98,10 +98,12 @@ CREATE TABLE IF NOT EXISTS quotes (
   total           NUMERIC(10,2) NOT NULL,
   depot_requis    NUMERIC(10,2) NOT NULL,
   statut          VARCHAR(20) NOT NULL DEFAULT 'brouillon'
-                    CHECK (statut IN ('brouillon','en_attente','approuve','envoye','depot_paye','planifie','complete','refuse')),
+                    CHECK (statut IN ('brouillon','en_attente','approuve','envoye','contrat_signe','depot_paye','planifie','complete','refuse')),
   submission_id   INT REFERENCES submissions(id) ON DELETE SET NULL,
   approved_at     TIMESTAMPTZ,
   sent_at         TIMESTAMPTZ,
+  contrat_signe_at TIMESTAMPTZ,
+  contrat_signature_nom VARCHAR(120),
   paid_at         TIMESTAMPTZ,
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()

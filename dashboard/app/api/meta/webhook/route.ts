@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { query } from '@/lib/db';
 import { getOrCreateConversation, processMessage } from '@/lib/agent';
 
-const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN ?? '';
-
 // GET — Meta webhook verification (subscribe handshake)
 export async function GET(req: NextRequest) {
+  const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN ?? '';
   const { searchParams } = new URL(req.url);
   const mode      = searchParams.get('hub.mode');
   const token     = searchParams.get('hub.verify_token');
@@ -21,12 +21,11 @@ export async function GET(req: NextRequest) {
 // Verify Meta webhook signature (X-Hub-Signature-256)
 function verifyMetaSignature(payload: string, signature: string | null): boolean {
   const appSecret = process.env.META_APP_SECRET;
-  if (!appSecret) return true; // Skip verification if secret not configured
+  if (!appSecret) return false; // Signature verification must fail if secret is missing
   if (!signature) return false;
 
-  const crypto = require('crypto');
-  const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(payload).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  const expected = 'sha256=' + createHmac('sha256', appSecret).update(payload).digest('hex');
+  return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
 }
 
 // POST — Receive events from Meta (leadgen + messaging)
@@ -40,7 +39,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
   }
 
-  const body = JSON.parse(rawBody);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
 
   if (body.object === 'page') {
     for (const entry of body.entry ?? []) {

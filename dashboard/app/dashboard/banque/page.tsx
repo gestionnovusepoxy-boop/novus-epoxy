@@ -179,7 +179,7 @@ function PageContent() {
                 <tr><td colSpan={6} className="text-center py-8 text-slate-500 text-sm">Aucune transaction. Importez un CSV de votre banque.</td></tr>
               )}
               {data.map(tx => (
-                <tr key={tx.id} className="border-b border-slate-700 hover:bg-slate-750 transition">
+                <tr key={tx.id} className="border-b border-slate-700 hover:bg-slate-700/50 transition">
                   <td className="px-4 py-3 text-slate-300 text-sm">{formatDate(tx.date_tx)}</td>
                   <td className="px-4 py-3 text-white text-sm">{tx.description}</td>
                   <td className={`px-4 py-3 text-sm font-medium ${tx.type === 'credit' ? 'text-green-400' : 'text-red-400'}`}>
@@ -205,7 +205,7 @@ function PageContent() {
         {total > 50 && (
           <div className="flex gap-2 justify-end">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40">Precedent</button>
+              className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40">Précédent</button>
             <span className="px-3 py-1.5 text-slate-400 text-sm">Page {page} / {Math.ceil(total / 50)}</span>
             <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 50)}
               className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40">Suivant</button>

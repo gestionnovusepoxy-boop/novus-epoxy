@@ -20,14 +20,22 @@ export async function POST(req: NextRequest) {
   if (quotes.length === 0) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
   const q = quotes[0];
-  if (!['envoye', 'depot_paye'].includes(q.statut as string)) {
-    return NextResponse.json({ error: 'Ce devis ne peut pas être planifié' }, { status: 400 });
+
+  // Verify the requester matches the quote's client email
+  const clientEmail = (body.client_email as string | undefined)?.toLowerCase().trim() ?? '';
+  const quoteEmail  = (q.client_email as string | undefined)?.toLowerCase().trim() ?? '';
+  if (!clientEmail || !quoteEmail || clientEmail !== quoteEmail) {
+    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
   }
 
-  // Check slots are still available
+  if (!['envoye', 'contrat_signe', 'depot_paye'].includes(q.statut as string)) {
+    return NextResponse.json({ error: 'Ce devis ne peut pas être planifié.' }, { status: 400 });
+  }
+
+  // Check slots are still available — only confirmed bookings block dates
   const conflicts = await query(
     `SELECT id FROM bookings
-     WHERE statut != 'annule'
+     WHERE statut = 'confirme'
      AND (
        (jour1_date = $1 AND jour1_slot = 'matin')
        OR (jour2_date = $2 AND jour2_slot = $3)
@@ -41,19 +49,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Ces dates ne sont plus disponibles' }, { status: 409 });
   }
 
-  // Create booking
+  // Create booking — provisional (en_attente) until deposit is paid
   const rows = await query(
-    `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot)
-     VALUES ($1, $2, 'matin', $3, $4)
+    `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut)
+     VALUES ($1, $2, 'matin', $3, $4, 'en_attente')
      RETURNING id`,
     [quoteId, jour1Date, jour2Date, jour2Slot]
   );
 
   const bookingId = rows[0].id as number;
 
-  // Link booking to quote
+  // Link booking to quote (don't change statut — dates are provisional until deposit)
   await query(
-    `UPDATE quotes SET booking_id = $1, statut = 'planifie' WHERE id = $2`,
+    `UPDATE quotes SET booking_id = $1 WHERE id = $2`,
     [bookingId, quoteId]
   );
 

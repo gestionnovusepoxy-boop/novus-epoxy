@@ -7,28 +7,30 @@ import { fetchQuotes, updateQuote, type Quote, type QuoteStatut } from '@/lib/ap
 import { formatDate } from '@/lib/utils';
 import { formatMoney } from '@/lib/pricing';
 
-const STATUTS: QuoteStatut[] = ['brouillon', 'en_attente', 'approuve', 'envoye', 'depot_paye', 'planifie', 'complete', 'refuse'];
+const STATUTS: QuoteStatut[] = ['brouillon', 'en_attente', 'approuve', 'envoye', 'contrat_signe', 'depot_paye', 'planifie', 'complete', 'refuse'];
 
 const BADGE: Record<QuoteStatut, string> = {
-  brouillon:  'bg-slate-500/20 text-slate-300 border-slate-500/30',
-  en_attente: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  approuve:   'bg-amber-500/20 text-amber-300 border-amber-500/30',
-  envoye:     'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  depot_paye: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-  planifie:   'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-  complete:   'bg-green-500/20 text-green-300 border-green-500/30',
-  refuse:     'bg-red-500/20 text-red-300 border-red-500/30',
+  brouillon:      'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  en_attente:     'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  approuve:       'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  envoye:         'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  contrat_signe:  'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+  depot_paye:     'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  planifie:       'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  complete:       'bg-green-500/20 text-green-300 border-green-500/30',
+  refuse:         'bg-red-500/20 text-red-300 border-red-500/30',
 };
 
 const LABEL: Record<QuoteStatut, string> = {
-  brouillon:  'Brouillon',
-  en_attente: 'En attente',
-  approuve:   'Approuvé',
-  envoye:     'Envoyé',
-  depot_paye: 'Dépôt payé',
-  planifie:   'Planifié',
-  complete:   'Complété',
-  refuse:     'Refusé',
+  brouillon:      'Brouillon',
+  en_attente:     'En attente',
+  approuve:       'Approuvé',
+  envoye:         'Envoyé',
+  contrat_signe:  'Contrat signé',
+  depot_paye:     'Dépôt payé',
+  planifie:       'Planifié',
+  complete:       'Complété',
+  refuse:         'Refusé',
 };
 
 const SERVICE_LABEL: Record<string, string> = {
@@ -48,7 +50,7 @@ function QuoteRow({ q, onUpdate }: { q: Quote; onUpdate: () => void }) {
   }
 
   return (
-    <tr className="border-b border-slate-700 hover:bg-slate-750 transition">
+    <tr className="border-b border-slate-700 hover:bg-slate-700/50 transition">
       <td className="px-4 py-3">
         <Link href={`/dashboard/devis/${q.id}`} className="hover:underline">
           <p className="text-white text-sm font-medium">{q.client_nom}</p>
@@ -152,7 +154,7 @@ function PageContent() {
               disabled={page === 1}
               className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40"
             >
-              Precedent
+              Précédent
             </button>
             <span className="px-3 py-1.5 text-slate-400 text-sm">
               Page {page} / {Math.ceil(total / 25)}

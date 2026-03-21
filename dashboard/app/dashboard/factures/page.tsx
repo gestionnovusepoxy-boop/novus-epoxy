@@ -36,11 +36,11 @@ const BADGE: Record<InvoiceStatut, string> = {
 
 const LABEL: Record<InvoiceStatut, string> = {
   brouillon:        'Brouillon',
-  envoyee:          'Envoyee',
-  depot_recu:       'Depot recu',
+  envoyee:          'Envoyée',
+  depot_recu:       'Dépôt reçu',
   travaux_en_cours: 'Travaux en cours',
-  completee:        'Completee',
-  annulee:          'Annulee',
+  completee:        'Complétée',
+  annulee:          'Annulée',
 };
 
 const SERVICE_LABEL: Record<string, string> = {
@@ -51,7 +51,7 @@ const SERVICE_LABEL: Record<string, string> = {
 
 function InvoiceRow({ inv }: { inv: InvoiceRow }) {
   return (
-    <tr className="border-b border-slate-700 hover:bg-slate-750 transition">
+    <tr className="border-b border-slate-700 hover:bg-slate-700/50 transition">
       <td className="px-4 py-3">
         <Link href={`/dashboard/factures/${inv.id}`} className="text-amber-400 hover:underline font-mono text-sm font-medium">
           {inv.numero}
@@ -163,7 +163,7 @@ function PageContent() {
         {total > 25 && (
           <div className="flex gap-2 justify-end">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}
-              className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40">Precedent</button>
+              className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40">Précédent</button>
             <span className="px-3 py-1.5 text-slate-400 text-sm">Page {page} / {Math.ceil(total / 25)}</span>
             <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 25)}
               className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40">Suivant</button>

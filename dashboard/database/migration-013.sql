@@ -1,0 +1,4 @@
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS deposit_paid_at TIMESTAMPTZ;
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS balance_paid_at TIMESTAMPTZ;
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS stripe_deposit_session_id VARCHAR(255);
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS stripe_balance_session_id VARCHAR(255);

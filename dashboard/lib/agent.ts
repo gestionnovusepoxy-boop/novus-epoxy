@@ -56,7 +56,7 @@ COLLECTE DE COULEUR:
 - Envoie TOUJOURS ce lien pour choisir visuellement: https://novus-epoxy.vercel.app/couleurs?vid={VISITOR_ID}
 - Ex: "Voici notre catalogue de couleurs, clique sur celle qui te plait!" suivi du lien
 - Le client clique sur une couleur et son choix est envoye automatiquement dans le chat
-- Si le client hesite, les plus populaires: Domination, Granite, Nightfall, Saddle Tan
+- Si le client hesite, les plus populaires: Nightfall, Saddle Tan, Sahara, Cappuccino
 
 REFERENCES DE SUPERFICIE (aide le client a estimer):
 - Garage simple (1 auto): ~250-400 pi²
@@ -82,12 +82,19 @@ INFORMATIONS A COLLECTER POUR UN DEVIS:
 7. Etat actuel du plancher (beton brut, peinture existante, etc.)
 
 COMMENT COLLECTER (strategie de closing):
-- Commence par le besoin: "C'est pour quel espace?" → type de service → superficie
-- Ensuite collecte les coordonnees: "Pour te preparer une belle soumission, c'est quoi ton nom?"
-- Pose 1-2 questions max a la fois. Jamais tout d'un coup.
-- Si le client hesite, aide-le: "Un garage simple c'est environ 400 pi². Le tien est-tu pas mal cette taille-la?"
-- Si le client semble pret mais hesite a donner ses infos, rassure-le: "C'est sans engagement, on veut juste te donner un prix exact!"
-- TOUJOURS relancer poliment si le client n'a pas repondu a une question — reformule autrement.
+- REGLE #1: Tes reponses doivent etre COURTES — 1 a 2 phrases MAX. Jamais de paragraphes.
+- REGLE #2: Pose UNE SEULE question a la fois. Le widget affiche des boutons de reponse rapide, donc ta question doit etre simple et directe.
+- Suis cet ordre precis, une question a la fois:
+  1. "C'est pour quel espace?" (le widget affiche: Garage, Sous-sol, Commercial, Autre)
+  2. "Quel type de fini t'interesse?" (le widget affiche: Flocon, Metallique, Commercial)
+  3. "C'est quoi l'etat de ton plancher actuellement?" (le widget affiche: Beton brut, Peinture existante, Epoxy a refaire, Je ne sais pas)
+  4. "C'est environ combien de pieds carres?" (le widget affiche: ~400pi², ~600pi², ~700pi², Je ne sais pas)
+  5. "Pour te preparer une soumission, c'est quoi ton nom complet?"
+  6. "Parfait [prenom]! Ton email pour recevoir la soumission?"
+  7. "Un numero de telephone au cas ou?"
+  8. "L'adresse du projet?"
+- Si le client hesite, aide-le en UNE phrase: "Un garage simple c'est environ 400 pi²."
+- JAMAIS de longs messages. JAMAIS de listes. Reponses courtes comme un texto.
 
 QUAND TU AS TOUTES LES INFOS:
 - Confirme un resume rapide et dis que l'equipe va verifier et envoyer le devis par email
@@ -361,7 +368,7 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 800,
+      max_tokens: 300,
       system: systemPrompt,
       messages: claudeMessages,
     }),
@@ -385,6 +392,11 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
     const name = current[0]?.visitor_name ?? '';
     await notifyTelegramHandoff(conversationId, name as string, handoffMatch[1]);
     await query(`UPDATE conversations SET status = 'handoff' WHERE id = $1`, [conversationId]);
+    // SMS notification to admins with dashboard link
+    const phones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];
+    const { sendSMS } = await import('@/lib/sms');
+    const smsMsg = `Novus Epoxy: ${name || 'Un client'} demande de parler a un humain! https://novus-epoxy.vercel.app/dashboard/conversations/${conversationId}`;
+    await Promise.all(phones.map(phone => sendSMS(phone, smsMsg)));
   }
 
   // Check if the agent wants to create a quote

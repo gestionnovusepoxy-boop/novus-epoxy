@@ -9,10 +9,9 @@ function safeCompare(a: string, b: string): boolean {
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
 }
 
-const WEBHOOK_SECRET = process.env.OPENCLAW_WEBHOOK_SECRET ?? '';
-
 // POST — Receive events from OpenClaw (Telegram bot Nova)
 export async function POST(req: NextRequest) {
+  const WEBHOOK_SECRET = process.env.OPENCLAW_WEBHOOK_SECRET ?? '';
   // Verify shared secret — reject if not configured or mismatch
   const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
   if (!WEBHOOK_SECRET || !authHeader || !safeCompare(WEBHOOK_SECRET, authHeader)) {

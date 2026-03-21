@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Rate limiting in-memory (réinitialisé à chaque cold start — suffisant pour Vercel serverless)
+// TODO: For production scale / multi-instance deployments, replace with Upstash Redis
+//       (e.g. @upstash/ratelimit) so rate limit state is shared across all serverless instances.
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function isRateLimited(key: string, maxRequests: number, windowMs: number): boolean {

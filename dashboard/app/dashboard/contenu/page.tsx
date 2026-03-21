@@ -23,9 +23,11 @@ export default function ContenuPage() {
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<GeneratedContent[]>([]);
   const [copied, setCopied] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   async function generate() {
     setLoading(true);
+    setError(null);
     try {
       const res = await fetch('/api/content/generate', {
         method: 'POST',
@@ -35,8 +37,12 @@ export default function ContenuPage() {
       const json = await res.json();
       if (json.content) {
         setResults(prev => [json.content, ...prev]);
+      } else {
+        setError(json.error ?? 'Erreur lors de la generation');
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur de connexion');
+    }
     setLoading(false);
   }
 
@@ -81,6 +87,12 @@ export default function ContenuPage() {
           {loading ? 'Generation en cours...' : 'Generer un post'}
         </button>
       </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 text-red-400 text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Results */}
       <div className="space-y-4">

@@ -57,7 +57,7 @@ const TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        statut: { type: 'string', description: 'Filtrer par statut (brouillon, en_attente, approuve, envoye, depot_paye, planifie, complete, refuse)', default: '' },
+        statut: { type: 'string', description: 'Filtrer par statut (brouillon, en_attente, approuve, envoye, contrat_signe, depot_paye, planifie, complete, refuse)', default: '' },
         limit: { type: 'number', description: 'Nombre de devis a retourner', default: 5 },
       },
       required: [],
@@ -207,9 +207,9 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
           (SELECT COUNT(*) FROM quotes WHERE statut = 'complete') as completes,
           (SELECT COUNT(*) FROM submissions WHERE created_at::date = CURRENT_DATE) as leads_today,
           (SELECT COUNT(*) FROM submissions) as leads_total,
-          (SELECT COALESCE(SUM(total), 0) FROM quotes WHERE statut IN ('depot_paye','planifie','complete')) as revenus_confirmes,
+          (SELECT COALESCE(SUM(total), 0) FROM quotes WHERE statut IN ('contrat_signe','depot_paye','planifie','complete')) as revenus_confirmes,
           (SELECT COALESCE(SUM(total), 0) FROM quotes WHERE statut = 'envoye') as revenus_en_attente,
-          (SELECT COUNT(*) FROM bookings WHERE day1_date >= CURRENT_DATE) as reservations_a_venir
+          (SELECT COUNT(*) FROM bookings WHERE jour1_date >= CURRENT_DATE) as reservations_a_venir
       `);
       return JSON.stringify(stats[0]);
     }
@@ -217,7 +217,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
     case 'liste_devis': {
       const statut = input.statut as string;
       const limit = Math.min(Number(input.limit) || 5, 20);
-      const validStatuts = ['brouillon','en_attente','approuve','envoye','depot_paye','planifie','complete','refuse'];
+      const validStatuts = ['brouillon','en_attente','approuve','envoye','contrat_signe','depot_paye','planifie','complete','refuse'];
       const safeStatut = statut && validStatuts.includes(statut) ? statut : '';
       const rows = safeStatut
         ? await query(
@@ -252,11 +252,11 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
     case 'liste_reservations': {
       const limit = Math.min(Number(input.limit) || 5, 20);
       const rows = await query(
-        `SELECT b.id, b.quote_id, b.day1_date, b.day1_slot, b.day2_date, b.day2_slot, b.statut,
+        `SELECT b.id, b.quote_id, b.jour1_date, b.jour1_slot, b.jour2_date, b.jour2_slot, b.statut,
                 q.client_nom, q.client_tel, q.client_adresse, q.type_service, q.superficie
          FROM bookings b JOIN quotes q ON b.quote_id = q.id
-         WHERE b.day1_date >= CURRENT_DATE
-         ORDER BY b.day1_date ASC LIMIT $1`,
+         WHERE b.jour1_date >= CURRENT_DATE
+         ORDER BY b.jour1_date ASC LIMIT $1`,
         [limit]
       );
       return JSON.stringify(rows);
@@ -312,13 +312,14 @@ IMPORTANT:
 
 // POST — Telegram webhook for admin bot
 export async function POST(req: NextRequest) {
-  // Verify Telegram webhook secret token
+  // Verify Telegram webhook secret token — mandatory
   const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (telegramSecret) {
-    const headerSecret = req.headers.get('x-telegram-bot-api-secret-token') ?? '';
-    if (!safeCompare(telegramSecret, headerSecret)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+  if (!telegramSecret) {
+    return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
+  }
+  const headerSecret = req.headers.get('x-telegram-bot-api-secret-token') ?? '';
+  if (!safeCompare(telegramSecret, headerSecret)) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);

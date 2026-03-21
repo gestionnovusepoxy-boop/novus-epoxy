@@ -28,12 +28,17 @@ export default function ReservationPage() {
   const [done, setDone] = useState(false);
   const [error, setError] = useState('');
 
+  const [clientEmail, setClientEmail] = useState('');
+
   useEffect(() => {
     fetch(`/api/bookings/available?quote_id=${id}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) setError(data.error);
-        else setSlots(data.available || []);
+        else {
+          setSlots(data.available || []);
+          if (data.client_email) setClientEmail(data.client_email);
+        }
       })
       .catch(() => setError('Erreur de connexion'))
       .finally(() => setLoading(false));
@@ -50,6 +55,7 @@ export default function ReservationPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           quote_id: id,
+          client_email: clientEmail,
           jour1_date: selected.date,
           jour2_date: selected.jour2_date,
           jour2_slot: selected.jour2_slot,
@@ -74,9 +80,9 @@ export default function ReservationPage() {
       <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
         <div style={{ textAlign: 'center', maxWidth: '500px' }}>
           <div style={{ fontSize: '64px', marginBottom: '16px' }}>&#10003;</div>
-          <h1 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 16px' }}>Reservation confirmee!</h1>
+          <h1 style={{ fontSize: '24px', fontWeight: 700, margin: '0 0 16px' }}>Dates choisies!</h1>
           <div style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', textAlign: 'left', marginBottom: '20px' }}>
-            <p style={{ margin: '0 0 12px', color: '#94a3b8', fontSize: '14px' }}>Vos rendez-vous:</p>
+            <p style={{ margin: '0 0 12px', color: '#94a3b8', fontSize: '14px' }}>Vos dates provisoires:</p>
             <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px', marginBottom: '8px' }}>
               <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '13px' }}>JOUR 1 — Preparation</div>
               <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '4px' }}>{formatDate(selected.date)}</div>
@@ -88,9 +94,22 @@ export default function ReservationPage() {
               <div style={{ color: '#94a3b8', fontSize: '14px' }}>{selected.jour2_slot === 'matin' ? 'Matin' : 'Apres-midi'}: {slotLabel(selected.jour2_slot)}</div>
             </div>
           </div>
-          <p style={{ color: '#94a3b8', fontSize: '14px' }}>
-            Vous recevrez un rappel 24h avant chaque rendez-vous. Pensez a preparer l'espace des travaux!
-          </p>
+          <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'left' }}>
+            <p style={{ margin: '0 0 4px', color: '#92400e', fontWeight: 700, fontSize: '14px' }}>Important</p>
+            <p style={{ margin: 0, color: '#78716c', fontSize: '13px' }}>
+              Ces dates sont provisoires et ne seront confirmees qu'apres la signature du contrat et la reception du depot de 30% dans les 48 heures.
+            </p>
+          </div>
+          <a
+            href={`/contrat/${id}`}
+            style={{
+              display: 'inline-block', background: '#f59e0b', color: '#0f172a',
+              padding: '14px 32px', borderRadius: '8px', textDecoration: 'none',
+              fontWeight: 700, fontSize: '16px',
+            }}
+          >
+            Etape suivante: Signer le contrat
+          </a>
         </div>
       </div>
     );

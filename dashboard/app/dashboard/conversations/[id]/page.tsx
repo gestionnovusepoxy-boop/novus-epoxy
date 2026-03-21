@@ -25,6 +25,7 @@ function PageContent() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [sendError, setSendError] = useState<string | null>(null);
   const msgsEndRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -41,6 +42,7 @@ function PageContent() {
   async function sendReply() {
     if (!reply.trim() || sending) return;
     setSending(true);
+    setSendError(null);
     try {
       const res = await fetch(`/api/conversations/${id}`, {
         method: 'POST',
@@ -50,8 +52,12 @@ function PageContent() {
       if (res.ok) {
         setReply('');
         await load();
+      } else {
+        setSendError('Erreur lors de l\'envoi du message');
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : 'Erreur de connexion');
+    }
     setSending(false);
   }
 
@@ -129,6 +135,12 @@ function PageContent() {
             )}
             <div ref={msgsEndRef} />
           </div>
+
+          {sendError && (
+            <div className="mt-2 bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-red-400 text-sm">
+              {sendError}
+            </div>
+          )}
 
           {/* Reply box */}
           <div className="mt-4 flex gap-3 border-t border-slate-700 pt-4">

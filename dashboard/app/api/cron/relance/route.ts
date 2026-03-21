@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { sendFollowUpSMS } from '@/lib/sms';
+import { escapeHtml } from '@/lib/utils';
 
 // Vercel Cron — runs every 6 hours to send follow-ups on unanswered quotes
 // Relance 1: 48h after sent
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest) {
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-<p>Bonjour ${q.client_nom},</p>
+<p>Bonjour ${escapeHtml(q.client_nom as string)},</p>
 <p>On voulait s'assurer que vous avez bien recu notre soumission #${q.id} pour votre projet de plancher epoxy.</p>
 <p>Le total est de <strong>${formatMoney(Number(q.total))}</strong> avec un depot de ${formatMoney(Number(q.depot_requis))} pour confirmer la reservation.</p>
 <p>Si vous avez des questions ou souhaitez ajuster quelque chose, n'hesitez pas a nous repondre directement a ce courriel!</p>
@@ -86,7 +87,7 @@ export async function GET(req: NextRequest) {
 
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-<p>Bonjour ${q.client_nom},</p>
+<p>Bonjour ${escapeHtml(q.client_nom as string)},</p>
 <p>C'est un dernier rappel concernant votre soumission #${q.id} de <strong>${formatMoney(Number(q.total))}</strong>.</p>
 <p>Notre calendrier se remplit vite — si vous souhaitez planifier vos travaux prochainement, c'est le bon moment pour confirmer!</p>
 <p>Pour toute question:<br/>

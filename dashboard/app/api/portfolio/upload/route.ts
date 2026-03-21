@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
 
   for (const file of files) {
     if (!file.type.startsWith('image/')) continue;
+    if (file.size > 10 * 1024 * 1024) continue;
 
     const ext = file.name.split('.').pop() ?? 'jpg';
     const name = `portfolio/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;

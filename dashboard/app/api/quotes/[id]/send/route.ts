@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, formatMoney } from '@/lib/pricing';
-import { readFileSync } from 'fs';
-import { join } from 'path';
+import { escapeHtml } from '@/lib/utils';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -27,13 +26,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const service = SERVICES[quote.type_service as ServiceType];
 
-  // Logo en CID pour affichage direct (sans cliquer "Afficher les images")
-  let logoBase64 = '';
-  try {
-    logoBase64 = readFileSync(join(process.cwd(), 'public', 'logo-email.jpg')).toString('base64');
-  } catch { /* fallback to hosted URL */ }
-
-  const logoSrc = logoBase64 ? 'cid:logo@novusepoxy' : 'https://novus-epoxy.vercel.app/logo-email.jpg';
+  const logoSrc = 'https://novus-epoxy.vercel.app/logo-email.jpg';
 
   const solde70 = formatMoney(Number(quote.total) - Number(quote.depot_requis));
   const ts = Date.now();
@@ -46,7 +39,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 <p style="color:#64748b;margin:6px 0 0;font-size:13px;">Planchers époxy haut de gamme</p>
 </td></tr></table>
 <h2 style="color:#1e293b;margin:0 0 12px;font-size:20px;">Soumission #${quote.id}</h2>
-<p style="margin:0 0 4px;">Bonjour ${quote.client_nom},</p>
+<p style="margin:0 0 4px;">Bonjour ${escapeHtml(quote.client_nom as string)},</p>
 <p style="margin:0 0 12px;color:#475569;">Voici votre soumission :</p>
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;">
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Service</td><td style="padding:6px 0;text-align:right;font-weight:600;font-size:14px;">${service.label}</td></tr>
@@ -62,11 +55,32 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 <p style="margin:0 0 6px;color:#78716c;font-size:12px;">Le dépôt confirme votre réservation. Nous vous contacterons pour planifier les travaux.</p>
 <p style="margin:0;color:#64748b;font-size:13px;border-top:1px dashed #d6d3d1;padding-top:6px;">Solde (70%) à la fin des travaux : <strong>${solde70}</strong></p>
 </div>
-<div style="text-align:center;margin:0 0 12px;">
+<div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 12px;">
+<p style="margin:0 0 8px;color:#1e293b;font-weight:700;font-size:14px;">Comment proceder:</p>
+<p style="margin:0 0 4px;color:#475569;font-size:13px;">1. Choisissez vos dates de travaux</p>
+<p style="margin:0 0 4px;color:#475569;font-size:13px;">2. Signez le contrat</p>
+<p style="margin:0 0 0;color:#475569;font-size:13px;">3. <a href="https://novus-epoxy.vercel.app/paiement/${quote.id}" style="color:#2563eb;text-decoration:underline;">Payez le depot (30%)</a> dans les 48h pour confirmer vos dates</p>
+</div>
+<div style="text-align:center;margin:0 0 8px;">
 <a href="https://novus-epoxy.vercel.app/reservation/${quote.id}"
    style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
-  Planifier mes travaux
+  Choisir vos dates
 </a>
+</div>
+<div style="text-align:center;margin:0 0 8px;">
+<a href="https://novus-epoxy.vercel.app/contrat/${quote.id}"
+   style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
+  Signer le contrat
+</a>
+</div>
+<div style="text-align:center;margin:0 0 8px;">
+<a href="https://novus-epoxy.vercel.app/paiement/${quote.id}"
+   style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
+  Payer le depot (30%)
+</a>
+</div>
+<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin:0 0 12px;">
+<p style="margin:0;color:#92400e;font-weight:600;font-size:13px;">Payer le depot de 30% dans les 48h suivant la signature du contrat en ligne ou par virement Interac a gestionnovusepoxy@gmail.com pour confirmer vos dates.</p>
 </div>
 <div style="background:#f1f5f9;border-radius:6px;padding:10px;margin:0 0 12px;font-size:12px;color:#475569;">
 <strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
@@ -84,14 +98,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
       to: [quote.client_email as string],
       subject: `Soumission Novus Epoxy #${quote.id}`,
       html,
-      ...(logoBase64 ? {
-        attachments: [{
-          content: logoBase64,
-          filename: 'logo.jpg',
-          content_type: 'image/jpeg',
-          content_id: 'logo@novusepoxy',
-        }],
-      } : {}),
     }),
   });
 

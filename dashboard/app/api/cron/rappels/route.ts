@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
+import { escapeHtml } from '@/lib/utils';
 
 // Vercel Cron — runs every 6 hours to send 24h reminders before work appointments
 export async function GET(req: NextRequest) {
@@ -34,7 +35,7 @@ export async function GET(req: NextRequest) {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <h2 style="color:#1e293b;margin:0 0 12px;">Rappel — Travaux demain matin!</h2>
-<p>Bonjour ${r.client_nom},</p>
+<p>Bonjour ${escapeHtml(r.client_nom as string)},</p>
 <p>Notre equipe sera chez vous <strong>demain matin a 8h</strong> pour la premiere etape de votre plancher epoxy.</p>
 <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
 <p style="margin:0 0 8px;font-weight:700;color:#92400e;">Preparation de l'espace:</p>
@@ -90,7 +91,7 @@ export async function GET(req: NextRequest) {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <h2 style="color:#1e293b;margin:0 0 12px;">Rappel — Finition ${periode}!</h2>
-<p>Bonjour ${r.client_nom},</p>
+<p>Bonjour ${escapeHtml(r.client_nom as string)},</p>
 <p>Notre equipe revient <strong>${periode} a ${heures}</strong> pour la finition de votre plancher epoxy.</p>
 <p style="color:#475569;">Si vous avez des questions:<br/>
 <strong>Jason Lanthier</strong> — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a></p>

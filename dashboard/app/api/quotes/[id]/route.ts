@@ -19,7 +19,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const allowed = ['statut', 'client_nom', 'client_email', 'client_tel', 'client_adresse', 'type_service', 'superficie', 'etat_plancher', 'notes'];
+  const allowed = ['statut', 'client_nom', 'client_email', 'client_tel', 'client_adresse', 'type_service', 'superficie', 'etat_plancher', 'notes', 'contrat_signature_nom'];
 
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -37,6 +37,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   }
   if (body.statut === 'envoye') {
     sets.push(`sent_at = NOW()`);
+  }
+  if (body.statut === 'contrat_signe') {
+    sets.push(`contrat_signe_at = NOW()`);
   }
 
   if (sets.length === 0) {

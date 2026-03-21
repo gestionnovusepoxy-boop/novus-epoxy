@@ -81,6 +81,18 @@ function DashboardContent() {
           </div>
         </div>
 
+        {!stats && (
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3 animate-pulse">
+                <div className="h-3 w-16 bg-slate-700 rounded" />
+                <div className="h-8 w-24 bg-slate-700 rounded" />
+                <div className="h-2 w-12 bg-slate-700 rounded" />
+              </div>
+            ))}
+          </div>
+        )}
+
         {stats && (
           <>
             {/* Metriques principales */}

@@ -8,21 +8,21 @@ export async function GET(req: NextRequest) {
 
   // Verify quote exists and is in a valid state for booking
   const quotes = await query(
-    `SELECT id, statut FROM quotes WHERE id = $1`,
+    `SELECT id, statut, client_email FROM quotes WHERE id = $1`,
     [parseInt(quoteId)]
   );
   if (quotes.length === 0) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
   const q = quotes[0];
-  if (!['envoye', 'depot_paye'].includes(q.statut as string)) {
-    return NextResponse.json({ error: 'Ce devis ne peut pas être planifié' }, { status: 400 });
+  if (!['envoye', 'contrat_signe', 'depot_paye'].includes(q.statut as string)) {
+    return NextResponse.json({ error: 'Ce devis ne peut pas etre planifie' }, { status: 400 });
   }
 
-  // Get all booked slots for next 60 days
+  // Get all CONFIRMED booked slots for next 60 days (en_attente bookings don't block)
   const bookedRows = await query(
     `SELECT jour1_date, jour1_slot, jour2_date, jour2_slot
      FROM bookings
-     WHERE statut != 'annule'
+     WHERE statut = 'confirme'
        AND (jour1_date >= CURRENT_DATE OR jour2_date >= CURRENT_DATE)`,
     []
   );
@@ -87,5 +87,5 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ available });
+  return NextResponse.json({ available, client_email: q.client_email });
 }

@@ -1,6 +1,7 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { compareSync } from 'bcryptjs';
+import { timingSafeEqual } from 'crypto';
 import { query } from '@/lib/db';
 
 // Audit log for auth events
@@ -13,13 +14,19 @@ async function auditLog(action: string, email: string, success: boolean, ip: str
   } catch { /* don't block auth on audit failure */ }
 }
 
-// Check password: supports bcrypt hashes ($2a$, $2b$) and plaintext fallback
+// Check password: supports bcrypt hashes ($2a$, $2b$) and timing-safe plaintext comparison.
+// Plaintext passwords come from env vars (ADMIN_PASSWORD / AUTHORIZED_USERS).
+// They are compared with timingSafeEqual to prevent timing attacks.
+// To migrate to bcrypt, replace the plaintext value in the env var with a bcrypt hash.
 function checkPassword(input: string, stored: string): boolean {
   if (stored.startsWith('$2a$') || stored.startsWith('$2b$')) {
     return compareSync(input, stored);
   }
-  // Plaintext fallback for migration period
-  return input === stored;
+  // Timing-safe comparison for plaintext env-var passwords
+  const a = Buffer.from(input);
+  const b = Buffer.from(stored);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 export const { handlers, signIn, signOut, auth } = NextAuth({

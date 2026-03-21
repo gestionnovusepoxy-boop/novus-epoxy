@@ -130,7 +130,7 @@ function LeadHunterInner({ history, setHistory }: {
           <button
             key={a.value}
             onClick={() => { setAction(a.value); setResult(null); }}
-            className={`group relative bg-slate-800 border rounded-xl p-5 text-left transition-all duration-200 hover:bg-slate-750 hover:border-amber-500/50 ${
+            className={`group relative bg-slate-800 border rounded-xl p-5 text-left transition-all duration-200 hover:bg-slate-700/50 hover:border-amber-500/50 ${
               action === a.value
                 ? 'border-amber-500 ring-1 ring-amber-500/30'
                 : 'border-slate-700'
@@ -218,7 +218,7 @@ function LeadHunterInner({ history, setHistory }: {
               <div key={item.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
                 <button
                   onClick={() => setExpandedId(expandedId === item.id ? null : item.id)}
-                  className="w-full p-4 text-left flex items-center gap-3 hover:bg-slate-750 transition"
+                  className="w-full p-4 text-left flex items-center gap-3 hover:bg-slate-700/50 transition"
                 >
                   <span className={`text-xs px-2 py-1 rounded font-medium shrink-0 ${actionBadge(item.action)}`}>
                     {item.action.charAt(0).toUpperCase() + item.action.slice(1)}

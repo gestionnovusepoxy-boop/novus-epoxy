@@ -122,7 +122,7 @@ export async function updateSubmissionStatus(id: number, statut: Submission['sta
 
 // --- Devis (Quotes) ---
 
-export type QuoteStatut = 'brouillon' | 'en_attente' | 'approuve' | 'envoye' | 'depot_paye' | 'planifie' | 'complete' | 'refuse';
+export type QuoteStatut = 'brouillon' | 'en_attente' | 'approuve' | 'envoye' | 'contrat_signe' | 'depot_paye' | 'planifie' | 'complete' | 'refuse';
 export type ServiceType = 'flake' | 'metallique' | 'commercial';
 
 export interface Quote {
@@ -145,6 +145,8 @@ export interface Quote {
   submission_id:   number | null;
   approved_at:     string | null;
   sent_at:         string | null;
+  contrat_signe_at: string | null;
+  contrat_signature_nom: string | null;
   paid_at:         string | null;
   created_at:      string;
   updated_at:      string;

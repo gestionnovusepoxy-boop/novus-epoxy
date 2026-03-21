@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { SERVICES, formatMoney, type ServiceType } from '@/lib/pricing';
+import { escapeHtml } from '@/lib/utils';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -26,7 +27,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
       <h1 style="color:#1e293b;">Novus Epoxy</h1>
       <h2 style="color:#475569;">Facture ${inv.numero}</h2>
-      <p>Bonjour ${inv.client_nom},</p>
+      <p>Bonjour ${escapeHtml(inv.client_nom as string)},</p>
       <p>Veuillez trouver ci-dessous le détail de votre facture :</p>
       <table style="width:100%;border-collapse:collapse;margin:20px 0;">
         <tr style="border-bottom:1px solid #e2e8f0;">
@@ -82,8 +83,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const emailData = await emailRes.json();
 
   await query(
-    `INSERT INTO email_logs (resend_id, destinataire, sujet) VALUES ($1, $2, $3)`,
-    [emailData.id, inv.client_email, `Facture ${inv.numero} — Novus Epoxy`],
+    `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
+    [emailData.id, inv.client_email, `Facture ${inv.numero} — Novus Epoxy`, 'sent'],
   );
 
   await query(`UPDATE invoices SET statut = 'envoyee' WHERE id = $1 AND statut = 'brouillon'`, [parseInt(id)]);

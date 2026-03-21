@@ -32,14 +32,15 @@ export default function NouvelleFacturePage() {
     fetch('/api/quotes?limit=100&statut=approuve')
       .then(r => r.json())
       .then(json => {
-        // Also fetch envoye and depot_paye quotes
+        // Also fetch envoye, contrat_signe and depot_paye quotes
         return Promise.all([
           json.data ?? [],
           fetch('/api/quotes?limit=100&statut=envoye').then(r => r.json()).then(j => j.data ?? []),
+          fetch('/api/quotes?limit=100&statut=contrat_signe').then(r => r.json()).then(j => j.data ?? []),
         ]);
       })
-      .then(([approuve, envoye]) => {
-        setQuotes([...approuve, ...envoye]);
+      .then(([approuve, envoye, contratSigne]) => {
+        setQuotes([...approuve, ...envoye, ...contratSigne]);
         setLoading(false);
       })
       .catch(() => setLoading(false));

@@ -32,7 +32,7 @@ function SubmissionRow({ s, onUpdate }: { s: Submission; onUpdate: () => void })
   }
 
   return (
-    <tr className="border-b border-slate-700 hover:bg-slate-750 transition">
+    <tr className="border-b border-slate-700 hover:bg-slate-700/50 transition">
       <td className="px-4 py-3">
         <p className="text-white text-sm font-medium">{s.nom}</p>
         <p className="text-slate-400 text-xs">{s.email}</p>

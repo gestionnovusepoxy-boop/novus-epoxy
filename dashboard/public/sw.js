@@ -5,7 +5,6 @@ const CACHE_NAME = 'novus-admin-v1';
 
 const STATIC_ASSETS = [
   '/',
-  '/dashboard',
   '/manifest.json',
 ];
 

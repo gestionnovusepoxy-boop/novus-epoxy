@@ -1,4 +1,5 @@
 import { SERVICES, formatMoney, type ServiceType } from './pricing';
+import { escapeHtml } from './utils';
 
 interface InvoiceData {
   numero: string;
@@ -111,7 +112,7 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
     </div>
     <div class="invoice-info">
       <h2>Facture</h2>
-      <div class="numero">${invoice.numero}</div>
+      <div class="numero">${escapeHtml(invoice.numero)}</div>
       <div class="date">Émise le ${formatDate(invoice.date_emission)}</div>
       ${invoice.date_echeance ? `<div class="date">Échéance : ${formatDate(invoice.date_echeance)}</div>` : ''}
       <div class="status status-${invoice.statut}">${statusLabel[invoice.statut] ?? invoice.statut}</div>
@@ -121,10 +122,10 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
   <div class="parties">
     <div class="party">
       <h3>Facturé à</h3>
-      <p class="name">${client.nom}</p>
-      <p>${client.email}</p>
-      ${client.telephone ? `<p>${client.telephone}</p>` : ''}
-      ${client.adresse ? `<p>${client.adresse}</p>` : ''}
+      <p class="name">${escapeHtml(client.nom)}</p>
+      <p>${escapeHtml(client.email)}</p>
+      ${client.telephone ? `<p>${escapeHtml(client.telephone)}</p>` : ''}
+      ${client.adresse ? `<p>${escapeHtml(client.adresse)}</p>` : ''}
     </div>
     <div class="party">
       <h3>De</h3>
@@ -192,7 +193,7 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
   ${invoice.notes ? `
   <div class="notes">
     <h4>Notes</h4>
-    <p>${invoice.notes}</p>
+    <p>${escapeHtml(invoice.notes)}</p>
   </div>` : ''}
 
   <div class="footer">

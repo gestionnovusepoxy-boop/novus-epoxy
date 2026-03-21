@@ -7,25 +7,27 @@ import { formatDate } from '@/lib/utils';
 import { SERVICES, formatMoney, type ServiceType } from '@/lib/pricing';
 
 const BADGE: Record<QuoteStatut, string> = {
-  brouillon:  'bg-slate-500/20 text-slate-300 border-slate-500/30',
-  en_attente: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  approuve:   'bg-amber-500/20 text-amber-300 border-amber-500/30',
-  envoye:     'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  depot_paye: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
-  planifie:   'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
-  complete:   'bg-green-500/20 text-green-300 border-green-500/30',
-  refuse:     'bg-red-500/20 text-red-300 border-red-500/30',
+  brouillon:      'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  en_attente:     'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  approuve:       'bg-amber-500/20 text-amber-300 border-amber-500/30',
+  envoye:         'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  contrat_signe:  'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
+  depot_paye:     'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  planifie:       'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
+  complete:       'bg-green-500/20 text-green-300 border-green-500/30',
+  refuse:         'bg-red-500/20 text-red-300 border-red-500/30',
 };
 
 const LABEL: Record<QuoteStatut, string> = {
-  brouillon:  'Brouillon',
-  en_attente: 'En attente',
-  approuve:   'Approuve',
-  envoye:     'Envoye',
-  depot_paye: 'Depot paye',
-  planifie:   'Planifie',
-  complete:   'Complete',
-  refuse:     'Refuse',
+  brouillon:      'Brouillon',
+  en_attente:     'En attente',
+  approuve:       'Approuvé',
+  envoye:         'Envoyé',
+  contrat_signe:  'Contrat signé',
+  depot_paye:     'Dépôt payé',
+  planifie:       'Planifié',
+  complete:       'Complété',
+  refuse:         'Refusé',
 };
 
 export default function DevisDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -86,6 +88,35 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       const updated = await updateQuote(quote.id, { statut: 'refuse' });
       setQuote(updated);
     } catch { setError('Erreur'); }
+    setAction('');
+  }
+
+  const [copied, setCopied] = useState(false);
+  const [depositResult, setDepositResult] = useState<{ conflict?: boolean; available_dates?: { date: string; jour2_date: string; jour2_slot: string }[]; confirmed?: boolean } | null>(null);
+
+  async function handleConfirmDeposit() {
+    if (!quote) return;
+    setAction('deposit');
+    setError('');
+    setDepositResult(null);
+    try {
+      const res = await fetch(`/api/quotes/${quote.id}/confirm-deposit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDepositResult({ confirmed: true });
+        const updated = await fetchQuote(quote.id);
+        setQuote(updated);
+      } else if (data.conflict) {
+        setDepositResult({ conflict: true, available_dates: data.available_dates });
+      } else {
+        setError(data.error || 'Erreur lors de la confirmation du depot');
+      }
+    } catch (e) {
+      setError(`Erreur: ${e instanceof Error ? e.message : String(e)}`);
+    }
     setAction('');
   }
 
@@ -211,14 +242,146 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
               <span className="text-white">{formatDate(quote.sent_at)}</span>
             </div>
           )}
+          {quote.contrat_signe_at && (
+            <div className="flex justify-between">
+              <span className="text-slate-400">Contrat signe le</span>
+              <span className="text-white">{formatDate(quote.contrat_signe_at)}</span>
+            </div>
+          )}
+          {quote.contrat_signature_nom && (
+            <div className="flex justify-between">
+              <span className="text-slate-400">Signe par</span>
+              <span className="text-white">{quote.contrat_signature_nom}</span>
+            </div>
+          )}
           {quote.paid_at && (
             <div className="flex justify-between">
               <span className="text-slate-400">Depot paye le</span>
               <span className="text-white">{formatDate(quote.paid_at)}</span>
             </div>
           )}
+          {!!(quote as unknown as Record<string, unknown>).deposit_paid_at && (
+            <div className="flex justify-between">
+              <span className="text-slate-400">Depot (Stripe) le</span>
+              <span className="text-emerald-400">{formatDate((quote as unknown as Record<string, unknown>).deposit_paid_at as string)}</span>
+            </div>
+          )}
+          {!!(quote as unknown as Record<string, unknown>).balance_paid_at && (
+            <div className="flex justify-between">
+              <span className="text-slate-400">Solde paye le</span>
+              <span className="text-emerald-400">{formatDate((quote as unknown as Record<string, unknown>).balance_paid_at as string)}</span>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Payment link */}
+      {['contrat_signe', 'depot_paye', 'planifie', 'complete'].includes(quote.statut) && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <h3 className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-4">Lien de paiement</h3>
+          <div className="flex items-center gap-3">
+            <code className="bg-slate-900 text-amber-400 px-3 py-2 rounded-lg text-sm flex-1 overflow-x-auto">
+              https://novus-epoxy.vercel.app/paiement/{quote.id}
+            </code>
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(`https://novus-epoxy.vercel.app/paiement/${quote.id}`);
+                setCopied(true);
+                setTimeout(() => setCopied(false), 2000);
+              }}
+              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-semibold rounded-lg px-4 py-2 text-sm transition border border-amber-500/30 whitespace-nowrap"
+            >
+              {copied ? 'Copie!' : 'Copier'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mark balance paid (for Interac payments) */}
+      {quote.statut === 'depot_paye' && !((quote as unknown as Record<string, unknown>).balance_paid_at) && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-6">
+          <h3 className="text-emerald-400 text-xs font-medium uppercase tracking-wider mb-4">Solde</h3>
+          <p className="text-slate-300 text-sm mb-4">Confirmez la reception du solde final ({formatMoney(Number(quote.total) - Number(quote.depot_requis))}) pour marquer le devis comme complet.</p>
+          <button
+            onClick={async () => {
+              if (!quote) return;
+              setAction('balance');
+              setError('');
+              try {
+                const res = await fetch(`/api/quotes/${quote.id}/confirm-balance`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                });
+                const data = await res.json();
+                if (!data.success) {
+                  setError(data.error || 'Erreur lors de la confirmation du solde');
+                } else {
+                  const updated = await fetchQuote(quote.id);
+                  setQuote(updated);
+                }
+              } catch (e) {
+                setError(`Erreur: ${e instanceof Error ? e.message : String(e)}`);
+              }
+              setAction('');
+            }}
+            disabled={!!action}
+            className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition"
+          >
+            {action === 'balance' ? 'Confirmation...' : 'Confirmer le solde recu (Interac)'}
+          </button>
+        </div>
+      )}
+
+      {/* Confirm deposit */}
+      {quote.statut === 'contrat_signe' && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6">
+          <h3 className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-4">Depot</h3>
+          <p className="text-slate-300 text-sm mb-4">Le contrat est signe. Confirmez la reception du depot pour bloquer les dates.</p>
+          <button
+            onClick={handleConfirmDeposit}
+            disabled={!!action}
+            className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition"
+          >
+            {action === 'deposit' ? 'Confirmation...' : 'Confirmer le depot recu'}
+          </button>
+        </div>
+      )}
+
+      {/* Deposit result */}
+      {depositResult?.confirmed && (
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3">
+          <p className="text-emerald-400 text-sm font-semibold">Depot confirme! Les dates sont maintenant bloquees et le client a ete notifie.</p>
+        </div>
+      )}
+
+      {depositResult?.conflict && (
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-6">
+          <h3 className="text-red-400 font-semibold mb-2">Les dates sont deja prises!</h3>
+          <p className="text-slate-300 text-sm mb-4">Une autre reservation confirmee occupe deja ces dates. Voici des dates alternatives:</p>
+          <div className="space-y-2">
+            {depositResult.available_dates?.map((d, i) => (
+              <div key={i} className="bg-slate-800 rounded-lg p-3 text-sm text-slate-300">
+                Jour 1: {d.date} — Jour 2: {d.jour2_date} ({d.jour2_slot === 'matin' ? 'Matin' : 'Apres-midi'})
+              </div>
+            ))}
+          </div>
+          <p className="text-slate-400 text-xs mt-3">Contactez le client pour replanifier, puis confirmez le depot a nouveau.</p>
+        </div>
+      )}
+
+      {/* Contract */}
+      {['envoye', 'contrat_signe', 'depot_paye', 'planifie', 'complete'].includes(quote.statut) && (
+        <div className="flex gap-3">
+          <a
+            href={`/api/quotes/${quote.id}/contract`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="bg-indigo-500/20 hover:bg-indigo-500/30 text-indigo-300 font-semibold rounded-lg px-6 py-2.5 text-sm transition border border-indigo-500/30 inline-block"
+          >
+            Voir le contrat
+          </a>
+        </div>
+      )}
 
       {/* Actions */}
       <div className="flex gap-3 flex-wrap">
@@ -248,7 +411,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             )}
           </>
         )}
-        {['brouillon', 'en_attente', 'envoye', 'depot_paye', 'planifie'].includes(quote.statut) && quote.client_tel && (
+        {['brouillon', 'en_attente', 'envoye', 'contrat_signe', 'depot_paye', 'planifie'].includes(quote.statut) && quote.client_tel && (
           <button
             onClick={handleSendSMS} disabled={!!action}
             className="bg-green-500/20 hover:bg-green-500/30 disabled:opacity-50 text-green-400 font-semibold rounded-lg px-6 py-2.5 text-sm transition border border-green-500/30"
