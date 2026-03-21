@@ -18,10 +18,11 @@ export async function GET(req: NextRequest) {
     [start, end]
   );
 
-  // Fetch invoices (revenue)
+  // Fetch invoices (revenue) — join clients for name
   const invoices = await query(
-    `SELECT date_emission, client_nom, type_service, sous_total, tps, tvq, total, statut
-     FROM invoices WHERE date_emission BETWEEN $1 AND $2 ORDER BY date_emission`,
+    `SELECT i.date_emission, COALESCE(c.nom, 'Client #' || i.client_id) AS client_nom, i.type_service, i.sous_total, i.tps, i.tvq, i.total, i.statut
+     FROM invoices i LEFT JOIN clients c ON i.client_id = c.id
+     WHERE i.date_emission BETWEEN $1 AND $2 ORDER BY i.date_emission`,
     [start, end]
   );
 
