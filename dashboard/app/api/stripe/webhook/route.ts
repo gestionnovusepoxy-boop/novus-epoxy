@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 import { formatMoney } from '@/lib/pricing';
+import { calendarLinksHtml } from '@/lib/calendar-links';
 import Stripe from 'stripe';
 
 async function notifyTelegram(message: string) {
@@ -120,6 +121,8 @@ export async function POST(req: NextRequest) {
       );
 
       // Send confirmation email
+      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';
+      const calendarHtml = datesAvailable ? calendarLinksHtml(quoteId, baseUrl) : '';
       const depositHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <div style="background:#0f172a;color:white;padding:20px 24px;border-radius:8px 8px 0 0;">
@@ -130,6 +133,7 @@ export async function POST(req: NextRequest) {
 <p>Bonjour ${clientName},</p>
 <p>Nous avons bien recu votre depot de <strong>${formatMoney(Number(quote.depot_requis))}</strong>.</p>
 ${datesAvailable ? '<p style="color:#16a34a;font-weight:600;">Vos dates de travaux sont maintenant confirmees!</p>' : '<p style="color:#f59e0b;">Notre equipe vous contactera pour confirmer les dates de travaux.</p>'}
+${calendarHtml}
 <p style="color:#64748b;font-size:13px;">Le solde de ${formatMoney(Number(quote.total) - Number(quote.depot_requis))} sera a payer a la fin des travaux.</p>
 <div style="text-align:center;margin:20px 0;">
 <a href="https://novus-epoxy.vercel.app/paiement/${quoteId}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Voir mon paiement</a>

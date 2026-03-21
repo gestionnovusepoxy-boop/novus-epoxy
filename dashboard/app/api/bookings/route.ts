@@ -118,7 +118,7 @@ export async function POST(req: NextRequest) {
   // SMS to admin
   const adminPhone = process.env.ADMIN_PHONE;
   if (adminPhone) {
-    await sendSMS(adminPhone, `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} matin, Jour 2: ${jour2Date} ${jour2Slot === 'matin' ? 'matin' : 'PM'}. Devis #${quoteId}`).catch(() => {});
+    await sendSMS(adminPhone, `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} AM, Jour 2: ${jour2Date} ${jour2Slot === 'matin' ? 'AM' : 'PM'}. Devis #${quoteId}`).catch(() => {});
   }
 
   return NextResponse.json({ ok: true, booking_id: bookingId });

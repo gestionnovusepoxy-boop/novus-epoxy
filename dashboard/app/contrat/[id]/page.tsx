@@ -325,9 +325,9 @@ export default function ContratPage() {
               <div style={{ color: '#cbd5e1', fontSize: '13px' }}>
                 <p style={{ margin: '0 0 8px', fontWeight: 600 }}>Dates provisoires choisies:</p>
                 <div style={{ background: '#0f172a', borderRadius: '8px', padding: '10px', marginBottom: '8px' }}>
-                  <p style={{ margin: '2px 0' }}><strong style={{ color: '#f59e0b' }}>Jour 1 (preparation):</strong> {formatDate(quote.booking_jour1_date)} — Matin (8h-12h)</p>
+                  <p style={{ margin: '2px 0' }}><strong style={{ color: '#f59e0b' }}>Jour 1 (preparation):</strong> {formatDate(quote.booking_jour1_date)} — AM (8h-12h)</p>
                   {quote.booking_jour2_date && (
-                    <p style={{ margin: '2px 0' }}><strong style={{ color: '#f59e0b' }}>Jour 2 (finition):</strong> {formatDate(quote.booking_jour2_date)} — {quote.booking_jour2_slot === 'matin' ? 'Matin (8h-12h)' : 'Apres-midi (12h-16h)'}</p>
+                    <p style={{ margin: '2px 0' }}><strong style={{ color: '#f59e0b' }}>Jour 2 (finition):</strong> {formatDate(quote.booking_jour2_date)} — {quote.booking_jour2_slot === 'matin' ? 'AM (8h-12h)' : 'PM (12h-16h)'}</p>
                   )}
                 </div>
                 <p style={{ margin: 0, color: '#94a3b8', fontSize: '12px' }}>Ces dates seront confirmees a la reception du depot de 30%.</p>

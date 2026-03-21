@@ -16,7 +16,7 @@ function formatDate(d: string) {
 }
 
 function slotLabel(s: string) {
-  return s === 'matin' ? '8h — 12h' : '12h — 16h';
+  return s === 'matin' ? 'AM (8h-12h)' : 'PM (12h-16h)';
 }
 
 export default function ReservationPage() {
@@ -86,12 +86,12 @@ export default function ReservationPage() {
             <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px', marginBottom: '8px' }}>
               <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '13px' }}>JOUR 1 — Preparation</div>
               <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '4px' }}>{formatDate(selected.date)}</div>
-              <div style={{ color: '#94a3b8', fontSize: '14px' }}>Matin: 8h — 12h</div>
+              <div style={{ color: '#94a3b8', fontSize: '14px' }}>AM: 8h — 12h</div>
             </div>
             <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px' }}>
               <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '13px' }}>JOUR 2 — Finition</div>
               <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '4px' }}>{formatDate(selected.jour2_date)}</div>
-              <div style={{ color: '#94a3b8', fontSize: '14px' }}>{selected.jour2_slot === 'matin' ? 'Matin' : 'Apres-midi'}: {slotLabel(selected.jour2_slot)}</div>
+              <div style={{ color: '#94a3b8', fontSize: '14px' }}>{selected.jour2_slot === 'matin' ? 'AM' : 'PM'}: {slotLabel(selected.jour2_slot)}</div>
             </div>
           </div>
           <div style={{ background: '#fffbeb', border: '1px solid #f59e0b', borderRadius: '8px', padding: '16px', marginBottom: '20px', textAlign: 'left' }}>
@@ -132,7 +132,7 @@ export default function ReservationPage() {
         <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '16px', border: '1px solid #334155' }}>
           <p style={{ margin: '0 0 8px', fontSize: '14px', color: '#f59e0b', fontWeight: 600 }}>Comment ca fonctionne:</p>
           <p style={{ margin: '0 0 4px', fontSize: '13px', color: '#94a3b8' }}>
-            <strong style={{ color: '#f8fafc' }}>Jour 1 (matin):</strong> Preparation et premiere couche
+            <strong style={{ color: '#f8fafc' }}>Jour 1 (AM):</strong> Preparation et premiere couche
           </p>
           <p style={{ margin: 0, fontSize: '13px', color: '#94a3b8' }}>
             <strong style={{ color: '#f8fafc' }}>Jour 2 (lendemain):</strong> Finition et deuxieme couche
@@ -171,7 +171,7 @@ export default function ReservationPage() {
                       {slot.dayName} {formatDate(slot.date)}
                     </div>
                     <div style={{ color: '#94a3b8', fontSize: '13px', marginTop: '4px' }}>
-                      Matin: 8h-12h
+                      AM: 8h-12h
                     </div>
                   </div>
                   <div style={{ textAlign: 'right' }}>
@@ -198,7 +198,7 @@ export default function ReservationPage() {
             <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', border: '1px solid #f59e0b' }}>
               <p style={{ margin: '0 0 4px', fontSize: '13px', color: '#94a3b8' }}>Vous avez choisi:</p>
               <p style={{ margin: '0 0 4px', fontSize: '15px', fontWeight: 600 }}>
-                Jour 1: {formatDate(selected.date)} — Matin (8h-12h)
+                Jour 1: {formatDate(selected.date)} — AM (8h-12h)
               </p>
               <p style={{ margin: '0 0 12px', fontSize: '15px', fontWeight: 600 }}>
                 Jour 2: {formatDate(selected.jour2_date)} — {slotLabel(selected.jour2_slot)}

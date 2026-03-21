@@ -361,7 +361,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           <div className="space-y-2">
             {depositResult.available_dates?.map((d, i) => (
               <div key={i} className="bg-slate-800 rounded-lg p-3 text-sm text-slate-300">
-                Jour 1: {d.date} — Jour 2: {d.jour2_date} ({d.jour2_slot === 'matin' ? 'Matin' : 'Apres-midi'})
+                Jour 1: {d.date} — Jour 2: {d.jour2_date} ({d.jour2_slot === 'matin' ? 'AM' : 'PM'})
               </div>
             ))}
           </div>

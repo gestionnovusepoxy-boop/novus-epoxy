@@ -6,7 +6,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params;
   const rows = await query(
     `SELECT id, client_nom, type_service, superficie, total, depot_requis, statut,
-            deposit_paid_at, balance_paid_at
+            deposit_paid_at, balance_paid_at, booking_id
      FROM quotes WHERE id = $1`,
     [parseInt(id)]
   );
@@ -21,6 +21,27 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const allowedStatuts = ['contrat_signe', 'depot_paye', 'planifie', 'complete'];
   if (!allowedStatuts.includes(quote.statut as string)) {
     return NextResponse.json({ error: 'Cette page n\'est pas encore disponible' }, { status: 400 });
+  }
+
+  // Include booking dates if deposit is paid
+  const depositStatuts = ['depot_paye', 'planifie', 'complete'];
+  if (depositStatuts.includes(quote.statut as string) && quote.booking_id) {
+    const bookingRows = await query(
+      'SELECT jour1_date, jour1_slot, jour2_date, jour2_slot FROM bookings WHERE id = $1',
+      [quote.booking_id]
+    );
+    if (bookingRows.length > 0) {
+      const b = bookingRows[0];
+      const formatDateStr = (d: unknown) =>
+        d instanceof Date ? d.toISOString().split('T')[0] : String(d).split('T')[0];
+      return NextResponse.json({
+        ...quote,
+        jour1_date: formatDateStr(b.jour1_date),
+        jour1_slot: b.jour1_slot,
+        jour2_date: formatDateStr(b.jour2_date),
+        jour2_slot: b.jour2_slot,
+      });
+    }
   }
 
   return NextResponse.json(quote);

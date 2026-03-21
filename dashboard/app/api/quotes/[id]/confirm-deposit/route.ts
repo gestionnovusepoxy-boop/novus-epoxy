@@ -4,6 +4,7 @@ import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
 import { sendSMS } from '@/lib/sms';
+import { calendarLinksHtml } from '@/lib/calendar-links';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -111,8 +112,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   // Send confirmation email to client
   const apiKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';
 
   if (apiKey) {
+    const calendarHtml = calendarLinksHtml(quoteId, baseUrl);
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <div style="background:#0f172a;color:white;padding:20px 24px;border-radius:8px 8px 0 0;">
@@ -124,9 +127,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 <p>Merci pour votre depot! Vos dates de travaux sont maintenant <strong>confirmees</strong>.</p>
 <div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:16px;margin:16px 0;">
 <p style="margin:0 0 8px;color:#166534;font-weight:700;font-size:16px;">Dates confirmees</p>
-<p style="margin:4px 0;"><strong>Jour 1 (preparation):</strong> ${j1Fmt} — Matin (8h-12h)</p>
+<p style="margin:4px 0;"><strong>Jour 1 (preparation):</strong> ${j1Fmt} — AM (8h-12h)</p>
 <p style="margin:4px 0;"><strong>Jour 2 (finition):</strong> ${j2Fmt} — ${slotLabel}</p>
 </div>
+${calendarHtml}
 <div style="background:#f8fafc;padding:16px;border-radius:8px;margin:16px 0;">
 <p style="margin:0 0 4px;font-weight:700;">Rappels importants:</p>
 <p style="margin:2px 0;color:#475569;font-size:13px;">- Liberer completement l'espace de travail avant notre arrivee</p>
@@ -157,7 +161,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   if (clientTel) {
     await sendSMS(
       clientTel,
-      `Novus Epoxy: Votre reservation est confirmee! Jour 1: ${j1Fmt} matin, Jour 2: ${j2Fmt} ${slotLabel}. Merci pour votre confiance! Questions? 581-307-2678`
+      `Novus Epoxy: Votre reservation est confirmee! Jour 1: ${j1Fmt} AM, Jour 2: ${j2Fmt} ${slotLabel}. Merci pour votre confiance! Questions? 581-307-2678`
     ).catch(() => {});
   }
 

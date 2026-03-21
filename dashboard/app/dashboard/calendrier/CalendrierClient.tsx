@@ -160,7 +160,7 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
                     <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase' as const }}>Jour 1</div>
                     <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '2px' }}>{formatDate(b.jour1_date)}</div>
                     <div style={{ color: '#64748b', fontSize: '12px' }}>
-                      {b.jour1_slot === 'matin' ? 'Matin: 8h-12h' : 'PM: 12h-16h'}
+                      {b.jour1_slot === 'matin' ? 'AM: 8h-12h' : 'PM: 12h-16h'}
                     </div>
                   </div>
                   <div style={{
@@ -170,7 +170,7 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
                     <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '11px', textTransform: 'uppercase' as const }}>Jour 2</div>
                     <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '2px' }}>{formatDate(b.jour2_date)}</div>
                     <div style={{ color: '#64748b', fontSize: '12px' }}>
-                      {b.jour2_slot === 'matin' ? 'Matin: 8h-12h' : 'PM: 12h-16h'}
+                      {b.jour2_slot === 'matin' ? 'AM: 8h-12h' : 'PM: 12h-16h'}
                     </div>
                   </div>
                 </div>
