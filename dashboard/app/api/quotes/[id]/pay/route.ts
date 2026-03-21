@@ -31,7 +31,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } });
   }
 
-  const stripe = new Stripe(stripeKey);
+  const stripe = new Stripe(stripeKey, {
+    httpClient: Stripe.createFetchHttpClient(),
+  });
   const total = Number(quote.total);
   const depot = Number(quote.depot_requis);
   const balance = total - depot;
