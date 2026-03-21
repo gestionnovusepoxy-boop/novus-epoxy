@@ -326,10 +326,9 @@ export async function POST(req: NextRequest) {
   if (!body) return NextResponse.json({ ok: true });
 
   const message = body.message;
-  if (!message?.text) return NextResponse.json({ ok: true });
+  if (!message) return NextResponse.json({ ok: true });
 
   const chatId = String(message.chat.id);
-  const text = (message.text as string).trim();
   const adminIds = ADMIN_CHAT_IDS();
 
   // Check if sender is an admin
@@ -337,6 +336,165 @@ export async function POST(req: NextRequest) {
     await sendTelegram(chatId, "Acces refuse. Ce bot est reserve aux admins Novus Epoxy.");
     return NextResponse.json({ ok: true });
   }
+
+  // Handle photo messages — receipt scanning
+  if (message.photo && message.photo.length > 0) {
+    // Get the largest photo (last in array)
+    const photo = message.photo[message.photo.length - 1];
+    const fileId = photo.file_id;
+
+    // Get file path from Telegram
+    const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${fileId}`);
+    const fileData = await fileRes.json();
+    const filePath = fileData.result?.file_path;
+
+    if (!filePath) {
+      await sendTelegram(chatId, 'Erreur: impossible de telecharger la photo.');
+      return NextResponse.json({ ok: true });
+    }
+
+    // Download the file
+    const downloadRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${filePath}`);
+    const imageBuffer = Buffer.from(await downloadRes.arrayBuffer());
+    const base64 = imageBuffer.toString('base64');
+    const mediaType = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+
+    await sendTelegram(chatId, 'Analyse du recu en cours...');
+
+    // Determine payment method from caption
+    const caption = (message.caption ?? '').toLowerCase().trim();
+    let methode = 'carte';
+    if (caption === 'comptant' || caption === 'cash') methode = 'comptant';
+    else if (caption === 'cheque' || caption === 'chèque') methode = 'cheque';
+    else if (caption === 'virement' || caption === 'transfert') methode = 'virement';
+    else if (caption === 'debit' || caption === 'débit' || caption === 'interac') methode = 'debit';
+
+    // Send to Claude for OCR
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      await sendTelegram(chatId, 'ANTHROPIC_API_KEY non configure.');
+      return NextResponse.json({ ok: true });
+    }
+
+    try {
+      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 1024,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+              { type: 'text', text: `Analyse cette photo de facture/recu et extrais les informations en JSON strict (pas de markdown):
+{
+  "fournisseur": "nom du commerce",
+  "date_depense": "YYYY-MM-DD",
+  "description": "description courte",
+  "montant_ht": nombre,
+  "tps": nombre,
+  "tvq": nombre,
+  "montant_ttc": nombre,
+  "categorie": "une parmi: materiaux, sous_traitance, transport, equipement, marketing, loyer, assurance, admin, autre",
+  "reference": "numero de facture ou null"
+}
+Si le HT n'est pas visible, calcule-le du TTC. Si taxes non detaillees, mets tps/tvq a 0 et HT=TTC.
+Pour la categorie, devine selon le fournisseur (quincaillerie=materiaux, essence=transport, etc).
+JSON uniquement.` },
+            ],
+          }],
+        }),
+      });
+
+      if (!claudeRes.ok) throw new Error('Erreur Claude API');
+
+      const claudeData = await claudeRes.json();
+      const ocrText = claudeData.content?.[0]?.text ?? '';
+      const jsonStr = ocrText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parsed = JSON.parse(jsonStr);
+
+      // Check for duplicates
+      const existingExpenses = await query(
+        `SELECT fournisseur, date_depense, montant_ttc, reference FROM expenses`
+      );
+
+      const isDuplicate = existingExpenses.some((exp: Record<string, unknown>) => {
+        if (parsed.reference && exp.reference && parsed.reference === String(exp.reference)) return true;
+        const sameSupplier = String(exp.fournisseur ?? '').toLowerCase().trim() === (parsed.fournisseur ?? '').toLowerCase().trim();
+        const sameDate = String(exp.date_depense ?? '').slice(0, 10) === parsed.date_depense;
+        const sameAmount = Math.abs(Number(exp.montant_ttc ?? 0) - Number(parsed.montant_ttc ?? 0)) < 0.02;
+        return sameSupplier && sameDate && sameAmount;
+      });
+
+      if (isDuplicate) {
+        await sendTelegram(chatId, `Doublon detecte!\n${parsed.fournisseur} — ${parsed.date_depense}\nTotal: ${Number(parsed.montant_ttc).toFixed(2)}$\n\nCette depense existe deja. Non enregistree.`);
+        return NextResponse.json({ ok: true });
+      }
+
+      // Validate category
+      const validCategories = ['materiaux', 'sous_traitance', 'transport', 'equipement', 'marketing', 'loyer', 'assurance', 'admin', 'autre'];
+      const categorie = validCategories.includes(parsed.categorie) ? parsed.categorie : 'autre';
+
+      // Save to database
+      const ht = Number(parsed.montant_ht ?? 0);
+      const tps = Number(parsed.tps ?? 0);
+      const tvq = Number(parsed.tvq ?? 0);
+      const ttc = Number(parsed.montant_ttc ?? 0) || Math.round((ht + tps + tvq) * 100) / 100;
+
+      const rows = await query(
+        `INSERT INTO expenses (date_depense, fournisseur, description, categorie, montant_ht, tps, tvq, montant_ttc, methode, reference)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        [
+          parsed.date_depense || new Date().toISOString().slice(0, 10),
+          (parsed.fournisseur || 'Inconnu').slice(0, 120),
+          parsed.description || null,
+          categorie,
+          ht, tps, tvq, ttc,
+          methode,
+          parsed.reference || null,
+        ]
+      );
+
+      const CAT_LABEL: Record<string, string> = {
+        materiaux: 'Materiaux', sous_traitance: 'Sous-traitance', transport: 'Transport',
+        equipement: 'Equipement', marketing: 'Marketing', loyer: 'Loyer',
+        assurance: 'Assurance', admin: 'Administration', autre: 'Autre',
+      };
+
+      const expId = rows[0].id;
+      await sendTelegram(chatId, [
+        `Depense #${expId} enregistree!`,
+        ``,
+        `${parsed.fournisseur}`,
+        `Date: ${parsed.date_depense}`,
+        `${parsed.description || ''}`,
+        ``,
+        `HT: ${ht.toFixed(2)}$`,
+        tps > 0 ? `TPS: ${tps.toFixed(2)}$` : '',
+        tvq > 0 ? `TVQ: ${tvq.toFixed(2)}$` : '',
+        `Total: ${ttc.toFixed(2)}$`,
+        ``,
+        `Categorie: ${CAT_LABEL[categorie] || categorie}`,
+        `Methode: ${methode}`,
+        parsed.reference ? `Ref: ${parsed.reference}` : '',
+      ].filter(Boolean).join('\n'));
+
+    } catch (err) {
+      console.error('Telegram receipt scan error:', err);
+      await sendTelegram(chatId, `Erreur lors de l'analyse du recu: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
+  // Non-text, non-photo messages — ignore
+  if (!message.text) return NextResponse.json({ ok: true });
+  const text = (message.text as string).trim();
 
   // /start command — quick help
   if (text === '/start') {

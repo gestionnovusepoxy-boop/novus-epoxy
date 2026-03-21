@@ -36,6 +36,15 @@ interface ScanResult {
   saving?: boolean;
 }
 
+interface RecurringExpense {
+  id: number; fournisseur: string; description: string | null;
+  categorie: string; montant_ht: number; tps: number; tvq: number; montant_ttc: number;
+  methode: string | null; frequence: string; jour_du_mois: number;
+  actif: boolean; derniere_creation: string | null;
+}
+
+const FREQ_LABEL: Record<string, string> = { mensuel: 'Mensuel', hebdomadaire: 'Hebdomadaire', annuel: 'Annuel' };
+
 function PageContent() {
   const [data, setData]       = useState<Expense[]>([]);
   const [total, setTotal]     = useState(0);
@@ -47,6 +56,56 @@ function PageContent() {
   const [scanProgress, setScanProgress] = useState('');
   const [scanResults, setScanResults] = useState<ScanResult[]>([]);
   const scanRef = useRef<HTMLInputElement>(null);
+  const [showRecurring, setShowRecurring] = useState(false);
+  const [recurring, setRecurring] = useState<RecurringExpense[]>([]);
+  const [showRecForm, setShowRecForm] = useState(false);
+  const [recForm, setRecForm] = useState({
+    fournisseur: '', description: '', categorie: 'loyer',
+    montant_ht: '', taxable: true, methode: 'virement',
+    frequence: 'mensuel', jour_du_mois: '1',
+  });
+
+  const recHt = parseFloat(recForm.montant_ht) || 0;
+  const recTps = recForm.taxable ? Math.round(recHt * TPS_RATE * 100) / 100 : 0;
+  const recTvq = recForm.taxable ? Math.round(recHt * TVQ_RATE * 100) / 100 : 0;
+  const recTtc = Math.round((recHt + recTps + recTvq) * 100) / 100;
+
+  async function loadRecurring() {
+    const res = await fetch('/api/expenses/recurring');
+    if (res.ok) setRecurring(await res.json());
+  }
+
+  async function handleRecSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await fetch('/api/expenses/recurring', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fournisseur: recForm.fournisseur, description: recForm.description || null,
+        categorie: recForm.categorie, montant_ht: recHt, tps: recTps, tvq: recTvq,
+        methode: recForm.methode, frequence: recForm.frequence,
+        jour_du_mois: parseInt(recForm.jour_du_mois) || 1,
+      }),
+    });
+    setRecForm({ fournisseur: '', description: '', categorie: 'loyer', montant_ht: '', taxable: true, methode: 'virement', frequence: 'mensuel', jour_du_mois: '1' });
+    setShowRecForm(false);
+    loadRecurring();
+  }
+
+  async function toggleRecurring(id: number, actif: boolean) {
+    await fetch(`/api/expenses/recurring/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actif }),
+    });
+    loadRecurring();
+  }
+
+  async function deleteRecurring(id: number) {
+    if (!window.confirm('Supprimer cette depense recurrente?')) return;
+    await fetch(`/api/expenses/recurring/${id}`, { method: 'DELETE' });
+    loadRecurring();
+  }
 
   // Form state
   const [form, setForm] = useState({
@@ -68,6 +127,7 @@ function PageContent() {
     const json = await res.json();
     setData(json.data ?? []);
     setTotal(json.total ?? 0);
+    loadRecurring();
   }, [page, categorie, search]);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -334,6 +394,113 @@ function PageContent() {
             </button>
           </form>
         )}
+
+        {/* Recurring Expenses */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4">
+          <button onClick={() => setShowRecurring(!showRecurring)}
+            className="flex items-center justify-between w-full">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">🔄</span>
+              <span className="text-white font-semibold">Depenses recurrentes</span>
+              <span className="text-slate-400 text-sm">{recurring.filter(r => r.actif).length} actives</span>
+            </div>
+            <span className="text-slate-400">{showRecurring ? '▲' : '▼'}</span>
+          </button>
+
+          {showRecurring && (
+            <div className="mt-4 space-y-3">
+              {recurring.map(r => (
+                <div key={r.id} className={`flex items-center justify-between border rounded-lg px-4 py-3 ${r.actif ? 'border-slate-600 bg-slate-700/30' : 'border-slate-700 bg-slate-800/50 opacity-60'}`}>
+                  <div className="flex items-center gap-4 flex-1 min-w-0">
+                    <span className="text-white font-medium text-sm truncate">{r.fournisseur}</span>
+                    {r.description && <span className="text-slate-400 text-xs truncate">{r.description}</span>}
+                    <span className="text-slate-500 text-xs">{CAT_LABEL[r.categorie]}</span>
+                    <span className="text-amber-400 text-sm font-medium">{formatMoney(Number(r.montant_ttc))}</span>
+                    <span className="text-slate-400 text-xs">{FREQ_LABEL[r.frequence]} — jour {r.jour_du_mois}</span>
+                  </div>
+                  <div className="flex items-center gap-2 ml-3">
+                    <button onClick={() => toggleRecurring(r.id, !r.actif)}
+                      className={`text-xs px-2 py-1 rounded ${r.actif ? 'bg-green-500/20 text-green-400' : 'bg-slate-600 text-slate-400'}`}>
+                      {r.actif ? 'Actif' : 'Pause'}
+                    </button>
+                    <button onClick={() => deleteRecurring(r.id)} className="text-red-400 hover:text-red-300 text-xs">✕</button>
+                  </div>
+                </div>
+              ))}
+
+              {!showRecForm ? (
+                <button onClick={() => setShowRecForm(true)}
+                  className="text-amber-400 hover:text-amber-300 text-sm font-medium">+ Ajouter une depense recurrente</button>
+              ) : (
+                <form onSubmit={handleRecSubmit} className="border border-slate-600 rounded-lg p-4 space-y-3">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Fournisseur *</label>
+                      <input required value={recForm.fournisseur} onChange={e => setRecForm({ ...recForm, fournisseur: e.target.value })}
+                        placeholder="Ex: Hydro-Quebec" className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Categorie *</label>
+                      <select value={recForm.categorie} onChange={e => setRecForm({ ...recForm, categorie: e.target.value })}
+                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                        {CATEGORIES.map(c => <option key={c} value={c}>{CAT_LABEL[c]}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Montant HT *</label>
+                      <input type="number" step="0.01" min="0" required value={recForm.montant_ht}
+                        onChange={e => setRecForm({ ...recForm, montant_ht: e.target.value })}
+                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Total TTC</label>
+                      <p className="text-white font-bold text-sm py-2">{formatMoney(recTtc)}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Frequence</label>
+                      <select value={recForm.frequence} onChange={e => setRecForm({ ...recForm, frequence: e.target.value })}
+                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                        <option value="mensuel">Mensuel</option>
+                        <option value="hebdomadaire">Hebdomadaire</option>
+                        <option value="annuel">Annuel</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Jour du mois</label>
+                      <input type="number" min="1" max="28" value={recForm.jour_du_mois}
+                        onChange={e => setRecForm({ ...recForm, jour_du_mois: e.target.value })}
+                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-slate-400 mb-1">Methode</label>
+                      <select value={recForm.methode} onChange={e => setRecForm({ ...recForm, methode: e.target.value })}
+                        className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500">
+                        {METHODES.map(m => <option key={m} value={m}>{METHODE_LABEL[m]}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex items-end gap-2 pb-1">
+                      <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                        <input type="checkbox" checked={recForm.taxable} onChange={e => setRecForm({ ...recForm, taxable: e.target.checked })} className="rounded" />
+                        Taxable
+                      </label>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">Description</label>
+                    <input value={recForm.description} onChange={e => setRecForm({ ...recForm, description: e.target.value })}
+                      className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500" />
+                  </div>
+                  <div className="flex gap-2">
+                    <button type="submit" className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-4 py-2 text-sm transition">Ajouter</button>
+                    <button type="button" onClick={() => setShowRecForm(false)} className="text-slate-400 hover:text-white text-sm">Annuler</button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Filters */}
         <div className="flex gap-3 flex-wrap">
