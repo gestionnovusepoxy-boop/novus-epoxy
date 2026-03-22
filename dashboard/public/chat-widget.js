@@ -133,6 +133,29 @@
     msgs.scrollTop = msgs.scrollHeight;
   }
 
+  // Detect which quick replies to show based on the last assistant message
+  function showQuickRepliesForMsg(text) {
+    var lower = text.toLowerCase();
+    var hasLink = lower.includes('novus-epoxy.vercel.app/couleurs');
+    // Remove existing quick replies first
+    var existing = msgs.querySelectorAll('.ne-quick');
+    existing.forEach(function(q) { q.remove(); });
+
+    if (lower.includes('quel') && (lower.includes('espace') || lower.includes('piece') || lower.includes('endroit')) && lower.includes('?')) {
+      addQuickReplies(['Garage', 'Sous-sol', 'Balcon', 'Commercial', 'Industriel']);
+    } else if ((lower.includes('quel type') || lower.includes('quel style') || lower.includes('quel fini')) && lower.includes('?') && !hasLink) {
+      addQuickReplies(['Flocon', 'Metallique', 'Couleur unie', 'Antiderapant', 'Commercial']);
+    } else if ((lower.includes('surface') || lower.includes('plancher') || lower.includes('sol') || lower.includes('beton') || lower.includes('etat')) && lower.includes('?') && !hasLink) {
+      addQuickReplies(['Beton', 'Bois', 'Peinture existante', 'Epoxy a refaire']);
+    } else if (lower.includes('parler') && (lower.includes('humain') || lower.includes('quelqu'))) {
+      addQuickReplies(['Oui, parler a quelqu\'un', 'Non ca va, continue']);
+    } else if (lower.includes('exact') || lower.includes('confirmer') || lower.includes('tout est bon')) {
+      addQuickReplies(['Oui c\'est exact!', 'Non, corriger']);
+    } else if ((lower.includes('combien') || lower.includes('quelle') || lower.includes('superficie')) && (lower.includes('pied') || lower.includes('pi') || lower.includes('mesure')) && lower.includes('?')) {
+      addQuickReplies(['Environ 200 pi²', 'Environ 400 pi²', 'Environ 600 pi²', 'Environ 800 pi²', 'Plus de 1000 pi²']);
+    }
+  }
+
   function showWelcome() {
     addMsg('assistant', 'Salut! Moi c\'est Nova de Novus Epoxy. C\'est pour quel type d\'espace que tu regardes de l\'epoxy?');
     addQuickReplies(['Garage', 'Sous-sol', 'Balcon', 'Commercial', 'Industriel']);
@@ -146,6 +169,9 @@
         if (data.messages && data.messages.length > 0) {
           data.messages.forEach(function(m) { addMsg(m.role, m.content); });
           knownMsgCount = data.messages.length;
+          // Show quick replies for the last assistant message
+          var lastA = data.messages.filter(function(m) { return m.role === 'assistant'; }).pop();
+          if (lastA) showQuickRepliesForMsg(lastA.content);
         } else {
           showWelcome();
         }
@@ -182,20 +208,7 @@
       addMsg('assistant', reply);
 
       // Show contextual quick replies based on Nova's response
-      var lower = reply.toLowerCase();
-      var hasLink = lower.includes('novus-epoxy.vercel.app/couleurs');
-
-      if (lower.includes('quel') && (lower.includes('espace') || lower.includes('piece') || lower.includes('endroit')) && lower.includes('?')) {
-        addQuickReplies(['Garage', 'Sous-sol', 'Balcon', 'Commercial', 'Industriel']);
-      } else if ((lower.includes('quel type') || lower.includes('quel style') || lower.includes('quel fini')) && lower.includes('?') && !hasLink) {
-        addQuickReplies(['Flocon', 'Metallique', 'Couleur unie', 'Antiderapant', 'Commercial']);
-      } else if ((lower.includes('surface') || lower.includes('plancher') || lower.includes('sol') || lower.includes('beton') || lower.includes('etat')) && lower.includes('?') && !hasLink) {
-        addQuickReplies(['Beton', 'Bois', 'Peinture existante', 'Epoxy a refaire']);
-      } else if (lower.includes('parler') && (lower.includes('humain') || lower.includes('quelqu'))) {
-        addQuickReplies(['Oui, parler a quelqu\'un', 'Non ca va, continue']);
-      } else if (lower.includes('exact') || lower.includes('confirmer') || lower.includes('tout est bon')) {
-        addQuickReplies(['Oui c\'est exact!', 'Non, corriger']);
-      }
+      showQuickRepliesForMsg(reply);
     })
     .catch(function() {
       msgs.removeChild(typing);
@@ -322,6 +335,9 @@
           var newMsgs = data.messages.slice(knownMsgCount);
           newMsgs.forEach(function(m) { addMsg(m.role, m.content); });
           knownMsgCount = data.messages.length;
+          // Show quick replies for the last assistant message
+          var lastAssistant = newMsgs.filter(function(m) { return m.role === 'assistant'; }).pop();
+          if (lastAssistant) showQuickRepliesForMsg(lastAssistant.content);
         }
       })
       .catch(function() {});
@@ -343,6 +359,9 @@
           msgs.innerHTML = '';
           data.messages.forEach(function(m) { addMsg(m.role, m.content); });
           knownMsgCount = data.messages.length;
+          // Show quick replies for the last assistant message
+          var lastA = data.messages.filter(function(m) { return m.role === 'assistant'; }).pop();
+          if (lastA) showQuickRepliesForMsg(lastA.content);
           clearInterval(fastPollTimer);
           fastPollTimer = null;
         })
@@ -368,6 +387,9 @@
         msgs.innerHTML = '';
         data.messages.forEach(function(m) { addMsg(m.role, m.content); });
         knownMsgCount = data.messages.length;
+        // Show quick replies for the last assistant message
+        var lastA = data.messages.filter(function(m) { return m.role === 'assistant'; }).pop();
+        if (lastA) showQuickRepliesForMsg(lastA.content);
       })
       .catch(function() {});
   });
