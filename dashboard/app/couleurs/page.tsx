@@ -20,8 +20,9 @@ export default function CouleursPage() {
 function CouleursContent() {
   const searchParams = useSearchParams();
   const visitorId = searchParams.get('vid');
+  const initialTab = (searchParams.get('tab') as Tab) || 'flake';
 
-  const [tab, setTab] = useState<Tab>('flake');
+  const [tab, setTab] = useState<Tab>(['flake', 'pigment', 'solid'].includes(initialTab) ? initialTab : 'flake');
   const [selected, setSelected] = useState<AnyColor | null>(null);
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
