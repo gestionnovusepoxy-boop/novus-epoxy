@@ -34,8 +34,8 @@
     #ne-chat-input button:disabled { opacity:0.5; cursor:default; }
     #ne-chat-input button svg { width:18px; height:18px; fill:#0f172a; }
     #ne-chat-photo-btn { background:none !important; border:none; padding:8px; cursor:pointer; display:flex; align-items:center; }
-    #ne-chat-photo-btn svg { width:22px; height:22px; fill:#64748b; }
-    #ne-chat-photo-btn:hover svg { fill:#f59e0b; }
+    #ne-chat-photo-btn svg { width:24px; height:24px; fill:#f59e0b; }
+    #ne-chat-photo-btn:hover svg { fill:#fbbf24; }
     @media(max-width:480px) { #ne-chat-box { right:8px; left:8px; bottom:80px; width:auto; max-height:70vh; } }
   `;
   document.head.appendChild(style);
