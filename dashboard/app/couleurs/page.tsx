@@ -2,10 +2,10 @@
 
 import { Suspense, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { FLAKE_COLORS, PIGMENT_COLORS, SOLID_COLORS, CATEGORY_LABELS, type FlakeColor, type PigmentColor, type SolidColor } from '@/lib/torginol';
+import { FLAKE_COLORS, PIGMENT_COLORS, SOLID_COLORS, QUARTZ_COLORS, CATEGORY_LABELS, QUARTZ_CATEGORY_LABELS, type FlakeColor, type PigmentColor, type SolidColor, type QuartzColor } from '@/lib/torginol';
 
-type Tab = 'flake' | 'pigment' | 'solid';
-type AnyColor = FlakeColor | PigmentColor | SolidColor;
+type Tab = 'flake' | 'pigment' | 'solid' | 'quartz';
+type AnyColor = FlakeColor | PigmentColor | SolidColor | QuartzColor;
 
 const categories = Object.keys(CATEGORY_LABELS) as FlakeColor['category'][];
 
@@ -22,15 +22,15 @@ function CouleursContent() {
   const visitorId = searchParams.get('vid');
   const initialTab = (searchParams.get('tab') as Tab) || 'flake';
 
-  const [tab, setTab] = useState<Tab>(['flake', 'pigment', 'solid'].includes(initialTab) ? initialTab : 'flake');
+  const [tab, setTab] = useState<Tab>(['flake', 'pigment', 'solid', 'quartz'].includes(initialTab) ? initialTab : 'flake');
   const [selected, setSelected] = useState<AnyColor | null>(null);
   const [filter, setFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
   const [sent, setSent] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
-  const currentColors = tab === 'flake' ? FLAKE_COLORS : tab === 'pigment' ? PIGMENT_COLORS : SOLID_COLORS;
-  const hasCategories = tab === 'flake';
+  const currentColors = tab === 'flake' ? FLAKE_COLORS : tab === 'pigment' ? PIGMENT_COLORS : tab === 'quartz' ? QUARTZ_COLORS : SOLID_COLORS;
+  const hasCategories = tab === 'flake' || tab === 'quartz';
 
   const filtered = currentColors.filter(c => {
     if (hasCategories && filter !== 'all' && 'category' in c && c.category !== filter) return false;
@@ -45,7 +45,7 @@ function CouleursContent() {
     if (!visitorId || sending) return;
     setSending(true);
 
-    const typeLabel = tab === 'flake' ? 'Flocon' : tab === 'pigment' ? 'Pigment' : 'Uni';
+    const typeLabel = tab === 'flake' ? 'Flocon' : tab === 'pigment' ? 'Pigment' : tab === 'quartz' ? 'Quartz' : 'Uni';
     const message = `J'ai choisi la couleur ${color.name} (${typeLabel})`;
 
     try {
@@ -79,8 +79,9 @@ function CouleursContent() {
 
   const tabLabels: Record<Tab, string> = {
     flake: `Flocon (${FLAKE_COLORS.length})`,
-    pigment: `Pigment (${PIGMENT_COLORS.length})`,
+    quartz: `Quartz (${QUARTZ_COLORS.length})`,
     solid: `Unis (${SOLID_COLORS.length})`,
+    pigment: `Pigment (${PIGMENT_COLORS.length})`,
   };
 
   // Success confirmation
@@ -137,7 +138,7 @@ function CouleursContent() {
 
       {/* Tabs */}
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '16px 16px 0', display: 'flex', gap: '4px', overflowX: 'auto' }}>
-        {(['flake', 'pigment', 'solid'] as Tab[]).map(t => (
+        {(['flake', 'quartz', 'solid', 'pigment'] as Tab[]).map(t => (
           <button key={t} onClick={() => { setTab(t); setFilter('all'); setSearch(''); }} style={tabStyle(t)}>
             {tabLabels[t]}
           </button>
@@ -173,40 +174,45 @@ function CouleursContent() {
               }}
             />
 
-            {/* Category filters (flake only) */}
-            {hasCategories && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
-                <button
-                  onClick={() => setFilter('all')}
-                  style={{
-                    padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
-                    background: filter === 'all' ? '#f59e0b' : '#1e293b',
-                    color: filter === 'all' ? '#0f172a' : '#94a3b8',
-                    fontWeight: filter === 'all' ? 700 : 400, fontSize: '13px',
-                  }}
-                >
-                  Toutes ({FLAKE_COLORS.length})
-                </button>
-                {categories.map(cat => {
-                  const count = FLAKE_COLORS.filter(c => c.category === cat).length;
-                  if (count === 0) return null;
-                  return (
-                    <button
-                      key={cat}
-                      onClick={() => setFilter(cat)}
-                      style={{
-                        padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
-                        background: filter === cat ? '#f59e0b' : '#1e293b',
-                        color: filter === cat ? '#0f172a' : '#94a3b8',
-                        fontWeight: filter === cat ? 700 : 400, fontSize: '13px',
-                      }}
-                    >
-                      {CATEGORY_LABELS[cat]} ({count})
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            {/* Category filters (flake and quartz) */}
+            {hasCategories && (() => {
+              const catLabels = tab === 'quartz' ? QUARTZ_CATEGORY_LABELS : CATEGORY_LABELS;
+              const catKeys = Object.keys(catLabels);
+              const catColors = tab === 'quartz' ? QUARTZ_COLORS : FLAKE_COLORS;
+              return (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', marginBottom: '16px' }}>
+                  <button
+                    onClick={() => setFilter('all')}
+                    style={{
+                      padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+                      background: filter === 'all' ? '#f59e0b' : '#1e293b',
+                      color: filter === 'all' ? '#0f172a' : '#94a3b8',
+                      fontWeight: filter === 'all' ? 700 : 400, fontSize: '13px',
+                    }}
+                  >
+                    Toutes ({catColors.length})
+                  </button>
+                  {catKeys.map(cat => {
+                    const count = catColors.filter((c: FlakeColor | QuartzColor) => c.category === cat).length;
+                    if (count === 0) return null;
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setFilter(cat)}
+                        style={{
+                          padding: '8px 16px', borderRadius: '20px', border: 'none', cursor: 'pointer',
+                          background: filter === cat ? '#f59e0b' : '#1e293b',
+                          color: filter === cat ? '#0f172a' : '#94a3b8',
+                          fontWeight: filter === cat ? 700 : 400, fontSize: '13px',
+                        }}
+                      >
+                        {(catLabels as Record<string, string>)[cat]} ({count})
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Color Grid */}
             <div style={{
@@ -295,7 +301,9 @@ function CouleursContent() {
               <p style={{ color: '#94a3b8', margin: '12px 0 0', fontSize: '14px' }}>{selected.colors}</p>
               {'category' in selected && (
                 <p style={{ color: '#64748b', margin: '8px 0 0', fontSize: '12px' }}>
-                  Categorie: {CATEGORY_LABELS[(selected as FlakeColor).category]}
+                  Categorie: {tab === 'quartz'
+                    ? QUARTZ_CATEGORY_LABELS[(selected as QuartzColor).category]
+                    : CATEGORY_LABELS[(selected as FlakeColor).category]}
                 </p>
               )}
 

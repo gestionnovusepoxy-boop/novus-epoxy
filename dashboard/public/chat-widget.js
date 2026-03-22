@@ -150,7 +150,7 @@
     if (lower.includes('quel') && (lower.includes('espace') || lower.includes('piece') || lower.includes('endroit')) && lower.includes('?')) {
       addQuickReplies(['Garage', 'Sous-sol', 'Balcon', 'Commercial', 'Industriel']);
     } else if ((lower.includes('quel type') || lower.includes('quel style') || lower.includes('quel fini')) && lower.includes('?') && !hasLink) {
-      addQuickReplies(['Flocon', 'Metallique', 'Couleur unie', 'Antiderapant', 'Commercial']);
+      addQuickReplies(['Flocon', 'Quartz', 'Metallique', 'Couleur unie', 'Antiderapant', 'Commercial', 'Meulage']);
     } else if ((lower.includes('surface') || lower.includes('plancher') || lower.includes('sol') || lower.includes('beton') || lower.includes('etat')) && lower.includes('?') && !hasLink) {
       addQuickReplies(['Beton', 'Bois', 'Peinture existante', 'Epoxy a refaire']);
     } else if (lower.includes('parler') && (lower.includes('humain') || lower.includes('quelqu'))) {

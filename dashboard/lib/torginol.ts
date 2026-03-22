@@ -231,3 +231,68 @@ export const SOLID_COLORS: SolidColor[] = [
   { name: 'Rouge Brique', code: 'UNI-15', colors: 'rouge terre cuite', hex: '#8B3A2F' },
   { name: 'Rouge Securite', code: 'UNI-16', colors: 'rouge vif industriel', hex: '#B22222' },
 ];
+
+// --- Quartz Colors (Torginol Quartz Blends) ---
+export interface QuartzColor {
+  name: string;
+  code: string;
+  colors: string;
+  category: 'signature' | 'warm' | 'cool';
+  hex: string;
+  image?: string;
+}
+
+export const QUARTZ_CATEGORY_LABELS: Record<QuartzColor['category'], string> = {
+  signature: 'Signature',
+  warm: 'Chaud',
+  cool: 'Froid',
+};
+
+export const QUARTZ_COLORS: QuartzColor[] = [
+  // Signature Collection — les plus populaires
+  { name: 'Quicksand', code: 'QB-1006', colors: 'brun, gris, noir, blanc naturel', category: 'signature', hex: '#9e8e78' },
+  { name: 'Eclipse', code: 'QB-1008', colors: 'gris fonce, noir, blanc contrast', category: 'signature', hex: '#5a5a5e' },
+  { name: 'Twilight', code: 'QB-1010', colors: 'gris profond, noir elegant', category: 'signature', hex: '#4a4a50' },
+  { name: 'Clearwater', code: 'QB-1020', colors: 'tons froids, gris bleu', category: 'signature', hex: '#7a8890' },
+  { name: 'Icicle', code: 'QB-2006', colors: 'gris pale, blanc glace', category: 'signature', hex: '#b8bcc0' },
+  { name: 'Riverbank', code: 'QB-2007', colors: 'tons pierre naturelle, brun gris', category: 'signature', hex: '#8a8070' },
+  { name: 'Lighthouse', code: 'QB-2011', colors: 'neutre chaud, beige gris', category: 'signature', hex: '#a8a090' },
+  { name: 'Cardinal', code: 'QB-2012', colors: 'tons chauds, terre cuite', category: 'signature', hex: '#8a6050' },
+  { name: 'Sandhill', code: 'QB-2014', colors: 'sable chaud, beige dore', category: 'signature', hex: '#b8a888' },
+
+  // Warm Collection
+  { name: 'Oyster', code: 'QB-1004', colors: 'beige nacre, gris chaud', category: 'warm', hex: '#b0a898' },
+  { name: 'Oxford', code: 'QB-1005', colors: 'brun classique, beige', category: 'warm', hex: '#8a7e70' },
+  { name: 'Breaking Dawn', code: 'QB-1011', colors: 'beige rose, tons aurore', category: 'warm', hex: '#b8a090' },
+  { name: 'Coconut', code: 'QB-1012', colors: 'blanc creme, beige tropical', category: 'warm', hex: '#c8c0b0' },
+  { name: 'Biscuit', code: 'QB-1013', colors: 'beige biscuit, creme chaud', category: 'warm', hex: '#c0b098' },
+  { name: 'Davenport', code: 'QB-1014', colors: 'brun doux, beige classique', category: 'warm', hex: '#a09080' },
+  { name: 'Driftwood', code: 'QB-1015', colors: 'brun bois flotte, gris chaud', category: 'warm', hex: '#908070' },
+  { name: 'Tradewinds', code: 'QB-1016', colors: 'beige sable, tons venteux', category: 'warm', hex: '#b0a090' },
+  { name: 'Cinnamon', code: 'QB-1023', colors: 'brun cannelle, rouge chaud', category: 'warm', hex: '#7a5040' },
+  { name: 'Firehouse', code: 'QB-1024', colors: 'rouge vif, brun chaud', category: 'warm', hex: '#8a3830' },
+  { name: 'Ruby', code: 'QB-1025', colors: 'rouge rubis, tons riches', category: 'warm', hex: '#7a2830' },
+  { name: 'Sidewinder', code: 'QB-2010', colors: 'brun desert, sable', category: 'warm', hex: '#a08868' },
+  { name: 'Badlands', code: 'QB-2015', colors: 'terre ocre, brun rouge', category: 'warm', hex: '#907058' },
+  { name: 'Canyon', code: 'QB-2016', colors: 'brun canyon, terre chaude', category: 'warm', hex: '#886050' },
+  { name: 'Steelhead', code: 'QB-2017', colors: 'gris acier chaud, brun', category: 'warm', hex: '#787078' },
+  { name: 'Sandpiper', code: 'QB-2020', colors: 'sable doux, beige nature', category: 'warm', hex: '#c0b0a0' },
+
+  // Cool Collection
+  { name: 'Crystal', code: 'QB-1001', colors: 'blanc cristal, gris pale', category: 'cool', hex: '#c0c4c8' },
+  { name: 'Tundra', code: 'QB-1002', colors: 'gris toundra, blanc froid', category: 'cool', hex: '#a0a4a8' },
+  { name: 'Solstice', code: 'QB-1003', colors: 'gris pale apaisant, blanc', category: 'cool', hex: '#b0b4b8' },
+  { name: 'Dalmatian', code: 'QB-1007', colors: 'noir, blanc, gris tachete', category: 'cool', hex: '#808080' },
+  { name: 'Matrix', code: 'QB-1009', colors: 'gris fonce, tons froids', category: 'cool', hex: '#606468' },
+  { name: 'Aquarium', code: 'QB-1017', colors: 'bleu ocean, gris', category: 'cool', hex: '#4a6878' },
+  { name: 'New Moon', code: 'QB-1018', colors: 'noir profond, gris nuit', category: 'cool', hex: '#383840' },
+  { name: 'Marina', code: 'QB-1019', colors: 'bleu marina, gris frais', category: 'cool', hex: '#506878' },
+  { name: 'Avocado', code: 'QB-1022', colors: 'vert avocat, tons naturels', category: 'cool', hex: '#687850' },
+  { name: 'Lilac', code: 'QB-1026', colors: 'mauve lilas, gris doux', category: 'cool', hex: '#887088' },
+  { name: 'Equinox', code: 'QB-2005', colors: 'gris equilibre, tons froids', category: 'cool', hex: '#888c90' },
+  { name: 'Ivy', code: 'QB-2008', colors: 'vert lierre, tons frais', category: 'cool', hex: '#507050' },
+  { name: 'Seaside', code: 'QB-2009', colors: 'bleu cotier, sable gris', category: 'cool', hex: '#607880' },
+  { name: 'Nebula', code: 'QB-2013', colors: 'noir dramatique, gris cosmique', category: 'cool', hex: '#404048' },
+  { name: 'Harbor', code: 'QB-2018', colors: 'bleu gris portuaire', category: 'cool', hex: '#586878' },
+  { name: 'Fjord', code: 'QB-2019', colors: 'bleu nordique, gris glace', category: 'cool', hex: '#607080' },
+];

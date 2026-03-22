@@ -2,9 +2,13 @@ export const SERVICES = {
   flake:         { label: 'Flocon (Flake)',  prix: 8.50 },
   metallique:    { label: 'Métallique',      prix: 12.75 },
   couleur_unie:  { label: 'Couleur unie',    prix: 7.50 },
+  quartz:        { label: 'Quartz',          prix: 11.00 },
   antiderapant:  { label: 'Antidérapant',    prix: 10.00 },
   commercial:    { label: 'Commercial',      prix: 15.00 },
+  meulage:       { label: 'Meulage au diamant', prix: 3.50 },
 } as const;
+
+// Note: les prix peuvent varier si les travaux sont a plus de 65 km de distance
 
 export type ServiceType = keyof typeof SERVICES;
 
