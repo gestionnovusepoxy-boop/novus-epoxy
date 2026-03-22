@@ -36,18 +36,21 @@ async function sendConfirmationEmail(to: string, subject: string, html: string) 
 }
 
 export async function POST(req: NextRequest) {
+  try {
   const stripeKey = process.env.STRIPE_SECRET_KEY;
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+  console.log('[Stripe Webhook] Called. Has key:', !!stripeKey, 'Has secret:', !!webhookSecret);
 
   if (!stripeKey || !webhookSecret) {
     return NextResponse.json({ error: 'Stripe not configured' }, { status: 500 });
   }
 
-  const stripe = new Stripe(stripeKey, {
-    httpClient: Stripe.createFetchHttpClient(),
-  });
+  const stripe = new Stripe(stripeKey);
   const body = await req.text();
   const sig = req.headers.get('stripe-signature');
+
+  console.log('[Stripe Webhook] Body length:', body.length, 'Sig:', sig?.substring(0, 20));
 
   if (!sig) {
     return NextResponse.json({ error: 'Missing signature' }, { status: 400 });
@@ -55,7 +58,7 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
+    event = await stripe.webhooks.constructEventAsync(body, sig, webhookSecret);
   } catch (err) {
     console.error('Webhook signature verification failed:', err);
     return NextResponse.json({ error: 'Invalid signature' }, { status: 400 });
@@ -195,4 +198,8 @@ ${calendarHtml}
   }
 
   return NextResponse.json({ received: true });
+  } catch (globalErr) {
+    console.error('[Stripe Webhook] GLOBAL ERROR:', globalErr);
+    return NextResponse.json({ error: 'Internal error', details: String(globalErr) }, { status: 500 });
+  }
 }

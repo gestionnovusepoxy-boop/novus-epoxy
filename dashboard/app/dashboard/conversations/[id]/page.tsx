@@ -123,7 +123,14 @@ function PageContent() {
                     ? 'bg-amber-500 text-slate-900'
                     : 'bg-slate-700 text-slate-200'
                 }`}>
-                  <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  {/\[Photo envoy[ée]+e?\]\s*(https?:\/\/[^\s]+)/i.test(msg.content) ? (
+                    <a href={msg.content.match(/https?:\/\/[^\s]+/)?.[0] ?? '#'} target="_blank" rel="noopener noreferrer">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={msg.content.match(/https?:\/\/[^\s]+/)?.[0] ?? ''} alt="Photo client" className="max-w-full rounded-lg" />
+                    </a>
+                  ) : (
+                    <p className="text-sm whitespace-pre-wrap">{msg.content}</p>
+                  )}
                   <p className={`text-xs mt-1 ${msg.role === 'user' ? 'text-amber-800' : 'text-slate-500'}`}>
                     {new Date(msg.created_at).toLocaleTimeString('fr-CA', { hour: '2-digit', minute: '2-digit' })}
                   </p>

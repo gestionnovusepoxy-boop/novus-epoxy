@@ -73,9 +73,11 @@ export default function PaiementPage() {
   const total = Number(data.total);
   const depot = Number(data.depot_requis);
   const balance = total - depot;
-  const depositPaid = !!data.deposit_paid_at;
-  const balancePaid = !!data.balance_paid_at;
-  const fullyPaid = depositPaid && balancePaid;
+  // Mark as paid if DB confirms OR if redirected from Stripe success
+  const statut = data.statut as string;
+  const depositPaid = !!data.deposit_paid_at || (success && ['contrat_signe'].includes(statut));
+  const balancePaid = !!data.balance_paid_at || (success && ['depot_paye', 'planifie'].includes(statut));
+  const fullyPaid = (!!data.deposit_paid_at && !!data.balance_paid_at) || (depositPaid && balancePaid);
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f8fafc' }}>
@@ -184,6 +186,7 @@ export default function PaiementPage() {
                   <p style={{ color: balancePaid ? '#86efac' : '#94a3b8', fontSize: '14px', margin: 0 }}>
                     {formatMoney(balance)}
                     {!depositPaid && ' — Disponible apres le depot'}
+                    {depositPaid && !balancePaid && ' — Payable a la fin des travaux'}
                   </p>
                 </div>
               </div>
@@ -252,12 +255,20 @@ export default function PaiementPage() {
           </div>
         )}
 
-        {/* Alternative payment */}
-        {!fullyPaid && (
+        {/* Alternative payment — hide only right after a successful Stripe payment */}
+        {!fullyPaid && !success && (
           <div style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #334155', marginTop: '16px', textAlign: 'center' }}>
             <p style={{ color: '#94a3b8', fontSize: '14px', margin: '0 0 8px' }}>Ou payez par virement Interac a:</p>
             <p style={{ color: '#f59e0b', fontWeight: 700, fontSize: '16px', margin: '0 0 4px' }}>gestionnovusepoxy@gmail.com</p>
-            <p style={{ color: '#64748b', fontSize: '12px', margin: 0 }}>Ou par cheque a l&apos;ordre de Novus Epoxy</p>
+            <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px', margin: '12px 0 0', border: '1px solid #334155' }}>
+              <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 4px' }}>Montant exact a envoyer:</p>
+              <p style={{ color: '#f8fafc', fontWeight: 700, fontSize: '16px', margin: '0 0 8px' }}>
+                {depositPaid ? formatMoney(balance) : formatMoney(depot)}
+              </p>
+              <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 2px' }}>Message du virement:</p>
+              <p style={{ color: '#f59e0b', fontWeight: 600, fontSize: '14px', margin: 0 }}>Devis #{data.id} — {data.client_nom}</p>
+            </div>
+            <p style={{ color: '#64748b', fontSize: '11px', margin: '8px 0 0' }}>Ou par cheque a l&apos;ordre de Novus Epoxy</p>
           </div>
         )}
 

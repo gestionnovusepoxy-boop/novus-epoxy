@@ -19,7 +19,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Fetch quote and booking
   const quotes = await query(
-    'SELECT id, adresse, booking_id, statut FROM quotes WHERE id = $1',
+    'SELECT id, client_adresse, booking_id, statut FROM quotes WHERE id = $1',
     [quoteId]
   );
   if (quotes.length === 0) {
@@ -54,7 +54,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     : String(booking.jour2_date).split('T')[0];
   const j1Slot = (booking.jour1_slot as string) || 'matin';
   const j2Slot = (booking.jour2_slot as string) || 'apres-midi';
-  const address = (quote.adresse as string) || '';
+  const address = (quote.client_adresse as string) || '';
 
   if (type === 'google') {
     const links = generateGoogleCalendarLinks(j1Date, j1Slot, j2Date, j2Slot, address);

@@ -1,7 +1,9 @@
 export const SERVICES = {
-  flake:       { label: 'Flocon (Flake)',  prix: 8.50 },
-  metallique:  { label: 'Métallique',      prix: 12.75 },
-  commercial:  { label: 'Commercial',      prix: 15.00 },
+  flake:         { label: 'Flocon (Flake)',  prix: 8.50 },
+  metallique:    { label: 'Métallique',      prix: 12.75 },
+  couleur_unie:  { label: 'Couleur unie',    prix: 7.50 },
+  antiderapant:  { label: 'Antidérapant',    prix: 10.00 },
+  commercial:    { label: 'Commercial',      prix: 15.00 },
 } as const;
 
 export type ServiceType = keyof typeof SERVICES;

@@ -53,6 +53,12 @@ function CouleursContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message, visitor_id: visitorId }),
       });
+
+      // Store the color choice so the widget picks it up
+      try {
+        localStorage.setItem('ne_color_chosen', JSON.stringify({ name: color.name, type: typeLabel, message, ts: Date.now() }));
+      } catch {}
+
       setSent(color.name);
       setSelected(null);
     } catch {
@@ -219,11 +225,24 @@ function CouleursContent() {
                     transition: 'all 0.2s',
                   }}
                 >
-                  <div style={{
-                    width: '100%', height: '120px',
-                    background: color.hex,
-                    borderRadius: '10px 10px 0 0',
-                  }} />
+                  {'image' in color && color.image ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={color.image}
+                      alt={color.name}
+                      style={{
+                        width: '100%', height: '120px',
+                        objectFit: 'cover',
+                        borderRadius: '10px 10px 0 0',
+                      }}
+                    />
+                  ) : (
+                    <div style={{
+                      width: '100%', height: '120px',
+                      background: color.hex,
+                      borderRadius: '10px 10px 0 0',
+                    }} />
+                  )}
                   <div style={{ padding: '8px 10px' }}>
                     <div style={{ fontSize: '13px', fontWeight: 600, color: '#f8fafc' }}>{color.name}</div>
                     <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px' }}>{color.code}</div>
@@ -258,7 +277,16 @@ function CouleursContent() {
               width: '100%', overflow: 'hidden',
             }}
           >
-            <div style={{ width: '100%', height: '200px', background: selected.hex }} />
+            {'image' in selected && selected.image ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={selected.image}
+                alt={selected.name}
+                style={{ width: '100%', height: '200px', objectFit: 'cover' }}
+              />
+            ) : (
+              <div style={{ width: '100%', height: '200px', background: selected.hex }} />
+            )}
             <div style={{ padding: '20px' }}>
               <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700 }}>{selected.name}</h2>
               <p style={{ color: '#64748b', margin: '4px 0 0', fontSize: '13px' }}>Code: {selected.code}</p>

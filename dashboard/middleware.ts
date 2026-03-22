@@ -36,7 +36,8 @@ export function middleware(req: NextRequest) {
     pathname === '/api/track' ||
     pathname === '/api/submissions' ||
     pathname === '/api/chat' ||
-    pathname === '/api/chat/history'
+    pathname === '/api/chat/history' ||
+    pathname === '/api/chat/upload'
   )) {
     return new NextResponse(null, { status: 204, headers: corsHeaders() });
   }
@@ -78,6 +79,17 @@ export function middleware(req: NextRequest) {
   if (pathname === '/api/chat/history') {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
     if (isRateLimited(`chathist:${ip}`, 60, 60_000)) {
+      return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+    }
+    const res = NextResponse.next();
+    res.headers.set('Access-Control-Allow-Origin', CORS_ORIGIN);
+    return res;
+  }
+
+  // /api/chat/upload — public photo upload from chat widget (rate limit: 10/min per IP)
+  if (pathname === '/api/chat/upload' && req.method === 'POST') {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    if (isRateLimited(`chatupload:${ip}`, 10, 60_000)) {
       return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
     }
     const res = NextResponse.next();
@@ -152,5 +164,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis'],
+  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/upload', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis'],
 };

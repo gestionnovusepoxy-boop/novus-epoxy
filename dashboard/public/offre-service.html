@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Offre de service — Novus Epoxy</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    background: #f5f5f5;
+    color: #1a1a1a;
+    line-height: 1.6;
+  }
+
+  .email-wrapper {
+    max-width: 640px;
+    margin: 0 auto;
+    background: #ffffff;
+  }
+
+  /* Header */
+  .header {
+    background: linear-gradient(135deg, #111827 0%, #1e3a5f 100%);
+    padding: 40px 40px 35px;
+    text-align: center;
+  }
+  .header img {
+    max-width: 180px;
+    margin-bottom: 12px;
+  }
+  .header h1 {
+    color: #ffffff;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .header p {
+    color: #94a3b8;
+    font-size: 14px;
+    margin-top: 6px;
+  }
+
+  /* Gold accent bar */
+  .accent-bar {
+    height: 4px;
+    background: linear-gradient(90deg, #d4a853, #f0c674, #d4a853);
+  }
+
+  /* Body */
+  .body {
+    padding: 40px;
+  }
+
+  .greeting {
+    font-size: 16px;
+    margin-bottom: 20px;
+  }
+
+  .intro {
+    font-size: 15px;
+    color: #374151;
+    margin-bottom: 30px;
+  }
+
+  /* Services section */
+  .section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111827;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #d4a853;
+    display: inline-block;
+  }
+
+  .services-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 35px;
+  }
+
+  .service-card {
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 10px;
+    padding: 18px;
+    text-align: center;
+    transition: transform 0.2s;
+  }
+
+  .service-card .icon {
+    font-size: 28px;
+    margin-bottom: 8px;
+  }
+
+  .service-card h3 {
+    font-size: 14px;
+    font-weight: 600;
+    color: #1e293b;
+  }
+
+  .service-card p {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 4px;
+  }
+
+  /* Partner program */
+  .partner-box {
+    background: linear-gradient(135deg, #111827 0%, #1e3a5f 100%);
+    border-radius: 12px;
+    padding: 30px;
+    margin: 30px 0;
+    color: #ffffff;
+  }
+
+  .partner-box h2 {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 18px;
+    color: #f0c674;
+  }
+
+  .partner-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+
+  .partner-item .check {
+    background: #d4a853;
+    color: #111827;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
+  .partner-item div h4 {
+    font-size: 15px;
+    font-weight: 600;
+    color: #ffffff;
+  }
+
+  .partner-item div p {
+    font-size: 13px;
+    color: #cbd5e1;
+    margin-top: 2px;
+  }
+
+  /* CTA */
+  .cta-section {
+    text-align: center;
+    margin: 35px 0 20px;
+  }
+
+  .cta-button {
+    display: inline-block;
+    background: linear-gradient(135deg, #d4a853, #c49b45);
+    color: #111827;
+    text-decoration: none;
+    padding: 16px 40px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.3px;
+  }
+
+  .cta-sub {
+    font-size: 13px;
+    color: #94a3b8;
+    margin-top: 10px;
+  }
+
+  /* Signature */
+  .signature {
+    border-top: 1px solid #e2e8f0;
+    padding-top: 25px;
+    margin-top: 30px;
+  }
+
+  .sig-name {
+    font-size: 17px;
+    font-weight: 700;
+    color: #111827;
+  }
+
+  .sig-title {
+    font-size: 13px;
+    color: #64748b;
+    margin-top: 2px;
+  }
+
+  .sig-info {
+    margin-top: 12px;
+    font-size: 13px;
+    color: #374151;
+    line-height: 1.8;
+  }
+
+  .sig-info a {
+    color: #d4a853;
+    text-decoration: none;
+    font-weight: 500;
+  }
+
+  /* Footer */
+  .footer {
+    background: #f8fafc;
+    padding: 20px 40px;
+    text-align: center;
+    border-top: 1px solid #e2e8f0;
+  }
+
+  .footer p {
+    font-size: 12px;
+    color: #94a3b8;
+  }
+
+  /* Responsive */
+  @media (max-width: 480px) {
+    .body { padding: 25px 20px; }
+    .header { padding: 30px 20px 25px; }
+    .header h1 { font-size: 22px; }
+    .services-grid { grid-template-columns: 1fr; }
+    .partner-box { padding: 20px; }
+    .footer { padding: 15px 20px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="email-wrapper">
+
+  <!-- Header -->
+  <div class="header">
+    <h1>NOVUS EPOXY</h1>
+    <p>Planchers haut de gamme au Qu&eacute;bec</p>
+  </div>
+  <div class="accent-bar"></div>
+
+  <!-- Body -->
+  <div class="body">
+
+    <p class="greeting">Bonjour <strong>[Pr&eacute;nom]</strong>,</p>
+
+    <p class="intro">
+      Je me pr&eacute;sente, <strong>Luca Hayes</strong>, copropri&eacute;taire de Novus Epoxy.
+      On travaille d&eacute;j&agrave; avec plusieurs entrepreneurs en construction et r&eacute;novation,
+      et on cherche &agrave; b&acirc;tir des <strong>partenariats solides</strong> avec des entreprises comme la v&ocirc;tre.
+    </p>
+
+    <!-- Services -->
+    <span class="section-title">Nos services</span>
+
+    <div class="services-grid">
+      <div class="service-card">
+        <div class="icon">🏠</div>
+        <h3>R&eacute;sidentiel</h3>
+        <p>Garage, sous-sol, cuisine</p>
+      </div>
+      <div class="service-card">
+        <div class="icon">🏢</div>
+        <h3>Commercial</h3>
+        <p>Bureau, commerce, showroom</p>
+      </div>
+      <div class="service-card">
+        <div class="icon">🏭</div>
+        <h3>Industriel</h3>
+        <p>Entrep&ocirc;t, usine, atelier</p>
+      </div>
+      <div class="service-card">
+        <div class="icon">🛡️</div>
+        <h3>Antid&eacute;rapant</h3>
+        <p>R&eacute;sistant aux produits chimiques</p>
+      </div>
+    </div>
+
+    <p style="font-size:15px; color:#374151; margin-bottom:10px;">
+      <strong>Service cl&eacute; en main</strong> &mdash; soumission rapide, installation professionnelle, garantie incluse.
+    </p>
+
+    <!-- Partner Program -->
+    <div class="partner-box">
+      <h2>Programme Partenaire</h2>
+
+      <div class="partner-item">
+        <div class="check">&#10003;</div>
+        <div>
+          <h4>Commission de 5%</h4>
+          <p>Sur chaque projet r&eacute;f&eacute;r&eacute; et compl&eacute;t&eacute;</p>
+        </div>
+      </div>
+
+      <div class="partner-item">
+        <div class="check">&#10003;</div>
+        <div>
+          <h4>Prix partenaire pr&eacute;f&eacute;rentiel</h4>
+          <p>Tarifs exclusifs sur vos propres projets</p>
+        </div>
+      </div>
+
+      <div class="partner-item">
+        <div class="check">&#10003;</div>
+        <div>
+          <h4>Priorit&eacute; de planification</h4>
+          <p>On s'adapte &agrave; votre calendrier de chantier</p>
+        </div>
+      </div>
+
+      <div class="partner-item">
+        <div class="check">&#10003;</div>
+        <div>
+          <h4>Soumission en 24h</h4>
+          <p>R&eacute;ponse rapide pour vos clients</p>
+        </div>
+      </div>
+    </div>
+
+    <p style="font-size:15px; color:#374151;">
+      C'est simple : vous r&eacute;f&eacute;rez un client, on s'occupe du reste, et vous recevez votre commission une fois le projet compl&eacute;t&eacute;.
+    </p>
+
+    <!-- CTA -->
+    <div class="cta-section">
+      <a href="tel:+15813075983" class="cta-button">Parlons-en &rarr; 581-307-5983</a>
+      <p class="cta-sub">Appel ou texto, on r&eacute;pond rapidement</p>
+    </div>
+
+    <!-- Signature -->
+    <div class="signature">
+      <div class="sig-name">Luca Hayes</div>
+      <div class="sig-title">Copropri&eacute;taire &mdash; Novus Epoxy</div>
+      <div class="sig-info">
+        📞 <a href="tel:+15813075983">581-307-5983</a><br>
+        ✉️ <a href="mailto:gestionnovusepoxy@gmail.com">gestionnovusepoxy@gmail.com</a><br>
+        🌐 <a href="https://novusepoxy.ca">novusepoxy.ca</a>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    <p>Novus Epoxy &mdash; Planchers &eacute;poxy haut de gamme au Qu&eacute;bec</p>
+  </div>
+
+</div>
+
+</body>
+</html>
