@@ -387,7 +387,7 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
     content: m.content,
   }));
 
-  const systemPrompt = SYSTEM_PROMPT.replace('{VISITOR_ID}', ctx.visitorId) + clientContext;
+  const systemPrompt = SYSTEM_PROMPT.replaceAll('{VISITOR_ID}', ctx.visitorId) + clientContext;
 
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
