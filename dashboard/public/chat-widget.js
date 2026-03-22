@@ -14,7 +14,8 @@
     #ne-chat-header { background:#1e293b; padding:16px; border-bottom:1px solid #334155; display:flex; align-items:center; justify-content:space-between; }
     #ne-chat-header h3 { color:white; font-size:15px; font-weight:600; margin:0; }
     #ne-chat-header span { color:#f59e0b; font-size:11px; }
-    #ne-chat-header button { background:none; border:none; color:#64748b; cursor:pointer; font-size:20px; padding:0 4px; }
+    #ne-chat-header button { background:none; border:none; color:#94a3b8; cursor:pointer; font-size:26px; padding:4px 6px; }
+    #ne-chat-header button:hover { color:#f59e0b; }
     #ne-chat-msgs { flex:1; overflow-y:auto; padding:16px; display:flex; flex-direction:column; gap:12px; max-height:340px; }
     #ne-chat-msgs::-webkit-scrollbar { width:4px; }
     #ne-chat-msgs::-webkit-scrollbar-thumb { background:#334155; border-radius:4px; }
@@ -34,8 +35,8 @@
     #ne-chat-input button:disabled { opacity:0.5; cursor:default; }
     #ne-chat-input button svg { width:18px; height:18px; fill:#0f172a; }
     #ne-chat-photo-btn { background:none !important; border:none; padding:8px; cursor:pointer; display:flex; align-items:center; }
-    #ne-chat-photo-btn svg { width:24px; height:24px; fill:#f59e0b; }
-    #ne-chat-photo-btn:hover svg { fill:#fbbf24; }
+    #ne-chat-input #ne-chat-photo-btn svg { width:26px; height:26px; fill:#f59e0b !important; }
+    #ne-chat-input #ne-chat-photo-btn:hover svg { fill:#fbbf24 !important; }
     @media(max-width:480px) { #ne-chat-box { right:8px; left:8px; bottom:80px; width:auto; max-height:70vh; } }
   `;
   document.head.appendChild(style);
@@ -53,7 +54,7 @@
     <div id="ne-chat-header">
       <div><h3>Nova — Novus Epoxy</h3><span>En ligne</span></div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <button id="ne-chat-reset" style="background:none;border:none;color:#475569;cursor:pointer;font-size:20px;padding:8px;">↺</button>
+        <button id="ne-chat-reset" title="Recommencer">↺</button>
         <button id="ne-chat-close">&times;</button>
       </div>
     </div>
