@@ -341,14 +341,16 @@
       .catch(function() {});
   }, 8000);
 
-  // Fast poll when waiting for color choice — check every 2s for 30s after link clicked
+  // Fast poll when waiting for color choice — check every 2s for 2min after link clicked
   var fastPollTimer = null;
+  var waitingForColor = false;
   function startFastPoll() {
+    waitingForColor = true;
     if (fastPollTimer) return;
     var elapsed = 0;
     fastPollTimer = setInterval(function() {
       elapsed += 2000;
-      if (elapsed > 30000) { clearInterval(fastPollTimer); fastPollTimer = null; return; }
+      if (elapsed > 120000) { clearInterval(fastPollTimer); fastPollTimer = null; waitingForColor = false; return; }
       fetch(API + '/api/chat/history?visitor_id=' + encodeURIComponent(visitorId))
         .then(function(r) { return r.json(); })
         .then(function(data) {
@@ -375,9 +377,8 @@
     }
   });
 
-  // Also check on window focus (user returns from color page)
-  window.addEventListener('focus', function() {
-    if (!isOpen) return;
+  // Check for new messages (used on focus/visibility change)
+  function refreshMessages() {
     fetch(API + '/api/chat/history?visitor_id=' + encodeURIComponent(visitorId))
       .then(function(r) { return r.json(); })
       .then(function(data) {
@@ -385,11 +386,18 @@
         msgs.innerHTML = '';
         data.messages.forEach(function(m) { addMsg(m.role, m.content); });
         knownMsgCount = data.messages.length;
+        waitingForColor = false;
         // Show quick replies for the last assistant message
         var lastA = data.messages.filter(function(m) { return m.role === 'assistant'; }).pop();
         if (lastA) showQuickRepliesForMsg(lastA.content);
       })
       .catch(function() {});
+  }
+
+  // When user returns to this tab — always check for new messages
+  window.addEventListener('focus', refreshMessages);
+  document.addEventListener('visibilitychange', function() {
+    if (!document.hidden) refreshMessages();
   });
 
   // Auto-open after 5 seconds on every page load
