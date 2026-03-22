@@ -30,6 +30,15 @@ export function calculateQuote(type: ServiceType, superficie: number) {
   };
 }
 
+export function calculateQuoteCustomPrice(sousTotal: number) {
+  const tps = Math.round(sousTotal * TPS_RATE * 100) / 100;
+  const tvq = Math.round(sousTotal * TVQ_RATE * 100) / 100;
+  const total = Math.round((sousTotal + tps + tvq) * 100) / 100;
+  const depot = Math.round(total * DEPOT_RATE * 100) / 100;
+
+  return { sous_total: sousTotal, tps, tvq, total, depot_requis: depot };
+}
+
 export function formatMoney(n: number): string {
   return new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD' }).format(n);
 }
