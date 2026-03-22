@@ -141,6 +141,11 @@
     var existing = msgs.querySelectorAll('.ne-quick');
     existing.forEach(function(q) { q.remove(); });
 
+    // Skip quick replies for questions about measurements/pi²
+    if ((lower.includes('pied') || lower.includes('pi²') || lower.includes('mesure')) && lower.includes('?')) {
+      return;
+    }
+
     if (lower.includes('quel') && (lower.includes('espace') || lower.includes('piece') || lower.includes('endroit')) && lower.includes('?')) {
       addQuickReplies(['Garage', 'Sous-sol', 'Balcon', 'Commercial', 'Industriel']);
     } else if ((lower.includes('quel type') || lower.includes('quel style') || lower.includes('quel fini')) && lower.includes('?') && !hasLink) {
@@ -149,7 +154,7 @@
       addQuickReplies(['Beton', 'Bois', 'Peinture existante', 'Epoxy a refaire']);
     } else if (lower.includes('parler') && (lower.includes('humain') || lower.includes('quelqu'))) {
       addQuickReplies(['Oui, parler a quelqu\'un', 'Non ca va, continue']);
-    } else if (lower.includes('exact') || lower.includes('confirmer') || lower.includes('tout est bon')) {
+    } else if ((lower.includes('tout est exact') || lower.includes('est-ce que tout') || lower.includes('confirmer') || lower.includes('tout est bon') || lower.includes('est-ce exact')) && lower.includes('?')) {
       addQuickReplies(['Oui c\'est exact!', 'Non, corriger']);
     }
   }
