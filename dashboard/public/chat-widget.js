@@ -151,8 +151,6 @@
       addQuickReplies(['Oui, parler a quelqu\'un', 'Non ca va, continue']);
     } else if (lower.includes('exact') || lower.includes('confirmer') || lower.includes('tout est bon')) {
       addQuickReplies(['Oui c\'est exact!', 'Non, corriger']);
-    } else if ((lower.includes('combien') || lower.includes('quelle') || lower.includes('superficie')) && (lower.includes('pied') || lower.includes('pi') || lower.includes('mesure')) && lower.includes('?')) {
-      addQuickReplies(['Environ 200 pi²', 'Environ 400 pi²', 'Environ 600 pi²', 'Environ 800 pi²', 'Plus de 1000 pi²']);
     }
   }
 
