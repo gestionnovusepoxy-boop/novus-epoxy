@@ -400,8 +400,20 @@
     if (!document.hidden) refreshMessages();
   });
 
-  // Auto-open after 5 seconds on every page load
-  setTimeout(function() {
-    openChat();
-  }, 5000);
+  // Detect return from color selection page (chatResume parameter)
+  var urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('chatResume')) {
+    // Clean URL without reload
+    history.replaceState({}, '', window.location.pathname);
+    // Open chat immediately and refresh messages
+    setTimeout(function() {
+      openChat();
+      refreshMessages();
+    }, 500);
+  } else {
+    // Auto-open after 5 seconds on every page load
+    setTimeout(function() {
+      openChat();
+    }, 5000);
+  }
 })();

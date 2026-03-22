@@ -59,8 +59,9 @@ function CouleursContent() {
         localStorage.setItem('ne_color_chosen', JSON.stringify({ name: color.name, type: typeLabel, message, ts: Date.now() }));
       } catch {}
 
-      setSent(color.name);
       setSelected(null);
+      // Redirect back to novusepoxy.ca — the chat widget will pick up the new messages
+      window.location.href = 'https://novusepoxy.ca?chatResume=1';
     } catch {
       alert('Erreur — reessayez');
     } finally {
