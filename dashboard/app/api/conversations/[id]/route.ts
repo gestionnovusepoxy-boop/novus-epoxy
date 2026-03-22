@@ -54,7 +54,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const clientTel = conv.visitor_tel ?? null;
     const clientAdresse = conv.visitor_adresse ?? null;
     const typeService = conv.type_service ?? 'antiderapant';
-    const superficie = conv.superficie ?? 0;
+    const superficie = Number(conv.superficie) || 0;
     const etatPlancher = conv.etat_plancher ?? null;
 
     if (!clientEmail) {
