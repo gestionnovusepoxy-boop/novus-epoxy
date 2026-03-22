@@ -209,6 +209,8 @@
       msgs.removeChild(typing);
       var reply = data.reply || 'Desolee, une erreur est survenue.';
       addMsg('assistant', reply);
+      // Update count so polling doesn't duplicate these messages
+      knownMsgCount += 2;
 
       // Show contextual quick replies based on Nova's response
       showQuickRepliesForMsg(reply);
