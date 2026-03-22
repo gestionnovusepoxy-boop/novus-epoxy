@@ -413,10 +413,15 @@
   if (urlParams.get('chatResume')) {
     // Clean URL without reload
     history.replaceState({}, '', window.location.pathname);
-    // Open chat immediately and refresh messages
+    // Force reload all messages and open chat
     setTimeout(function() {
+      // Clear existing content so loadHistory runs fresh
+      msgs.innerHTML = '';
+      knownMsgCount = 0;
+      isOpen = false;
       openChat();
-      refreshMessages();
+      // Also start fast polling in case Claude is still responding
+      startFastPoll();
     }, 500);
   } else {
     // Auto-open after 5 seconds on every page load
