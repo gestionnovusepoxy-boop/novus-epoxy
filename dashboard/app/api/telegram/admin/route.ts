@@ -494,86 +494,104 @@ export async function POST(req: NextRequest) {
     const caption = (message.caption ?? '').trim();
     const captionLower = caption.toLowerCase();
 
-    // --- PORTFOLIO MODE: caption starts with "portfolio" ---
-    const portfolioKeywords = ['portfolio', 'galerie', 'projet', 'realisation', 'réalisation'];
-    const isPortfolio = portfolioKeywords.some(k => captionLower.startsWith(k));
+    // --- SMART ANALYSIS: Claude decides if it's a receipt or portfolio ---
+    const base64 = imageBuffer.toString('base64');
+    const mediaType = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+    const apiKey = process.env.ANTHROPIC_API_KEY;
 
-    if (isPortfolio) {
+    if (!apiKey) {
+      await sendTelegram(chatId, 'ANTHROPIC_API_KEY non configure.');
+      return NextResponse.json({ ok: true });
+    }
+
+    await sendTelegram(chatId, 'Analyse en cours...');
+
+    // Step 1: Ask Claude to classify the image
+    const classifyRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 512,
+        messages: [{
+          role: 'user',
+          content: [
+            { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+            { type: 'text', text: `Analyse cette image. Caption de l'envoyeur: "${caption}"
+
+C'est une entreprise de planchers epoxy (Novus Epoxy). Determine ce que c'est:
+- "recu" si c'est une facture, recu, ticket de caisse, bon de commande, releve
+- "portfolio" si c'est un plancher epoxy, un chantier, un balcon, un escalier, un garage, un travail de construction/renovation
+- "autre" si c'est autre chose (screenshot, meme, photo perso, etc)
+
+Reponds en JSON strict:
+{
+  "type": "recu" ou "portfolio" ou "autre",
+  "titre": "titre descriptif court",
+  "description": "description 1-2 phrases",
+  "type_service": "flake" ou "metallique" ou "couleur_unie" ou "commercial" ou "quartz" (seulement si portfolio),
+  "fournisseur": "nom du fournisseur" (seulement si recu),
+  "montant_ttc": nombre (seulement si recu),
+  "montant_ht": nombre (seulement si recu),
+  "tps": nombre (seulement si recu),
+  "tvq": nombre (seulement si recu),
+  "date_depense": "YYYY-MM-DD" (seulement si recu),
+  "categorie": "materiaux/sous_traitance/transport/equipement/marketing/loyer/assurance/admin/autre" (seulement si recu),
+  "reference": "numero de facture ou null" (seulement si recu),
+  "ville": "ville ou null" (seulement si portfolio),
+  "superficie": nombre en pi2 ou 0 (seulement si portfolio)
+}` },
+          ],
+        }],
+      }),
+    });
+
+    if (!classifyRes.ok) {
+      const errText = await classifyRes.text();
+      console.error('Claude classify error:', errText);
+      await sendTelegram(chatId, 'Erreur API Claude. Reessaie.');
+      return NextResponse.json({ ok: true });
+    }
+
+    const classifyData = await classifyRes.json();
+    const classifyText = classifyData.content?.[0]?.text ?? '';
+    let classified;
+    try {
+      classified = JSON.parse(classifyText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+    } catch {
+      await sendTelegram(chatId, 'Erreur analyse image. Reessaie.');
+      return NextResponse.json({ ok: true });
+    }
+
+    // --- PORTFOLIO ---
+    if (classified.type === 'portfolio') {
       try {
         const { put } = await import('@vercel/blob');
-        const slug = `portfolio-${Date.now()}.jpg`;
+        const slug = `portfolio/photo-${Date.now()}.jpg`;
         const blob = await put(slug, imageBuffer, { access: 'public', contentType: 'image/jpeg' });
-
-        // Parse caption for metadata: "portfolio [type] [titre] [ville] [superficie]"
-        const apiKey = process.env.ANTHROPIC_API_KEY;
-        let titre = caption.replace(/^(portfolio|galerie|projet|realisation|réalisation)\s*/i, '').trim() || 'Nouveau projet';
-        let typeService = 'metallique';
-        let ville = '';
-        let superficie = 0;
-        let description = '';
-
-        if (apiKey) {
-          const base64 = imageBuffer.toString('base64');
-          const mediaType = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
-          const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: {
-              'x-api-key': apiKey,
-              'anthropic-version': '2023-06-01',
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              model: 'claude-sonnet-4-6',
-              max_tokens: 512,
-              messages: [{
-                role: 'user',
-                content: [
-                  { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-                  { type: 'text', text: `Analyse cette photo de plancher epoxy. Contexte du photographe: "${caption}"
-
-Reponds en JSON strict (pas de markdown):
-{
-  "titre": "titre descriptif court en francais",
-  "description": "description 1-2 phrases",
-  "type_service": "flake" ou "metallique" ou "couleur_unie" ou "commercial" ou "quartz",
-  "ville": "ville si mentionnee ou null",
-  "superficie": nombre en pi2 si mentionne ou 0
-}` },
-                ],
-              }],
-            }),
-          });
-          if (claudeRes.ok) {
-            const data = await claudeRes.json();
-            const text = data.content?.[0]?.text ?? '';
-            const parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
-            titre = parsed.titre || titre;
-            description = parsed.description || '';
-            typeService = parsed.type_service || typeService;
-            ville = parsed.ville || '';
-            superficie = parsed.superficie || 0;
-          }
-        }
 
         const rows = await query(
           `INSERT INTO portfolio (titre, description, type_service, superficie, ville, photos, featured)
            VALUES ($1, $2, $3, $4, $5, $6, false) RETURNING id`,
-          [titre, description, typeService, superficie || null, ville || null, [blob.url]]
+          [classified.titre || 'Nouveau projet', classified.description || '', classified.type_service || 'metallique', classified.superficie || null, classified.ville || null, [blob.url]]
         );
 
         const id = rows[0].id;
         await sendTelegram(chatId, [
           `Portfolio #${id} ajoute!`,
           ``,
-          `${titre}`,
-          description ? description : '',
-          `Type: ${typeService}`,
-          ville ? `Ville: ${ville}` : '',
-          superficie ? `Surface: ${superficie} pi²` : '',
+          classified.titre || '',
+          classified.description || '',
+          `Type: ${classified.type_service || 'metallique'}`,
+          classified.ville ? `Ville: ${classified.ville}` : '',
+          classified.superficie ? `Surface: ${classified.superficie} pi²` : '',
           ``,
           `Photo: ${blob.url}`,
         ].filter(Boolean).join('\n'));
-
       } catch (err) {
         console.error('Portfolio save error:', err);
         await sendTelegram(chatId, `Erreur portfolio: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
@@ -581,67 +599,25 @@ Reponds en JSON strict (pas de markdown):
       return NextResponse.json({ ok: true });
     }
 
-    // --- RECEIPT MODE (default) ---
-    const base64 = imageBuffer.toString('base64');
-    const mediaType = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
-
-    await sendTelegram(chatId, 'Analyse du recu en cours...');
-
-    // Determine payment method from caption
-    let methode = 'carte';
-    if (captionLower === 'comptant' || captionLower === 'cash') methode = 'comptant';
-    else if (captionLower === 'cheque' || captionLower === 'chèque') methode = 'cheque';
-    else if (captionLower === 'virement' || captionLower === 'transfert') methode = 'virement';
-    else if (captionLower === 'debit' || captionLower === 'débit' || captionLower === 'interac') methode = 'debit';
-
-    // Send to Claude for OCR
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) {
-      await sendTelegram(chatId, 'ANTHROPIC_API_KEY non configure.');
+    // --- AUTRE (pas recu, pas portfolio) ---
+    if (classified.type === 'autre') {
+      await sendTelegram(chatId, `J'ai vu ta photo mais je ne sais pas quoi en faire.\n\n"${classified.description || classified.titre || 'Image non reconnue'}"\n\nSi c'est un recu, renvoie avec caption "recu".\nSi c'est un projet, renvoie avec caption "portfolio".`);
       return NextResponse.json({ ok: true });
     }
 
+    // --- RECEIPT MODE (classified.type === 'recu') ---
+
+    // Determine payment method from caption
+    let methode = 'carte';
+    if (captionLower.includes('comptant') || captionLower.includes('cash')) methode = 'comptant';
+    else if (captionLower.includes('cheque') || captionLower.includes('chèque')) methode = 'cheque';
+    else if (captionLower.includes('virement') || captionLower.includes('transfert')) methode = 'virement';
+    else if (captionLower.includes('debit') || captionLower.includes('débit') || captionLower.includes('interac')) methode = 'debit';
+
+    // Use data already extracted by Claude in the classify step
+    const parsed = classified;
+
     try {
-      const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 1024,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
-              { type: 'text', text: `Analyse cette photo de facture/recu et extrais les informations en JSON strict (pas de markdown):
-{
-  "fournisseur": "nom du commerce",
-  "date_depense": "YYYY-MM-DD",
-  "description": "description courte",
-  "montant_ht": nombre,
-  "tps": nombre,
-  "tvq": nombre,
-  "montant_ttc": nombre,
-  "categorie": "une parmi: materiaux, sous_traitance, transport, equipement, marketing, loyer, assurance, admin, autre",
-  "reference": "numero de facture ou null"
-}
-Si le HT n'est pas visible, calcule-le du TTC. Si taxes non detaillees, mets tps/tvq a 0 et HT=TTC.
-Pour la categorie, devine selon le fournisseur (quincaillerie=materiaux, essence=transport, etc).
-JSON uniquement.` },
-            ],
-          }],
-        }),
-      });
-
-      if (!claudeRes.ok) throw new Error('Erreur Claude API');
-
-      const claudeData = await claudeRes.json();
-      const ocrText = claudeData.content?.[0]?.text ?? '';
-      const jsonStr = ocrText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      const parsed = JSON.parse(jsonStr);
 
       // Check for duplicates
       const existingExpenses = await query(
