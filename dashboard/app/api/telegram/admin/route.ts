@@ -337,7 +337,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // Handle photo messages — receipt scanning
+  // Handle photo messages — portfolio or receipt scanning
   if (message.photo && message.photo.length > 0) {
     // Get the largest photo (last in array)
     const photo = message.photo[message.photo.length - 1];
@@ -356,18 +356,109 @@ export async function POST(req: NextRequest) {
     // Download the file
     const downloadRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${filePath}`);
     const imageBuffer = Buffer.from(await downloadRes.arrayBuffer());
+
+    const caption = (message.caption ?? '').trim();
+    const captionLower = caption.toLowerCase();
+
+    // --- PORTFOLIO MODE: caption starts with "portfolio" ---
+    const portfolioKeywords = ['portfolio', 'galerie', 'projet', 'realisation', 'réalisation'];
+    const isPortfolio = portfolioKeywords.some(k => captionLower.startsWith(k));
+
+    if (isPortfolio) {
+      try {
+        const { put } = await import('@vercel/blob');
+        const slug = `portfolio-${Date.now()}.jpg`;
+        const blob = await put(slug, imageBuffer, { access: 'public', contentType: 'image/jpeg' });
+
+        // Parse caption for metadata: "portfolio [type] [titre] [ville] [superficie]"
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        let titre = caption.replace(/^(portfolio|galerie|projet|realisation|réalisation)\s*/i, '').trim() || 'Nouveau projet';
+        let typeService = 'metallique';
+        let ville = '';
+        let superficie = 0;
+        let description = '';
+
+        if (apiKey) {
+          const base64 = imageBuffer.toString('base64');
+          const mediaType = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
+          const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-6',
+              max_tokens: 512,
+              messages: [{
+                role: 'user',
+                content: [
+                  { type: 'image', source: { type: 'base64', media_type: mediaType, data: base64 } },
+                  { type: 'text', text: `Analyse cette photo de plancher epoxy. Contexte du photographe: "${caption}"
+
+Reponds en JSON strict (pas de markdown):
+{
+  "titre": "titre descriptif court en francais",
+  "description": "description 1-2 phrases",
+  "type_service": "flake" ou "metallique" ou "couleur_unie" ou "commercial" ou "quartz",
+  "ville": "ville si mentionnee ou null",
+  "superficie": nombre en pi2 si mentionne ou 0
+}` },
+                ],
+              }],
+            }),
+          });
+          if (claudeRes.ok) {
+            const data = await claudeRes.json();
+            const text = data.content?.[0]?.text ?? '';
+            const parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+            titre = parsed.titre || titre;
+            description = parsed.description || '';
+            typeService = parsed.type_service || typeService;
+            ville = parsed.ville || '';
+            superficie = parsed.superficie || 0;
+          }
+        }
+
+        const rows = await query(
+          `INSERT INTO portfolio (titre, description, type_service, superficie, ville, photos, featured)
+           VALUES ($1, $2, $3, $4, $5, $6, false) RETURNING id`,
+          [titre, description, typeService, superficie || null, ville || null, [blob.url]]
+        );
+
+        const id = rows[0].id;
+        await sendTelegram(chatId, [
+          `Portfolio #${id} ajoute!`,
+          ``,
+          `${titre}`,
+          description ? description : '',
+          `Type: ${typeService}`,
+          ville ? `Ville: ${ville}` : '',
+          superficie ? `Surface: ${superficie} pi²` : '',
+          ``,
+          `Photo: ${blob.url}`,
+        ].filter(Boolean).join('\n'));
+
+      } catch (err) {
+        console.error('Portfolio save error:', err);
+        await sendTelegram(chatId, `Erreur portfolio: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // --- RECEIPT MODE (default) ---
     const base64 = imageBuffer.toString('base64');
     const mediaType = filePath.endsWith('.png') ? 'image/png' : 'image/jpeg';
 
     await sendTelegram(chatId, 'Analyse du recu en cours...');
 
     // Determine payment method from caption
-    const caption = (message.caption ?? '').toLowerCase().trim();
     let methode = 'carte';
-    if (caption === 'comptant' || caption === 'cash') methode = 'comptant';
-    else if (caption === 'cheque' || caption === 'chèque') methode = 'cheque';
-    else if (caption === 'virement' || caption === 'transfert') methode = 'virement';
-    else if (caption === 'debit' || caption === 'débit' || caption === 'interac') methode = 'debit';
+    if (captionLower === 'comptant' || captionLower === 'cash') methode = 'comptant';
+    else if (captionLower === 'cheque' || captionLower === 'chèque') methode = 'cheque';
+    else if (captionLower === 'virement' || captionLower === 'transfert') methode = 'virement';
+    else if (captionLower === 'debit' || captionLower === 'débit' || captionLower === 'interac') methode = 'debit';
 
     // Send to Claude for OCR
     const apiKey = process.env.ANTHROPIC_API_KEY;
