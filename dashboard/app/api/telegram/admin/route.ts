@@ -3,6 +3,7 @@ import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { sendSMS, notifyAdminSMS } from '@/lib/sms';
 import { timingSafeEqual } from 'crypto';
+import { google } from 'googleapis';
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -118,6 +119,18 @@ const TOOLS = [
         superficie: { type: 'number', description: 'Superficie en pieds carres' },
       },
       required: ['type_service', 'superficie'],
+    },
+  },
+  {
+    name: 'resume_emails',
+    description: 'Lit les derniers emails recus sur gestionnovusepoxy@gmail.com et retourne un resume. Utile quand on demande "les emails", "resume emails", "nouveaux messages".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        nombre: { type: 'number', description: 'Nombre d\'emails a lire (max 10)', default: 5 },
+        non_lus_seulement: { type: 'boolean', description: 'Seulement les emails non lus', default: false },
+      },
+      required: [],
     },
   },
 ];
@@ -277,6 +290,45 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       });
     }
 
+    case 'resume_emails': {
+      const clientId = process.env.GOOGLE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+      const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+      if (!clientId || !clientSecret || !refreshToken) {
+        return JSON.stringify({ error: 'Gmail API non configure (GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN manquant)' });
+      }
+      const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
+      oauth2.setCredentials({ refresh_token: refreshToken });
+      const gmail = google.gmail({ version: 'v1', auth: oauth2 });
+
+      const nombre = Math.min(Number(input.nombre) || 5, 10);
+      const nonLus = input.non_lus_seulement as boolean;
+      const q = nonLus ? 'is:unread' : '';
+
+      const listRes = await gmail.users.messages.list({
+        userId: 'me',
+        maxResults: nombre,
+        q,
+      });
+      const messageIds = listRes.data.messages ?? [];
+      if (messageIds.length === 0) {
+        return JSON.stringify({ message: nonLus ? 'Aucun email non lu' : 'Aucun email recent' });
+      }
+
+      const emails = [];
+      for (const msg of messageIds.slice(0, nombre)) {
+        const detail = await gmail.users.messages.get({ userId: 'me', id: msg.id!, format: 'metadata', metadataHeaders: ['From', 'Subject', 'Date'] });
+        const headers = detail.data.payload?.headers ?? [];
+        const from = headers.find(h => h.name === 'From')?.value ?? 'inconnu';
+        const subject = headers.find(h => h.name === 'Subject')?.value ?? '(sans objet)';
+        const date = headers.find(h => h.name === 'Date')?.value ?? '';
+        const snippet = detail.data.snippet ?? '';
+        const isUnread = detail.data.labelIds?.includes('UNREAD') ?? false;
+        emails.push({ from, subject, date, snippet: snippet.slice(0, 200), non_lu: isUnread });
+      }
+      return JSON.stringify(emails);
+    }
+
     default:
       return JSON.stringify({ error: `Outil inconnu: ${name}` });
   }
@@ -284,7 +336,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 
 const ADMIN_SYSTEM_PROMPT = `Tu es l'assistant admin de Novus Epoxy, une entreprise de planchers epoxy haut de gamme au Quebec.
 
-Tu parles a Luca ou Jason, les proprietaires. Reponds en francais, de facon concise et directe.
+Tu parles a Luca ou Jason, les proprietaires. Reponds en francais, de facon concise et directe. Tu es leur bras droit virtuel.
 
 TU PEUX:
 - Creer des devis et les envoyer par SMS aux clients
@@ -294,21 +346,42 @@ TU PEUX:
 - Approuver des devis
 - Voir les reservations a venir
 - Calculer des prix rapidement
+- Lire et resumer les emails recus (Gmail)
+- Ajouter des photos au portfolio (envoie une photo avec caption "portfolio")
+- Scanner des recus/factures (envoie une photo du recu)
 
 PRIX:
-- Flake (Flocon): 8.50$/pi²
-- Metallique: 12.75$/pi²
-- Commercial: 15.00$/pi²
+- Flake (Flocon): 8.50$/pi2
+- Metallique: 12.75$/pi2
+- Commercial: 15.00$/pi2
 - Taxes: TPS 5% + TVQ 9.975%
 - Depot: 30% du total
+
+SERVICES OFFERTS:
+- Planchers epoxy metallique (residentiel et commercial)
+- Planchers epoxy flake/flocon (garages, sous-sols, commerces)
+- Planchers epoxy commercial (cuisines, entrepots)
+- Planchers epoxy couleur unie
+- Revetement balcons et escaliers exterieurs (flake antiderapant)
+- Reparation beton / Auto-nivelant
+
+INFOS BUSINESS:
+- RBQ: 5861-8471-01
+- Membre APCHQ
+- Garantie 10 ans
+- 15 ans d'experience
+- Zone: Grand Quebec, Levis, Rive-Sud, Rive-Nord
+- Tel: 581-307-2678 (Jason), 581-307-5983 (Luca)
 
 IMPORTANT:
 - Quand on te demande d'envoyer un devis, utilise l'outil creer_devis_sms
 - Quand on te demande les stats, utilise stats_business
+- Quand on te demande les emails/courriels/messages recus, utilise resume_emails
 - Sois bref dans tes reponses — c'est un chat Telegram
 - Formate les numeros de telephone a 10 chiffres (ex: 4186092084)
 - Si des infos manquent pour un devis, demande-les
-- N'utilise PAS de HTML dans tes reponses, Telegram gere mal certaines balises complexes`;
+- N'utilise PAS de HTML dans tes reponses, Telegram gere mal certaines balises complexes
+- Sois proactif: si un email semble urgent, dis-le. Si un devis est en attente depuis longtemps, mentionne-le.`;
 
 // POST — Telegram webhook for admin bot
 export async function POST(req: NextRequest) {

@@ -84,18 +84,27 @@
   var gallerySection = document.getElementById('gallery');
   if (gallerySection) {
     var CDN = 'https://novus-epoxy.vercel.app/gallery/';
+    var BLOB = 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/';
     var photos = [
-      { src: 'metallique-commercial-1.jpg', title: 'Plancher m\u00e9tallique commercial', type: 'M\u00e9tallique' },
-      { src: 'metallique-commercial-2.jpg', title: 'Espace commercial \u00e9poxy noir et or', type: 'M\u00e9tallique' },
-      { src: 'metallique-closeup-or.jpg', title: 'Finition m\u00e9tallique or \u2014 effet miroir', type: 'M\u00e9tallique' },
-      { src: 'metallique-texture-or-noir.jpg', title: 'Texture veines or et noir', type: 'M\u00e9tallique' },
-      { src: 'metallique-brillant.jpg', title: 'Plancher m\u00e9tallique brillant', type: 'M\u00e9tallique' },
-      { src: 'metallique-or-angle.jpg', title: '\u00c9poxy m\u00e9tallique or \u2014 vue rapproch\u00e9e', type: 'M\u00e9tallique' },
-      { src: 'metallique-marbre-blanc.jpg', title: 'Sous-sol m\u00e9tallique marbr\u00e9 blanc', type: 'M\u00e9tallique' },
-      { src: 'couleur-unie-blanc.jpg', title: 'Plancher couleur unie blanc brillant', type: 'Couleur unie' },
-      { src: 'metallique-multicolore.jpg', title: 'M\u00e9tallique turquoise, or et rouge', type: 'M\u00e9tallique' },
-      { src: 'flake-sous-sol-gris.jpg', title: 'Garage double finition flake gris', type: 'Flake' },
-      { src: 'flake-garage-pierre.jpg', title: 'Garage flake gris \u2014 fini professionnel', type: 'Flake' }
+      { src: CDN + 'metallique-commercial-1.jpg', title: 'Plancher m\u00e9tallique commercial', type: 'M\u00e9tallique' },
+      { src: CDN + 'metallique-commercial-2.jpg', title: 'Espace commercial \u00e9poxy noir et or', type: 'M\u00e9tallique' },
+      { src: CDN + 'metallique-closeup-or.jpg', title: 'Finition m\u00e9tallique or \u2014 effet miroir', type: 'M\u00e9tallique' },
+      { src: CDN + 'metallique-texture-or-noir.jpg', title: 'Texture veines or et noir', type: 'M\u00e9tallique' },
+      { src: CDN + 'metallique-brillant.jpg', title: 'Plancher m\u00e9tallique brillant', type: 'M\u00e9tallique' },
+      { src: CDN + 'metallique-or-angle.jpg', title: '\u00c9poxy m\u00e9tallique or \u2014 vue rapproch\u00e9e', type: 'M\u00e9tallique' },
+      { src: CDN + 'metallique-marbre-blanc.jpg', title: 'Sous-sol m\u00e9tallique marbr\u00e9 blanc', type: 'M\u00e9tallique' },
+      { src: CDN + 'couleur-unie-blanc.jpg', title: 'Plancher couleur unie blanc brillant', type: 'Couleur unie' },
+      { src: CDN + 'metallique-multicolore.jpg', title: 'M\u00e9tallique turquoise, or et rouge', type: 'M\u00e9tallique' },
+      { src: CDN + 'flake-sous-sol-gris.jpg', title: 'Garage double finition flake gris', type: 'Flake' },
+      { src: CDN + 'flake-garage-pierre.jpg', title: 'Garage flake gris \u2014 fini professionnel', type: 'Flake' },
+      { src: BLOB + '01-metallique-noir-argent.jpg', title: 'M\u00e9tallique noir et argent \u2014 effet miroir', type: 'M\u00e9tallique' },
+      { src: BLOB + '03-commercial-gris.jpg', title: 'Cuisine commerciale \u00e9poxy gris', type: 'Commercial' },
+      { src: BLOB + '08-metallique-grand.jpg', title: 'Grand espace m\u00e9tallique noir et or', type: 'M\u00e9tallique' },
+      { src: BLOB + '07-escalier-entree.jpg', title: 'Escalier entr\u00e9e finition flake', type: 'Flake' },
+      { src: BLOB + '04-balcon-flake.jpg', title: 'Balcon ext\u00e9rieur finition flake', type: 'Flake' },
+      { src: BLOB + '11-flake-garage-amg.jpg', title: 'Garage flake noir \u2014 style showroom', type: 'Flake' },
+      { src: BLOB + '12-flake-garage-double.jpg', title: 'Garage double flake bleu-gris', type: 'Flake' },
+      { src: BLOB + '10-flake-sous-sol.jpg', title: 'Sous-sol r\u00e9sidentiel flake gris', type: 'Flake' }
     ];
 
     var grid = document.createElement('div');
@@ -108,7 +117,7 @@
       card.onmouseleave = function() { this.style.transform = 'scale(1)'; };
 
       var img = document.createElement('img');
-      img.src = CDN + p.src;
+      img.src = p.src;
       img.alt = p.title;
       img.loading = 'lazy';
       img.style.cssText = 'width:100%;height:280px;object-fit:cover;display:block;';
@@ -126,7 +135,7 @@
         var lb = document.createElement('div');
         lb.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:pointer;';
         var bigImg = document.createElement('img');
-        bigImg.src = CDN + p.src;
+        bigImg.src = p.src;
         bigImg.style.cssText = 'max-width:90%;max-height:90%;border-radius:8px;box-shadow:0 0 40px rgba(0,0,0,0.5);';
         lb.appendChild(bigImg);
         lb.addEventListener('click', function() { document.body.removeChild(lb); });
