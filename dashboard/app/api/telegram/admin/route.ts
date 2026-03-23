@@ -410,6 +410,67 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
+  // Handle video messages — portfolio only
+  if (message.video || message.video_note) {
+    const video = message.video || message.video_note;
+    const fileId = video.file_id;
+    const caption = (message.caption ?? '').trim();
+    const captionLower = caption.toLowerCase();
+
+    const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${fileId}`);
+    const fileData = await fileRes.json();
+    const filePath = fileData.result?.file_path;
+
+    if (!filePath) {
+      await sendTelegram(chatId, 'Erreur: impossible de telecharger la video.');
+      return NextResponse.json({ ok: true });
+    }
+
+    // Check file size (Telegram Bot API limit: 20MB download)
+    const fileSize = video.file_size || 0;
+    if (fileSize > 20 * 1024 * 1024) {
+      await sendTelegram(chatId, 'Video trop grosse (max 20MB via Telegram). Envoie une video plus courte.');
+      return NextResponse.json({ ok: true });
+    }
+
+    const downloadRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${filePath}`);
+    const videoBuffer = Buffer.from(await downloadRes.arrayBuffer());
+
+    try {
+      const { put } = await import('@vercel/blob');
+      const ext = filePath.split('.').pop() || 'mp4';
+      const contentType = ext === 'mov' ? 'video/quicktime' : 'video/mp4';
+      const slug = `portfolio/video-${Date.now()}.${ext}`;
+      const blob = await put(slug, videoBuffer, { access: 'public', contentType });
+
+      const titre = caption.replace(/^(portfolio|galerie|projet|realisation|réalisation|video|vidéo)\s*/i, '').trim() || 'Video projet';
+      const typeService = captionLower.includes('flake') ? 'flake'
+        : captionLower.includes('commercial') ? 'commercial'
+        : captionLower.includes('couleur') ? 'couleur_unie'
+        : 'metallique';
+
+      const rows = await query(
+        `INSERT INTO portfolio (titre, description, type_service, videos, featured)
+         VALUES ($1, $2, $3, $4, false) RETURNING id`,
+        [titre, 'Video ajoutee via Telegram', typeService, [blob.url]]
+      );
+
+      const id = rows[0].id;
+      await sendTelegram(chatId, [
+        `Portfolio #${id} — video ajoutee!`,
+        ``,
+        `${titre}`,
+        `Type: ${typeService}`,
+        ``,
+        `Video: ${blob.url}`,
+      ].filter(Boolean).join('\n'));
+    } catch (err) {
+      console.error('Video upload error:', err);
+      await sendTelegram(chatId, `Erreur upload video: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
+    }
+    return NextResponse.json({ ok: true });
+  }
+
   // Handle photo messages — portfolio or receipt scanning
   if (message.photo && message.photo.length > 0) {
     // Get the largest photo (last in array)
