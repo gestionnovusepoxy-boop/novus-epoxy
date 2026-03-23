@@ -107,10 +107,37 @@
       { src: BLOB + '10-flake-sous-sol.jpg', title: 'Sous-sol r\u00e9sidentiel flake gris', type: 'Flake' }
     ];
 
+    // Filter buttons
+    var types = ['Tout', 'M\u00e9tallique', 'Flake', 'Commercial', 'Couleur unie'];
+    var filterBar = document.createElement('div');
+    filterBar.style.cssText = 'display:flex;justify-content:center;gap:10px;padding:10px 5%;max-width:1400px;margin:0 auto;flex-wrap:wrap;';
+    var activeFilter = 'Tout';
+
+    function renderGallery(filter) {
+      activeFilter = filter;
+      // Update button styles
+      filterBar.querySelectorAll('button').forEach(function(btn) {
+        var isActive = btn.textContent === filter;
+        btn.style.cssText = 'padding:8px 20px;border-radius:25px;border:2px solid #c8a96e;cursor:pointer;font-weight:600;font-size:14px;transition:all 0.3s;' +
+          (isActive ? 'background:#c8a96e;color:#000;' : 'background:transparent;color:#c8a96e;');
+      });
+      // Filter photos
+      grid.innerHTML = '';
+      var filtered = filter === 'Tout' ? photos : photos.filter(function(p) { return p.type === filter; });
+      filtered.forEach(function(p) { grid.appendChild(createCard(p)); });
+    }
+
+    types.forEach(function(t) {
+      var btn = document.createElement('button');
+      btn.textContent = t;
+      btn.addEventListener('click', function() { renderGallery(t); });
+      filterBar.appendChild(btn);
+    });
+
     var grid = document.createElement('div');
     grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;padding:20px 5%;max-width:1400px;margin:0 auto;';
 
-    photos.forEach(function(p) {
+    function createCard(p) {
       var card = document.createElement('div');
       card.style.cssText = 'position:relative;border-radius:12px;overflow:hidden;cursor:pointer;box-shadow:0 4px 15px rgba(0,0,0,0.2);transition:transform 0.3s;';
       card.onmouseenter = function() { this.style.transform = 'scale(1.03)'; };
@@ -128,7 +155,6 @@
 
       card.appendChild(img);
       card.appendChild(overlay);
-      grid.appendChild(card);
 
       // Lightbox on click
       card.addEventListener('click', function() {
@@ -141,13 +167,19 @@
         lb.addEventListener('click', function() { document.body.removeChild(lb); });
         document.body.appendChild(lb);
       });
-    });
+      return card;
+    }
+
+    // Initial render with all photos
+    renderGallery('Tout');
 
     // Clear existing content and add gallery
     var existingContent = gallerySection.querySelector('.gallery-grid, .portfolio-grid');
     if (existingContent) {
-      existingContent.parentNode.replaceChild(grid, existingContent);
+      existingContent.parentNode.replaceChild(filterBar, existingContent);
+      filterBar.parentNode.insertBefore(grid, filterBar.nextSibling);
     } else {
+      gallerySection.appendChild(filterBar);
       gallerySection.appendChild(grid);
     }
   }
