@@ -74,7 +74,8 @@ export async function GET(req: NextRequest) {
     `SELECT id, client_nom, client_email, client_tel, total, depot_requis
      FROM quotes
      WHERE statut = 'contrat_signe'
-       AND contrat_signe_at <= NOW() - INTERVAL '48 hours'`,
+       AND contrat_signe_at <= NOW() - INTERVAL '48 hours'
+       AND contrat_signe_at > NOW() - INTERVAL '96 hours'`,
     []
   );
 

@@ -273,7 +273,7 @@ export async function GET(req: NextRequest) {
 
       if (existing.length === 0) {
         await query(
-          `INSERT INTO expenses (fournisseur, description, montant_ht, tps, tvq, montant_ttc, categorie, date_depense, mode_paiement, source)
+          `INSERT INTO expenses (fournisseur, description, montant_ht, tps, tvq, montant_ttc, categorie, date_depense, methode, source)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
           [
             analysis.fournisseur ?? 'Inconnu',
