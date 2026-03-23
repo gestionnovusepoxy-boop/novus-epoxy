@@ -385,7 +385,7 @@ export async function POST(req: NextRequest) {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 1024,
           messages: [{
             role: 'user',
@@ -541,7 +541,7 @@ JSON uniquement.` },
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
+          model: 'claude-sonnet-4-6',
           max_tokens: 1024,
           system: ADMIN_SYSTEM_PROMPT,
           tools: TOOLS,
