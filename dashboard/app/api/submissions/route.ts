@@ -68,6 +68,21 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
+async function notifyAdmins(nom: string, service: string, typeProjet: string, ville: string) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  if (!botToken || chatIds.length === 0) return;
+
+  const msg = `📋 *Nouvelle soumission!*\n\nClient: ${nom}\nService: ${service}\nType: ${typeProjet}\nVille: ${ville}\n\n[Voir les soumissions](https://novus-epoxy.vercel.app/dashboard/soumissions)`;
+  await Promise.all(chatIds.map(chatId =>
+    fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId.trim(), text: msg, parse_mode: 'Markdown' }),
+    }).catch(() => {})
+  ));
+}
+
 // Endpoint public pour recevoir les soumissions du formulaire de contact
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
@@ -79,18 +94,28 @@ export async function POST(req: NextRequest) {
   const ua     = req.headers.get('user-agent') ?? '';
   const ipHash = await sha256(`${ip}${ua}${new Date().toISOString().slice(0, 10)}`);
 
-  
   await db(
-    `INSERT INTO submissions (nom, email, telephone, message, service, ip_hash)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
+    `INSERT INTO submissions (nom, email, telephone, service, type_projet, adresse, surface_estimee, ville, ip_hash)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       body.nom.slice(0, 120),
       body.email.slice(0, 255),
       body.telephone?.slice(0, 30) ?? null,
-      body.message ?? null,
       body.service?.slice(0, 80) ?? null,
+      body.type_projet?.slice(0, 80) ?? null,
+      body.adresse?.slice(0, 500) ?? null,
+      body.surface_estimee?.slice(0, 50) ?? null,
+      body.ville?.slice(0, 120) ?? null,
       ipHash,
     ]
+  );
+
+  // Notify admins via Telegram
+  await notifyAdmins(
+    body.nom,
+    body.service ?? 'Non spécifié',
+    body.type_projet ?? 'Non spécifié',
+    body.ville ?? 'Non spécifié'
   );
 
   return NextResponse.json({ ok: true }, { status: 201 });

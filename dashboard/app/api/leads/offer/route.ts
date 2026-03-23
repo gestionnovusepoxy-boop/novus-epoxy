@@ -69,7 +69,7 @@ const OFFER_HTML = `<!DOCTYPE html>
     </table>
 
     <p style="font-size:15px;color:#374151;margin-bottom:10px;">
-      <strong>Service cl&eacute; en main</strong> &mdash; soumission rapide, installation professionnelle, garantie incluse.
+      <strong>Service cl&eacute; en main</strong> &mdash; soumission rapide, installation professionnelle, garantie 10 ans incluse.
     </p>
 
     <!-- Partner Program -->

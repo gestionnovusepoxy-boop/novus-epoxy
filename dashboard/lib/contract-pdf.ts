@@ -178,7 +178,7 @@ export function generateContractHtml(quote: QuoteData, companyInfo: CompanyInfo 
       <li>Fournir tous les materiaux necessaires a la realisation des travaux</li>
       <li>Respecter l'echeancier convenu entre les parties</li>
       <li>Detenir une assurance responsabilite civile valide</li>
-      <li>Offrir une garantie de 1 an sur les travaux (Code civil du Quebec)</li>
+      <li>Offrir une garantie de 10 ans sur l'adhesion du revetement epoxy</li>
     </ul>
   </div>
 
@@ -204,8 +204,9 @@ export function generateContractHtml(quote: QuoteData, companyInfo: CompanyInfo 
   <div class="article">
     <h2>Article 7 — Garantie</h2>
     <ul>
-      <li>Garantie de 1 an contre les defauts de fabrication et d'installation.</li>
-      <li>Garantie de 5 ans contre la perte de l'ouvrage (Code civil du Quebec, art. 2118).</li>
+      <li>Garantie de 10 ans sur l'adhesion du revetement epoxy.</li>
+      <li>Garantie legale de 1 an contre les defauts de fabrication (Code civil du Quebec).</li>
+      <li>Garantie legale de 5 ans contre la perte de l'ouvrage (Code civil du Quebec, art. 2118).</li>
       <li><strong>Exclusions :</strong> dommages causes par une utilisation inadequate, impacts mecaniques lourds, produits chimiques non compatibles.</li>
     </ul>
   </div>
