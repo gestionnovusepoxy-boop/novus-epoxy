@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/cron/email-scan",
-      "schedule": "0 23 * * *"
+      "schedule": "*/15 * * * *"
     }
   ],
   "headers": [
