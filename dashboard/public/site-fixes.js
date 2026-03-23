@@ -95,8 +95,7 @@
       { src: 'couleur-unie-blanc.jpg', title: 'Plancher couleur unie blanc brillant', type: 'Couleur unie' },
       { src: 'metallique-multicolore.jpg', title: 'M\u00e9tallique turquoise, or et rouge', type: 'M\u00e9tallique' },
       { src: 'flake-sous-sol-gris.jpg', title: 'Sous-sol finition flake gris', type: 'Flake' },
-      { src: 'flake-garage-pierre.jpg', title: 'Garage flake avec mur de pierre', type: 'Flake' },
-      { src: 'flake-garage-fini.jpg', title: 'Garage flake gris \u2014 fini professionnel', type: 'Flake' }
+      { src: 'flake-garage-pierre.jpg', title: 'Garage flake avec mur de pierre', type: 'Flake' }
     ];
 
     var grid = document.createElement('div');
