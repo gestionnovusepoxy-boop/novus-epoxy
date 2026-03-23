@@ -80,6 +80,70 @@
     document.head.appendChild(robots);
   }
 
+  // Inject photo gallery into #gallery section
+  var gallerySection = document.getElementById('gallery');
+  if (gallerySection) {
+    var CDN = 'https://novus-epoxy.vercel.app/gallery/';
+    var photos = [
+      { src: 'metallique-commercial-1.jpg', title: 'Plancher m\u00e9tallique commercial', type: 'M\u00e9tallique' },
+      { src: 'metallique-commercial-2.jpg', title: 'Espace commercial \u00e9poxy noir et or', type: 'M\u00e9tallique' },
+      { src: 'metallique-closeup-or.jpg', title: 'Finition m\u00e9tallique or \u2014 effet miroir', type: 'M\u00e9tallique' },
+      { src: 'metallique-texture-or-noir.jpg', title: 'Texture veines or et noir', type: 'M\u00e9tallique' },
+      { src: 'metallique-brillant.jpg', title: 'Plancher m\u00e9tallique brillant', type: 'M\u00e9tallique' },
+      { src: 'metallique-or-angle.jpg', title: '\u00c9poxy m\u00e9tallique or \u2014 vue rapproch\u00e9e', type: 'M\u00e9tallique' },
+      { src: 'metallique-marbre-blanc.jpg', title: 'Sous-sol m\u00e9tallique marbr\u00e9 blanc', type: 'M\u00e9tallique' },
+      { src: 'couleur-unie-blanc.jpg', title: 'Plancher couleur unie blanc brillant', type: 'Couleur unie' },
+      { src: 'metallique-multicolore.jpg', title: 'M\u00e9tallique turquoise, or et rouge', type: 'M\u00e9tallique' },
+      { src: 'flake-sous-sol-gris.jpg', title: 'Sous-sol finition flake gris', type: 'Flake' },
+      { src: 'flake-garage-pierre.jpg', title: 'Garage flake avec mur de pierre', type: 'Flake' },
+      { src: 'flake-garage-fini.jpg', title: 'Garage flake gris \u2014 fini professionnel', type: 'Flake' }
+    ];
+
+    var grid = document.createElement('div');
+    grid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px;padding:20px 5%;max-width:1400px;margin:0 auto;';
+
+    photos.forEach(function(p) {
+      var card = document.createElement('div');
+      card.style.cssText = 'position:relative;border-radius:12px;overflow:hidden;cursor:pointer;box-shadow:0 4px 15px rgba(0,0,0,0.2);transition:transform 0.3s;';
+      card.onmouseenter = function() { this.style.transform = 'scale(1.03)'; };
+      card.onmouseleave = function() { this.style.transform = 'scale(1)'; };
+
+      var img = document.createElement('img');
+      img.src = CDN + p.src;
+      img.alt = p.title;
+      img.loading = 'lazy';
+      img.style.cssText = 'width:100%;height:280px;object-fit:cover;display:block;';
+
+      var overlay = document.createElement('div');
+      overlay.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:12px 16px;background:linear-gradient(transparent,rgba(0,0,0,0.8));color:#fff;';
+      overlay.innerHTML = '<div style="font-weight:600;font-size:14px;">' + p.title + '</div><div style="font-size:12px;opacity:0.8;margin-top:2px;">' + p.type + '</div>';
+
+      card.appendChild(img);
+      card.appendChild(overlay);
+      grid.appendChild(card);
+
+      // Lightbox on click
+      card.addEventListener('click', function() {
+        var lb = document.createElement('div');
+        lb.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99999;display:flex;align-items:center;justify-content:center;cursor:pointer;';
+        var bigImg = document.createElement('img');
+        bigImg.src = CDN + p.src;
+        bigImg.style.cssText = 'max-width:90%;max-height:90%;border-radius:8px;box-shadow:0 0 40px rgba(0,0,0,0.5);';
+        lb.appendChild(bigImg);
+        lb.addEventListener('click', function() { document.body.removeChild(lb); });
+        document.body.appendChild(lb);
+      });
+    });
+
+    // Clear existing content and add gallery
+    var existingContent = gallerySection.querySelector('.gallery-grid, .portfolio-grid');
+    if (existingContent) {
+      existingContent.parentNode.replaceChild(grid, existingContent);
+    } else {
+      gallerySection.appendChild(grid);
+    }
+  }
+
   // Fix social links (Facebook, Instagram, LinkedIn)
   var socialMap = {
     'fa-facebook-f': 'https://www.facebook.com/novusepoxy',
