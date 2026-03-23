@@ -449,21 +449,31 @@ export async function POST(req: NextRequest) {
         : captionLower.includes('couleur') ? 'couleur_unie'
         : 'metallique';
 
-      const rows = await query(
-        `INSERT INTO portfolio (titre, description, type_service, videos, featured)
-         VALUES ($1, $2, $3, $4, false) RETURNING id`,
-        [titre, 'Video ajoutee via Telegram', typeService, [blob.url]]
+      // Check for duplicate video
+      const existing = await query(
+        `SELECT id FROM portfolio WHERE LOWER(titre) = LOWER($1) AND type_service = $2 LIMIT 1`,
+        [titre, typeService]
       );
-
-      const id = rows[0].id;
-      await sendTelegram(chatId, [
-        `Portfolio #${id} — video ajoutee!`,
-        ``,
-        `${titre}`,
-        `Type: ${typeService}`,
-        ``,
-        `Video: ${blob.url}`,
-      ].filter(Boolean).join('\n'));
+      if (existing.length > 0) {
+        // Add video to existing portfolio entry
+        await query(`UPDATE portfolio SET videos = array_append(videos, $1) WHERE id = $2`, [blob.url, existing[0].id]);
+        await sendTelegram(chatId, `Video ajoutee au portfolio #${existing[0].id} existant!\n\nVideo: ${blob.url}`);
+      } else {
+        const rows = await query(
+          `INSERT INTO portfolio (titre, description, type_service, videos, featured)
+           VALUES ($1, $2, $3, $4, false) RETURNING id`,
+          [titre, 'Video ajoutee via Telegram', typeService, [blob.url]]
+        );
+        const id = rows[0].id;
+        await sendTelegram(chatId, [
+          `Portfolio #${id} — video ajoutee!`,
+          ``,
+          `${titre}`,
+          `Type: ${typeService}`,
+          ``,
+          `Video: ${blob.url}`,
+        ].filter(Boolean).join('\n'));
+      }
     } catch (err) {
       console.error('Video upload error:', err);
       await sendTelegram(chatId, `Erreur upload video: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
@@ -573,6 +583,16 @@ Reponds en JSON strict:
         const { put } = await import('@vercel/blob');
         const slug = `portfolio/photo-${Date.now()}.jpg`;
         const blob = await put(slug, imageBuffer, { access: 'public', contentType: 'image/jpeg' });
+
+        // Check for duplicates (same title + same type = likely duplicate)
+        const existing = await query(
+          `SELECT id FROM portfolio WHERE LOWER(titre) = LOWER($1) AND type_service = $2 LIMIT 1`,
+          [classified.titre || 'Nouveau projet', classified.type_service || 'metallique']
+        );
+        if (existing.length > 0) {
+          await sendTelegram(chatId, `Doublon detecte! Portfolio #${existing[0].id} a deja le meme titre.\n\nPhoto uploadee quand meme: ${blob.url}\nSi c'est une photo supplementaire du meme projet, je peux l'ajouter — dis-moi.`);
+          return NextResponse.json({ ok: true });
+        }
 
         const rows = await query(
           `INSERT INTO portfolio (titre, description, type_service, superficie, ville, photos, featured)
