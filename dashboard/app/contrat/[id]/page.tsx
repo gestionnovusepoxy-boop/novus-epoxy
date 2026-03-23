@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 
 interface QuoteData {
   id: number;
@@ -43,6 +43,8 @@ function formatDate(d: string) {
 
 export default function ContratPage() {
   const { id } = useParams();
+  const searchParams = useSearchParams();
+  const token = searchParams.get('token') || '';
   const [quote, setQuote] = useState<QuoteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -105,7 +107,7 @@ export default function ContratPage() {
 
   useEffect(() => {
     // Fetch quote data for display via the public contract data endpoint
-    fetch(`/api/quotes/${id}/contract/data`)
+    fetch(`/api/quotes/${id}/contract/data?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
       .then(data => {
         if (data.error) {
@@ -134,6 +136,7 @@ export default function ContratPage() {
         body: JSON.stringify({
           client_email: quote.client_email,
           signature_nom: signatureNom.trim(),
+          token,
         }),
       });
       const data = await res.json();
@@ -174,7 +177,7 @@ export default function ContratPage() {
             <p style={{ color: '#f59e0b', fontWeight: 600, fontSize: '14px', margin: '0 0 8px' }}>Prochaine etape: Payer le depot</p>
             <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 12px' }}>Payez le depot de {quote ? formatMoney(Number(quote.depot_requis)) : ''} dans les 48 heures pour confirmer vos dates.</p>
             <a
-              href={`/api/quotes/${id}/pay`}
+              href={`/api/quotes/${id}/pay?token=${encodeURIComponent(token)}`}
               style={{
                 display: 'block', width: '100%', padding: '14px',
                 background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px',
@@ -202,7 +205,7 @@ export default function ContratPage() {
             Merci {signatureNom}! Vous recevrez une confirmation par email.
           </p>
           <a
-            href={`/api/quotes/${id}/pay`}
+            href={`/api/quotes/${id}/pay?token=${encodeURIComponent(token)}`}
             style={{
               display: 'block', width: '100%', padding: '16px',
               background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px',

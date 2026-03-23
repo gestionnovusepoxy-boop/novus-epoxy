@@ -3,11 +3,15 @@ import { query } from '@/lib/db';
 import Stripe from 'stripe';
 import { formatMoney } from '@/lib/pricing';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const quoteId = parseInt(id);
+  const token = req.nextUrl.searchParams.get('token');
+  if (!token) {
+    return NextResponse.json({ error: 'Token requis' }, { status: 403 });
+  }
 
-  const rows = await query('SELECT * FROM quotes WHERE id = $1', [quoteId]);
+  const rows = await query('SELECT * FROM quotes WHERE id = $1 AND secret_token = $2', [quoteId, token]);
   if (!rows[0]) {
     return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
   }
@@ -109,6 +113,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   } catch (err: unknown) {
     console.error('Stripe session creation error:', err);
     const message = err instanceof Error ? err.message : 'Unknown error';
-    return NextResponse.json({ error: 'Erreur lors de la creation de la session de paiement', details: message }, { status: 500 });
+    return NextResponse.json({ error: 'Erreur lors de la creation de la session de paiement' }, { status: 500 });
   }
 }

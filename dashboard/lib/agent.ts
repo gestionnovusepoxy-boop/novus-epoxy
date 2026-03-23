@@ -2,6 +2,7 @@ import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { getColorCatalogText } from '@/lib/torginol';
 import { notifyAdminSMS } from '@/lib/sms';
+import { escapeHtml } from '@/lib/utils';
 
 // Send notification to Telegram admins when bot needs human help
 async function notifyTelegramHandoff(conversationId: number, visitorName: string, reason: string) {
@@ -314,7 +315,7 @@ async function createQuoteFromConversation(conversationId: number, data: {
           html: `
             <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
               <h2 style="color:#1e293b;">Nouveau devis a approuver</h2>
-              <p><strong>Client:</strong> ${data.nom} (${data.email})</p>
+              <p><strong>Client:</strong> ${escapeHtml(data.nom)} (${escapeHtml(data.email)})</p>
               <p><strong>Service:</strong> ${SERVICES[data.type_service as ServiceType].label}</p>
               <p><strong>Superficie:</strong> ${data.superficie} pi²</p>
               <p><strong>Total:</strong> ${formatMoney(calc.total)}</p>
@@ -378,11 +379,32 @@ async function getClientContext(conversationId: number, visitorId: string): Prom
   return parts.length > 0 ? `\n\nCONTEXTE CLIENT:\n${parts.join('\n')}` : '';
 }
 
+// Sanitize user input to prevent prompt injection via control tags
+function sanitizeUserInput(msg: string): string {
+  return msg
+    .replace(/<QUOTE_DATA>/gi, '&lt;QUOTE_DATA&gt;')
+    .replace(/<\/QUOTE_DATA>/gi, '&lt;/QUOTE_DATA&gt;')
+    .replace(/<HANDOFF>/gi, '&lt;HANDOFF&gt;')
+    .replace(/<\/HANDOFF>/gi, '&lt;/HANDOFF&gt;');
+}
+
+// Validate quote data from AI output
+function isValidQuoteData(data: Record<string, unknown>): boolean {
+  if (!data.nom || typeof data.nom !== 'string' || data.nom.length > 200) return false;
+  if (!data.email || typeof data.email !== 'string' || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(data.email)) return false;
+  if (!data.type_service || !(data.type_service as string in SERVICES)) return false;
+  if (!data.superficie || typeof data.superficie !== 'number' || data.superficie < 10 || data.superficie > 100000) return false;
+  return true;
+}
+
 // Main agent function — process a user message and return response
 export async function processMessage(ctx: ConversationContext, userMessage: string): Promise<string> {
   const { conversationId } = ctx;
 
-  // Save user message
+  // Sanitize user input to prevent control tag injection
+  const sanitizedMessage = sanitizeUserInput(userMessage);
+
+  // Save user message (original for display)
   await saveMessage(conversationId, 'user', userMessage);
 
   // Load conversation history and client context in parallel
@@ -401,7 +423,7 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
 
   const claudeMessages = history.map(m => ({
     role: m.role === 'system' ? 'user' as const : m.role as 'user' | 'assistant',
-    content: m.content,
+    content: m.role === 'user' ? sanitizeUserInput(m.content) : m.content,
   }));
 
   const systemPrompt = SYSTEM_PROMPT.replaceAll('{VISITOR_ID}', ctx.visitorId) + clientContext;
@@ -453,6 +475,12 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
   if (quoteMatch) {
     try {
       const quoteData = JSON.parse(quoteMatch[1]);
+
+      // Validate quote data to prevent forged quotes
+      if (!isValidQuoteData(quoteData)) {
+        console.error('Invalid quote data rejected:', quoteData);
+        throw new Error('Invalid quote data');
+      }
 
       // Update conversation with collected data
       await updateConversationData(conversationId, quoteData);

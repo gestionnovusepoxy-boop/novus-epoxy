@@ -2,13 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
 // Public endpoint — returns limited quote data for the payment page
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// Requires ?token= parameter for security (prevents ID enumeration)
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const token = req.nextUrl.searchParams.get('token');
+  if (!token) {
+    return NextResponse.json({ error: 'Token requis' }, { status: 403 });
+  }
+
   const rows = await query(
     `SELECT id, client_nom, type_service, superficie, total, depot_requis, statut,
             deposit_paid_at, balance_paid_at, booking_id
-     FROM quotes WHERE id = $1`,
-    [parseInt(id)]
+     FROM quotes WHERE id = $1 AND secret_token = $2`,
+    [parseInt(id), token]
   );
 
   if (rows.length === 0) {

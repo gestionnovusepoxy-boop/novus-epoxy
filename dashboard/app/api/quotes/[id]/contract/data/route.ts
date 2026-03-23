@@ -2,9 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
 // Public endpoint — returns quote data for the contract signing page
-// Only returns data when quote is in a signable/signed state
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+// Requires ?token= parameter for security (prevents ID enumeration)
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const token = req.nextUrl.searchParams.get('token');
+  if (!token) {
+    return NextResponse.json({ error: 'Token requis' }, { status: 403 });
+  }
+
   const rows = await query(
     `SELECT q.id, q.client_nom, q.client_email, q.client_tel, q.client_adresse,
             q.type_service, q.superficie, q.etat_plancher, q.notes,
@@ -15,8 +20,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
             b.jour2_slot AS booking_jour2_slot
      FROM quotes q
      LEFT JOIN bookings b ON b.id = q.booking_id
-     WHERE q.id = $1`,
-    [parseInt(id)]
+     WHERE q.id = $1 AND q.secret_token = $2`,
+    [parseInt(id), token]
   );
 
   if (rows.length === 0) {

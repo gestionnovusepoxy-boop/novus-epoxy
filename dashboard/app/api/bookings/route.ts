@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { sendSMS } from '@/lib/sms';
+import { escapeHtml } from '@/lib/utils';
 
 // Public endpoint — client books their work dates
 export async function POST(req: NextRequest) {
@@ -88,12 +89,12 @@ export async function POST(req: NextRequest) {
             <h2 style="color:#1e293b;margin-bottom:4px;">📅 Nouvelle reservation!</h2>
             <p style="color:#64748b;margin-top:0;">Un client vient de confirmer ses dates de travaux.</p>
             <div style="background:white;padding:16px;border-radius:8px;border-left:4px solid #f59e0b;margin:16px 0;">
-              <p style="margin:4px 0;"><strong>Client:</strong> ${q.client_nom}</p>
-              <p style="margin:4px 0;"><strong>Tel:</strong> ${q.client_tel || 'N/A'}</p>
-              <p style="margin:4px 0;"><strong>Email:</strong> ${q.client_email || 'N/A'}</p>
-              <p style="margin:4px 0;"><strong>Service:</strong> ${q.type_service} — ${q.superficie} pi²</p>
+              <p style="margin:4px 0;"><strong>Client:</strong> ${escapeHtml(q.client_nom as string)}</p>
+              <p style="margin:4px 0;"><strong>Tel:</strong> ${escapeHtml((q.client_tel || 'N/A') as string)}</p>
+              <p style="margin:4px 0;"><strong>Email:</strong> ${escapeHtml((q.client_email || 'N/A') as string)}</p>
+              <p style="margin:4px 0;"><strong>Service:</strong> ${escapeHtml(q.type_service as string)} — ${q.superficie} pi²</p>
               <p style="margin:4px 0;"><strong>Total:</strong> ${formatMoney(Number(q.total))}</p>
-              <p style="margin:4px 0;"><strong>Adresse:</strong> ${q.client_adresse || 'N/A'}</p>
+              <p style="margin:4px 0;"><strong>Adresse:</strong> ${escapeHtml((q.client_adresse || 'N/A') as string)}</p>
             </div>
             <div style="background:white;padding:16px;border-radius:8px;margin:16px 0;">
               <p style="margin:4px 0;font-size:16px;"><strong>Jour 1 (prep):</strong> ${fmt(j1)} — 8h à 12h</p>

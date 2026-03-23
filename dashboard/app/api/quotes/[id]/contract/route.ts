@@ -53,7 +53,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   });
 }
 
-// POST — Client signs the contract (public endpoint, verified by email)
+// POST — Client signs the contract (public endpoint, verified by token + email)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const body = await req.json().catch(() => null);
@@ -62,8 +62,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'client_email et signature_nom requis' }, { status: 400 });
   }
 
+  const token = body.token || req.nextUrl.searchParams.get('token');
+  if (!token) {
+    return NextResponse.json({ error: 'Token requis' }, { status: 403 });
+  }
+
   const quoteId = parseInt(id);
-  const rows = await query('SELECT * FROM quotes WHERE id = $1', [quoteId]);
+  const rows = await query('SELECT * FROM quotes WHERE id = $1 AND secret_token = $2', [quoteId, token]);
   const quote = rows[0];
   if (!quote) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 

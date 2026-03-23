@@ -34,13 +34,14 @@ export default function PaiementPage() {
   const searchParams = useSearchParams();
   const success = searchParams.get('success') === 'true';
   const cancelled = searchParams.get('cancelled') === 'true';
+  const token = searchParams.get('token') || '';
 
   const [data, setData] = useState<PaymentData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    fetch(`/api/quotes/${id}/payment-info`)
+    fetch(`/api/quotes/${id}/payment-info?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
       .then(d => {
         if (d.error) setError(d.error);
@@ -156,7 +157,7 @@ export default function PaiementPage() {
               </div>
               {!depositPaid && (
                 <a
-                  href={`/api/quotes/${data.id}/pay`}
+                  href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}`}
                   style={{
                     display: 'block', width: '100%', padding: '16px',
                     background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px',
@@ -192,7 +193,7 @@ export default function PaiementPage() {
               </div>
               {depositPaid && !balancePaid && (
                 <a
-                  href={`/api/quotes/${data.id}/pay`}
+                  href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}`}
                   style={{
                     display: 'block', width: '100%', padding: '16px',
                     background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px',

@@ -3,6 +3,7 @@ import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 import { formatMoney } from '@/lib/pricing';
 import { calendarLinksHtml } from '@/lib/calendar-links';
+import { escapeHtml } from '@/lib/utils';
 import Stripe from 'stripe';
 
 async function notifyTelegram(message: string) {
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
     const quote = rows[0];
     const clientName = quote.client_nom as string;
     const clientEmail = quote.client_email as string;
+    const secretToken = quote.secret_token as string;
 
     if (paymentType === 'deposit') {
       // Check if booking dates are still available
@@ -135,13 +137,13 @@ export async function POST(req: NextRequest) {
 <p style="margin:4px 0 0;color:#f59e0b;font-size:14px;">Novus Epoxy — Devis #${quoteId}</p>
 </div>
 <div style="padding:20px 24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
-<p>Bonjour ${clientName},</p>
+<p>Bonjour ${escapeHtml(clientName)},</p>
 <p>Nous avons bien recu votre depot de <strong>${formatMoney(Number(quote.depot_requis))}</strong>.</p>
 ${datesAvailable ? '<p style="color:#16a34a;font-weight:600;">Vos dates de travaux sont maintenant confirmees!</p>' : '<p style="color:#f59e0b;">Notre equipe vous contactera pour confirmer les dates de travaux.</p>'}
 ${calendarHtml}
 <p style="color:#64748b;font-size:13px;">Le solde de ${formatMoney(Number(quote.total) - Number(quote.depot_requis))} sera a payer a la fin des travaux.</p>
 <div style="text-align:center;margin:20px 0;">
-<a href="https://novus-epoxy.vercel.app/paiement/${quoteId}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Voir mon paiement</a>
+<a href="https://novus-epoxy.vercel.app/paiement/${quoteId}?token=${secretToken}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Voir mon paiement</a>
 </div>
 <p style="color:#64748b;font-size:13px;">Questions? Contactez-nous:<br/>
 <strong>Luca:</strong> 581-307-5983 | <strong>Jason:</strong> 581-307-2678</p>
@@ -177,7 +179,7 @@ ${calendarHtml}
 <p style="margin:4px 0 0;color:#22c55e;font-size:14px;">Novus Epoxy — Devis #${quoteId}</p>
 </div>
 <div style="padding:20px 24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
-<p>Bonjour ${clientName},</p>
+<p>Bonjour ${escapeHtml(clientName)},</p>
 <p>Nous avons bien recu votre paiement final de <strong>${formatMoney(Number(quote.total) - Number(quote.depot_requis))}</strong>.</p>
 <p style="color:#16a34a;font-weight:600;">Tous les paiements sont completes. Merci!</p>
 <p style="color:#64748b;font-size:13px;">Questions? Contactez-nous:<br/>
@@ -200,6 +202,6 @@ ${calendarHtml}
   return NextResponse.json({ received: true });
   } catch (globalErr) {
     console.error('[Stripe Webhook] GLOBAL ERROR:', globalErr);
-    return NextResponse.json({ error: 'Internal error', details: String(globalErr) }, { status: 500 });
+    return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
 }

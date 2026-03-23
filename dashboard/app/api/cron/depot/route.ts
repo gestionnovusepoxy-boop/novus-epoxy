@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 import { formatMoney } from '@/lib/pricing';
+import { escapeHtml } from '@/lib/utils';
 
 // Vercel Cron — runs daily at 2PM UTC to send deposit reminders
 // - 24h-48h after contract signed: send reminder
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
             subject: `Rappel: depot requis — Novus Epoxy #${q.id}`,
             html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <h2 style="color:#1e293b;">Rappel: depot requis</h2>
-<p>Bonjour ${q.client_nom},</p>
+<p>Bonjour ${escapeHtml(q.client_nom as string)},</p>
 <p>Votre contrat est signe! Pour confirmer vos dates de travaux, veuillez effectuer le depot de <strong>${depot}</strong> dans les prochaines 24 heures.</p>
 <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
 <p style="margin:0 0 4px;font-weight:700;color:#92400e;">Modes de paiement:</p>
@@ -102,7 +103,7 @@ export async function GET(req: NextRequest) {
             subject: `Dernier rappel: vos dates pourraient etre attribuees — Novus Epoxy #${q.id}`,
             html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <h2 style="color:#dc2626;">Dernier rappel: depot requis</h2>
-<p>Bonjour ${q.client_nom},</p>
+<p>Bonjour ${escapeHtml(q.client_nom as string)},</p>
 <p>Le delai de 48 heures pour le depot de votre devis #${q.id} est depasse. <strong>Vos dates de travaux pourraient etre attribuees a un autre client</strong> si le depot de ${depot} n'est pas recu rapidement.</p>
 <div style="background:#fef2f2;border:1px solid #dc2626;border-radius:8px;padding:16px;margin:16px 0;">
 <p style="margin:0 0 4px;font-weight:700;color:#991b1b;">Pour conserver vos dates:</p>

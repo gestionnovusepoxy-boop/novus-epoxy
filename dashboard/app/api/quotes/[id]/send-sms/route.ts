@@ -18,6 +18,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const service = SERVICES[quote.type_service as ServiceType];
+  const secretToken = quote.secret_token as string;
   const solde70 = formatMoney(Number(quote.total) - Number(quote.depot_requis));
 
   const msg = [
@@ -37,7 +38,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     `Adresse: ${quote.client_adresse ?? 'Non specifiee'}`,
     ``,
     `Pour planifier vos travaux:`,
-    `https://novus-epoxy.vercel.app/reservation/${quote.id}`,
+    `https://novus-epoxy.vercel.app/reservation/${quote.id}?token=${secretToken}`,
     ``,
     `Questions? 581-307-2678`,
   ].join('\n');

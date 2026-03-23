@@ -25,6 +25,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const service = SERVICES[quote.type_service as ServiceType];
+  const secretToken = quote.secret_token as string;
 
   const logoSrc = 'https://novus-epoxy.vercel.app/logo-email.jpg';
 
@@ -59,22 +60,22 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 <p style="margin:0 0 8px;color:#1e293b;font-weight:700;font-size:14px;">Comment proceder:</p>
 <p style="margin:0 0 4px;color:#475569;font-size:13px;">1. Choisissez vos dates de travaux</p>
 <p style="margin:0 0 4px;color:#475569;font-size:13px;">2. Signez le contrat</p>
-<p style="margin:0 0 0;color:#475569;font-size:13px;">3. <a href="https://novus-epoxy.vercel.app/paiement/${quote.id}" style="color:#2563eb;text-decoration:underline;">Payez le depot (30%)</a> dans les 48h pour confirmer vos dates</p>
+<p style="margin:0 0 0;color:#475569;font-size:13px;">3. <a href="https://novus-epoxy.vercel.app/paiement/${quote.id}?token=${secretToken}" style="color:#2563eb;text-decoration:underline;">Payez le depot (30%)</a> dans les 48h pour confirmer vos dates</p>
 </div>
 <div style="text-align:center;margin:0 0 8px;">
-<a href="https://novus-epoxy.vercel.app/reservation/${quote.id}"
+<a href="https://novus-epoxy.vercel.app/reservation/${quote.id}?token=${secretToken}"
    style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
   Choisir vos dates
 </a>
 </div>
 <div style="text-align:center;margin:0 0 8px;">
-<a href="https://novus-epoxy.vercel.app/contrat/${quote.id}"
+<a href="https://novus-epoxy.vercel.app/contrat/${quote.id}?token=${secretToken}"
    style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
   Signer le contrat
 </a>
 </div>
 <div style="text-align:center;margin:0 0 8px;">
-<a href="https://novus-epoxy.vercel.app/paiement/${quote.id}"
+<a href="https://novus-epoxy.vercel.app/paiement/${quote.id}?token=${secretToken}"
    style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
   Payer le depot (30%)
 </a>
