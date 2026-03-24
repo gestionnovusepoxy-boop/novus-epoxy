@@ -12,6 +12,7 @@ interface PortfolioItem {
   couleur: string | null;
   ville: string | null;
   photos: string[];
+  videos: string[];
   featured: boolean;
   created_at: string;
 }
@@ -20,16 +21,23 @@ const TYPE_LABELS: Record<string, string> = {
   flake: 'Flocon',
   metallique: 'Métallique',
   commercial: 'Commercial',
+  couleur_unie: 'Couleur unie',
+  quartz: 'Quartz',
 };
 
 const TYPE_COLORS: Record<string, string> = {
   flake: 'bg-blue-600',
   metallique: 'bg-purple-600',
   commercial: 'bg-amber-600',
+  couleur_unie: 'bg-green-600',
+  quartz: 'bg-rose-600',
 };
+
+const SECTIONS = ['tout', 'metallique', 'flake', 'commercial', 'couleur_unie', 'quartz'] as const;
 
 function PageContent() {
   const [items, setItems] = useState<PortfolioItem[]>([]);
+  const [activeSection, setActiveSection] = useState<string>('tout');
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -288,6 +296,27 @@ function PageContent() {
           </form>
         )}
 
+        {/* Section filter tabs */}
+        <div className="flex gap-2 flex-wrap">
+          {SECTIONS.map(section => {
+            const count = section === 'tout' ? items.length : items.filter(i => i.type_service === section).length;
+            if (section !== 'tout' && count === 0) return null;
+            return (
+              <button
+                key={section}
+                onClick={() => setActiveSection(section)}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                  activeSection === section
+                    ? 'bg-amber-600 text-white'
+                    : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
+                }`}
+              >
+                {section === 'tout' ? 'Tout' : TYPE_LABELS[section] ?? section} ({count})
+              </button>
+            );
+          })}
+        </div>
+
         {/* Grid */}
         {items.length === 0 && !showForm && (
           <div className="text-center py-16 text-slate-500">
@@ -297,7 +326,9 @@ function PageContent() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {items.map(item => (
+          {items
+            .filter(item => activeSection === 'tout' || item.type_service === activeSection)
+            .map(item => (
             <div key={item.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden hover:border-slate-600 transition">
               {/* Thumbnail */}
               <div className="h-40 bg-slate-700 relative">
@@ -306,6 +337,15 @@ function PageContent() {
                     src={item.photos[0]}
                     alt={item.titre}
                     className="w-full h-full object-cover"
+                  />
+                ) : item.videos && item.videos.length > 0 ? (
+                  <video
+                    src={item.videos[0]}
+                    className="w-full h-full object-cover"
+                    muted
+                    playsInline
+                    onMouseOver={e => (e.target as HTMLVideoElement).play()}
+                    onMouseOut={e => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-500 text-4xl">
@@ -317,11 +357,18 @@ function PageContent() {
                     Vedette
                   </span>
                 )}
-                {item.photos && item.photos.length > 1 && (
-                  <span className="absolute bottom-2 left-2 bg-slate-900/80 text-white text-[10px] font-medium px-2 py-0.5 rounded-full">
-                    {item.photos.length} photos
-                  </span>
-                )}
+                <div className="absolute bottom-2 left-2 flex gap-1">
+                  {item.photos && item.photos.length > 0 && (
+                    <span className="bg-slate-900/80 text-white text-[10px] font-medium px-2 py-0.5 rounded-full">
+                      {item.photos.length} photo{item.photos.length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                  {item.videos && item.videos.length > 0 && (
+                    <span className="bg-blue-900/80 text-blue-200 text-[10px] font-medium px-2 py-0.5 rounded-full">
+                      {item.videos.length} video{item.videos.length > 1 ? 's' : ''}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Info */}
@@ -332,6 +379,9 @@ function PageContent() {
                     {TYPE_LABELS[item.type_service] ?? item.type_service}
                   </span>
                 </div>
+                {item.description && (
+                  <p className="text-xs text-slate-400 line-clamp-2">{item.description}</p>
+                )}
                 <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-slate-400">
                   {item.superficie && <span>{item.superficie} pi²</span>}
                   {item.ville && <span>{item.ville}</span>}
