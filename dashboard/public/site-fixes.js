@@ -1,6 +1,6 @@
 // Novus Epoxy - Site fixes (nav links, smooth scroll, OG tags, form accents)
 (function() {
-  // Fix gallery page — replace broken images with Blob portfolio photos
+  // Fix gallery page — replace broken images with correct Blob portfolio photos
   var BLOB = 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/';
   var galleryPhotos = [
     BLOB + '01-metallique-noir-argent.jpg',
@@ -12,16 +12,13 @@
     BLOB + '12-flake-garage-double.jpg',
     BLOB + '10-flake-sous-sol.jpg',
   ];
-  function fixGallery() {
-    var items = document.querySelectorAll('.gallery-img');
-    if (items.length === 0) return;
-    items.forEach(function(img, i) {
-      if (!img.complete || img.naturalWidth === 0) {
-        img.src = galleryPhotos[i % galleryPhotos.length];
-      }
-    });
-  }
-  window.addEventListener('load', fixGallery);
+  var galIdx = 0;
+  document.addEventListener('error', function(e) {
+    if (e.target.tagName === 'IMG' && e.target.classList.contains('gallery-img')) {
+      e.target.src = galleryPhotos[galIdx % galleryPhotos.length];
+      galIdx++;
+    }
+  }, true);
 
   // Replace favicon
   var faviconUrl = 'https://novus-epoxy.vercel.app/logo.jpg';
