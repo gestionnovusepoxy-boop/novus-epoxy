@@ -174,6 +174,29 @@ export async function POST(req: NextRequest) {
   return GET(req);
 }
 
+async function alertAdmins(text: string) {
+  for (const chatId of ADMIN_CHAT_IDS()) {
+    await sendTelegram(chatId, text).catch(() => {});
+  }
+}
+
+async function renewGmailWatchIfNeeded() {
+  const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  try {
+    const res = await fetch(`${baseUrl}/api/gmail/watch`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${adminKey}` },
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error ?? 'watch failed');
+    console.log('[Email Scan] Gmail watch renewed:', data.expiration);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    await alertAdmins(`🚨 <b>Gmail Watch — renouvellement echoue</b>\n\n${msg}\n\nVerifie les credentials Google.`);
+  }
+}
+
 export async function GET(req: NextRequest) {
   // Auth — accept CRON_SECRET or ADMIN_API_KEY
   const authHeader = req.headers.get('authorization') ?? '';
@@ -186,9 +209,25 @@ export async function GET(req: NextRequest) {
 
   const gmail = getGmailClient();
   if (!gmail) {
-    return NextResponse.json({ error: 'Gmail non configure (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN)' }, { status: 500 });
+    await alertAdmins('🚨 <b>Email Scan — Gmail non configure</b>\n\nVariables manquantes: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET ou GOOGLE_REFRESH_TOKEN\n\nVerifie les env vars sur Vercel.');
+    return NextResponse.json({ error: 'Gmail non configure' }, { status: 500 });
   }
 
+  // Auto-renew Gmail watch every ~5 days (expires after 7 days)
+  const lastWatchRows = await query(`SELECT value FROM kv_store WHERE key = 'last_gmail_watch'`).catch(() => []);
+  const lastWatch = lastWatchRows?.[0]?.value as string | undefined;
+  const daysSinceWatch = lastWatch
+    ? (Date.now() - new Date(lastWatch).getTime()) / (1000 * 60 * 60 * 24)
+    : 999;
+  if (daysSinceWatch >= 5) {
+    await renewGmailWatchIfNeeded();
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ('last_gmail_watch', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+      [new Date().toISOString()],
+    ).catch(() => {});
+  }
+
+  try {
   // Get last scan timestamp from DB
   const lastScanRows = await query(
     `SELECT value FROM kv_store WHERE key = 'last_email_scan'`,
@@ -394,4 +433,16 @@ export async function GET(req: NextRequest) {
 
   const summary = `Email scan: ${messageIds.length} traites, ${invoicesCreated} factures, ${repliesSent} reponses, ${alertsSent} alertes`;
   return NextResponse.json({ processed: messageIds.length, invoicesCreated, repliesSent, alertsSent, summary });
+
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error('[Email Scan] Fatal error:', msg);
+    await alertAdmins(
+      `🚨 <b>Email Scan — ERREUR CRITIQUE</b>\n\n` +
+      `${msg}\n\n` +
+      `Le scan des emails est en panne. Verifiez les logs Vercel.\n` +
+      `https://vercel.com/gestionnovusepoxy-boops-projects/novus-epoxy/logs`,
+    ).catch(() => {});
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
