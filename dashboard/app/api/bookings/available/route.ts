@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   // Verify quote exists and is in a valid state for booking
   const quotes = await query(
-    `SELECT id, statut, client_email FROM quotes WHERE id = $1`,
+    `SELECT id, statut, client_email, secret_token FROM quotes WHERE id = $1`,
     [parseInt(quoteId)]
   );
   if (quotes.length === 0) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
@@ -87,5 +87,5 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  return NextResponse.json({ available, client_email: q.client_email });
+  return NextResponse.json({ available, client_email: q.client_email, secret_token: q.secret_token });
 }

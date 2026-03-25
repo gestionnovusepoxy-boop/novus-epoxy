@@ -29,6 +29,7 @@ export default function ReservationPage() {
   const [error, setError] = useState('');
 
   const [clientEmail, setClientEmail] = useState('');
+  const [secretToken, setSecretToken] = useState('');
 
   useEffect(() => {
     fetch(`/api/bookings/available?quote_id=${id}`)
@@ -38,6 +39,7 @@ export default function ReservationPage() {
         else {
           setSlots(data.available || []);
           if (data.client_email) setClientEmail(data.client_email);
+          if (data.secret_token) setSecretToken(data.secret_token);
         }
       })
       .catch(() => setError('Erreur de connexion'))
@@ -101,7 +103,7 @@ export default function ReservationPage() {
             </p>
           </div>
           <a
-            href={`/contrat/${id}`}
+            href={`/contrat/${id}?token=${encodeURIComponent(secretToken)}`}
             style={{
               display: 'inline-block', background: '#f59e0b', color: '#0f172a',
               padding: '14px 32px', borderRadius: '8px', textDecoration: 'none',
