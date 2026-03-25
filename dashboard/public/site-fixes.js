@@ -1,5 +1,13 @@
 // Novus Epoxy - Site fixes (nav links, smooth scroll, OG tags, form accents)
 (function() {
+  // Replace favicon
+  var faviconUrl = 'https://novus-epoxy.vercel.app/logo.jpg';
+  var link = document.querySelector("link[rel~='icon']") || document.createElement('link');
+  link.type = 'image/jpeg';
+  link.rel = 'icon';
+  link.href = faviconUrl;
+  document.head.appendChild(link);
+
   // Replace header + footer logos with full Novus Epoxy logo
   var newLogoUrl = 'https://novus-epoxy.vercel.app/logo.jpg';
   function replaceLogo() {
