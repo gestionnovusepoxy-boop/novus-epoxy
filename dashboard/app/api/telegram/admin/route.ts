@@ -1019,7 +1019,7 @@ Reponds en JSON strict:
       await sendTelegram(chatId, finalResponse);
       // Save conversation history (keep last 10 exchanges = 20 messages)
       const newHistory: ClaudeMessage[] = [...messages, { role: 'assistant', content: finalResponse }];
-      const trimmed = newHistory.slice(-20);
+      const trimmed = newHistory.slice(-40);
       await query(
         `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
         [historyKey, JSON.stringify(trimmed)],
