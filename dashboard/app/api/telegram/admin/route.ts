@@ -993,8 +993,8 @@ Reponds en JSON strict:
         const result = await executeTool(tool.name!, tool.input!);
         toolResults.push({
           type: 'tool_result',
-          id: tool.id!,
-          text: result,
+          tool_use_id: tool.id!,
+          content: result,
         } as unknown as ContentBlock);
       }
 
