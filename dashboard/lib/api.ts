@@ -141,6 +141,8 @@ export interface Quote {
   etat_plancher:   string | null;
   notes:           string | null;
   prix_pied_carre: number;
+  rabais_pct:      number;
+  rabais_montant:  number;
   sous_total:      number;
   tps:             number;
   tvq:             number;
@@ -175,7 +177,7 @@ export function fetchQuote(id: number): Promise<Quote> {
 export async function createQuote(data: {
   client_nom: string; client_email: string; client_tel?: string; client_adresse?: string;
   type_service: ServiceType; superficie: number; etat_plancher?: string; notes?: string;
-  submission_id?: number;
+  submission_id?: number; rabais_pct?: number;
 }): Promise<Quote> {
   return apiFetch('/api/quotes', { method: 'POST', body: JSON.stringify(data) });
 }

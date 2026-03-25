@@ -201,8 +201,20 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         <div className="space-y-3 text-sm">
           <div className="flex justify-between text-slate-300">
             <span>{service.label} x {quote.superficie} pi² @ {formatMoney(Number(quote.prix_pied_carre))}/pi²</span>
-            <span>{formatMoney(Number(quote.sous_total))}</span>
+            <span>{formatMoney(Math.round(Number(quote.prix_pied_carre) * Number(quote.superficie) * 100) / 100)}</span>
           </div>
+          {Number(quote.rabais_pct) > 0 && (
+            <div className="flex justify-between text-green-400 font-medium">
+              <span>Rabais Avril {quote.rabais_pct}%</span>
+              <span>-{formatMoney(Number(quote.rabais_montant))}</span>
+            </div>
+          )}
+          {Number(quote.rabais_pct) > 0 && (
+            <div className="flex justify-between text-slate-300">
+              <span>Sous-total</span>
+              <span>{formatMoney(Number(quote.sous_total))}</span>
+            </div>
+          )}
           <div className="flex justify-between text-slate-400">
             <span>TPS (5%)</span>
             <span>{formatMoney(Number(quote.tps))}</span>

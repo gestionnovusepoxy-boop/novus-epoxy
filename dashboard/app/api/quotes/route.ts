@@ -44,7 +44,7 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
   const body = await req.json();
-  const { client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, notes, submission_id } = body;
+  const { client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, notes, submission_id, rabais_pct } = body;
 
   if (!client_nom || !client_email || !type_service || !superficie) {
     return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 });
@@ -54,17 +54,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Type de service invalide' }, { status: 400 });
   }
 
-  const calc = calculateQuote(type_service as ServiceType, parseFloat(superficie));
+  const rabaisPct = Math.min(100, Math.max(0, parseFloat(rabais_pct ?? 0) || 0));
+  const calc = calculateQuote(type_service as ServiceType, parseFloat(superficie), rabaisPct);
 
   const rows = await query(
-    `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, notes, prix_pied_carre, sous_total, tps, tvq, total, depot_requis, submission_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+    `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, notes, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis, submission_id)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
      RETURNING *`,
     [
       client_nom, client_email, client_tel ?? null, client_adresse ?? null,
       type_service, parseFloat(superficie),
       etat_plancher ?? null, notes ?? null,
-      calc.prix_pied_carre, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
+      calc.prix_pied_carre, calc.rabais_pct, calc.rabais_montant, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
       submission_id ?? null,
     ],
   );

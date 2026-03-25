@@ -19,10 +19,11 @@ export default function NouveauDevisPage() {
     superficie: '',
     etat_plancher: '',
     notes: '',
+    rabais_pct: 0,
   });
 
   const sup = parseFloat(form.superficie) || 0;
-  const preview = sup > 0 ? calculateQuote(form.type_service, sup) : null;
+  const preview = sup > 0 ? calculateQuote(form.type_service, sup, form.rabais_pct) : null;
 
   function update(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }));
@@ -43,6 +44,7 @@ export default function NouveauDevisPage() {
         superficie: sup,
         etat_plancher: form.etat_plancher || undefined,
         notes: form.notes || undefined,
+        rabais_pct: form.rabais_pct || undefined,
       });
       router.push(`/dashboard/devis/${quote.id}`);
     } catch {
@@ -136,6 +138,15 @@ export default function NouveauDevisPage() {
               className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500 resize-none"
             />
           </div>
+          <label className="flex items-center gap-3 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={form.rabais_pct === 20}
+              onChange={e => setForm(prev => ({ ...prev, rabais_pct: e.target.checked ? 20 : 0 }))}
+              className="w-4 h-4 accent-amber-500"
+            />
+            <span className="text-sm text-amber-400 font-medium">Appliquer le rabais Avril 20%</span>
+          </label>
         </div>
 
         {/* Preview prix */}
@@ -145,8 +156,20 @@ export default function NouveauDevisPage() {
             <div className="space-y-2 text-sm">
               <div className="flex justify-between text-slate-300">
                 <span>{SERVICES[form.type_service].label} x {sup} pi²</span>
-                <span>{formatMoney(preview.sous_total)}</span>
+                <span>{formatMoney(Math.round(SERVICES[form.type_service].prix * sup * 100) / 100)}</span>
               </div>
+              {preview.rabais_pct > 0 && (
+                <div className="flex justify-between text-green-400 font-medium">
+                  <span>Rabais Avril {preview.rabais_pct}%</span>
+                  <span>-{formatMoney(preview.rabais_montant)}</span>
+                </div>
+              )}
+              {preview.rabais_pct > 0 && (
+                <div className="flex justify-between text-slate-300">
+                  <span>Sous-total</span>
+                  <span>{formatMoney(preview.sous_total)}</span>
+                </div>
+              )}
               <div className="flex justify-between text-slate-400">
                 <span>TPS (5%)</span>
                 <span>{formatMoney(preview.tps)}</span>
