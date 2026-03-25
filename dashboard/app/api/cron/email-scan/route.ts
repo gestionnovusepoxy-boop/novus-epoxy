@@ -273,6 +273,15 @@ export async function GET(req: NextRequest) {
     const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value ?? '';
     const fromEmail = fromHeader.match(/<([^>]+)>/)?.[1] ?? fromHeader.split(' ')[0] ?? '';
 
+    // Mark as read immediately to prevent re-processing by parallel cron/webhook runs
+    try {
+      await gmail.users.messages.modify({
+        userId: 'me',
+        id: msg.id,
+        requestBody: { removeLabelIds: ['UNREAD'] },
+      });
+    } catch { /* ignore */ }
+
     // Skip our own emails
     if (fromEmail.includes('novusepoxy')) continue;
 
@@ -382,22 +391,35 @@ export async function GET(req: NextRequest) {
 
     // === CLIENT: Auto-reply + notify admins on Telegram ===
     if (analysis.type === 'client' && analysis.reply_suggestion) {
-      try {
-        await processAutoReply(fromEmail, subject, analysis.reply_suggestion);
-        repliesSent++;
-      } catch { /* ignore reply errors */ }
-
-      for (const chatId of ADMIN_CHAT_IDS()) {
-        await sendTelegram(chatId,
-          `👤 <b>Email client recu</b>\n\n` +
-          `De: ${fromHeader}\n` +
-          `Sujet: ${subject}\n\n` +
-          `📋 ${analysis.summary}\n` +
-          `\n✅ Reponse auto envoyee:\n<i>${(analysis.reply_suggestion ?? '').slice(0, 500)}</i>` +
-          `\n\nhttps://novus-epoxy.vercel.app/dashboard/devis`,
+      // Check if already replied to this email (dedup by Gmail message ID)
+      const alreadyReplied = await query(
+        `SELECT id FROM email_logs WHERE resend_id = $1`,
+        [`gmail-${msg.id}`],
+      );
+      if (alreadyReplied.length === 0) {
+        // Mark as processed immediately to prevent duplicate from parallel runs
+        await query(
+          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
+          [`gmail-${msg.id}`, fromEmail, subject ? `Re: ${subject}` : 'Auto-reply', 'processing'],
         );
+        try {
+          await processAutoReply(fromEmail, subject, analysis.reply_suggestion);
+          await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`gmail-${msg.id}`]);
+          repliesSent++;
+        } catch { /* ignore reply errors */ }
+
+        for (const chatId of ADMIN_CHAT_IDS()) {
+          await sendTelegram(chatId,
+            `👤 <b>Email client recu</b>\n\n` +
+            `De: ${fromHeader}\n` +
+            `Sujet: ${subject}\n\n` +
+            `📋 ${analysis.summary}\n` +
+            `\n✅ Reponse auto envoyee:\n<i>${(analysis.reply_suggestion ?? '').slice(0, 500)}</i>` +
+            `\n\nhttps://novus-epoxy.vercel.app/dashboard/devis`,
+          );
+        }
+        alertsSent++;
       }
-      alertsSent++;
     }
 
     // === IMPORTANT / NEEDS ATTENTION: Alert admin ===
