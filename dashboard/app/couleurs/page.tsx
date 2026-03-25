@@ -99,7 +99,7 @@ function CouleursContent() {
           </p>
           <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 24px' }}>
             {isFromForm
-              ? 'Retournez au formulaire pour completer votre soumission!'
+              ? 'Fermez cet onglet pour retourner a votre formulaire. Votre couleur sera affichee automatiquement!'
               : 'Votre choix a ete envoye dans le chat. Retournez a la conversation pour continuer!'}
           </p>
           <button
@@ -115,7 +115,13 @@ function CouleursContent() {
           <button
             onClick={() => {
               if (isFromForm) {
-                window.location.href = 'https://novusepoxy.ca/#ghl-form';
+                // Try to close this tab — form is still open in the other tab
+                // The form's focus listener will pick up the color from localStorage
+                window.close();
+                // Fallback if window.close() doesn't work (some browsers block it)
+                setTimeout(() => {
+                  window.location.href = 'https://novusepoxy.ca/#ghl-form';
+                }, 300);
               } else {
                 window.location.href = 'https://novusepoxy.ca?chatResume=1';
               }
