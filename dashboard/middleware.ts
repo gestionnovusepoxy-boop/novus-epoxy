@@ -1,21 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import arcjet, { shield, detectBot } from '@arcjet/next';
 
-// Arcjet security — shield + bot detection (only active when ARCJET_KEY is set)
-const aj = process.env.ARCJET_KEY
-  ? arcjet({
-      key: process.env.ARCJET_KEY,
-      rules: [
-        shield({ mode: 'LIVE' }),
-        detectBot({
-          mode: 'LIVE',
-          allow: ['CATEGORY:SEARCH_ENGINE', 'CATEGORY:MONITOR', 'CATEGORY:SOCIAL', 'CATEGORY:PREVIEW'],
-        }),
-      ],
-    })
-  : null;
-
-// Rate limiting in-memory (per-endpoint limits — Arcjet handles global security)
+// Note: Arcjet moved to API routes (lib/arcjet.ts) — Edge Function size limit on Hobby plan
+// Rate limiting in-memory (per-endpoint limits)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function isRateLimited(key: string, maxRequests: number, windowMs: number): boolean {
@@ -41,18 +27,8 @@ function corsHeaders() {
   };
 }
 
-export async function middleware(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-
-  // Arcjet security check (shield + bot detection)
-  if (aj) {
-    try {
-      const decision = await aj.protect(req);
-      if (decision.isDenied()) {
-        return NextResponse.json({ error: 'Blocked' }, { status: 403 });
-      }
-    } catch { /* fail open if Arcjet is unavailable */ }
-  }
 
   // CORS preflight for all public endpoints
   if (req.method === 'OPTIONS' && (
