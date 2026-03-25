@@ -398,6 +398,122 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ ok: true });
 
+  // Handle callback_query (inline button presses)
+  if (body.callback_query) {
+    const cb = body.callback_query;
+    const cbChatId = String(cb.message?.chat?.id ?? '');
+    const cbData = (cb.data ?? '') as string;
+    const cbId = cb.id as string;
+
+    // Answer the callback to remove loading state
+    await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/answerCallbackQuery`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ callback_query_id: cbId }),
+    });
+
+    // approve_quote_123
+    if (cbData.startsWith('approve_quote_')) {
+      const quoteId = parseInt(cbData.replace('approve_quote_', ''));
+      try {
+        const rows = await query('SELECT * FROM quotes WHERE id = $1', [quoteId]);
+        const q = rows[0];
+        if (!q) {
+          await sendTelegram(cbChatId, `Devis #${quoteId} introuvable.`);
+          return NextResponse.json({ ok: true });
+        }
+        if (!['brouillon', 'en_attente'].includes(q.statut as string)) {
+          await sendTelegram(cbChatId, `Devis #${quoteId} est deja ${q.statut}.`);
+          return NextResponse.json({ ok: true });
+        }
+
+        // Approve the quote
+        await query(`UPDATE quotes SET statut = 'approuve', approved_at = NOW() WHERE id = $1`, [quoteId]);
+
+        // Now send it to the client via the send logic
+        const apiKey = process.env.RESEND_API_KEY;
+        const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
+        const secretToken = q.secret_token as string;
+
+        if (apiKey && q.client_email) {
+          const service = SERVICES[q.type_service as ServiceType];
+          const solde70 = formatMoney(Number(q.total) - Number(q.depot_requis));
+
+          const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:16px;background:#ffffff;">
+<h2 style="color:#1e293b;margin:0 0 12px;font-size:20px;">Soumission #${q.id}</h2>
+<p>Bonjour ${q.client_nom},</p>
+<p style="color:#475569;">Voici votre soumission pour vos travaux de plancher epoxy :</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;">
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Service</td><td style="padding:6px 0;text-align:right;font-weight:600;">${service?.label ?? q.type_service}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Superficie</td><td style="padding:6px 0;text-align:right;">${q.superficie} pi2</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Sous-total</td><td style="padding:6px 0;text-align:right;">${formatMoney(Number(q.sous_total))}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">TPS (5%)</td><td style="padding:6px 0;text-align:right;">${formatMoney(Number(q.tps))}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">TVQ (9,975%)</td><td style="padding:6px 0;text-align:right;">${formatMoney(Number(q.tvq))}</td></tr>
+<tr style="border-bottom:2px solid #1e293b;"><td style="padding:10px 0;font-weight:700;font-size:17px;">Total</td><td style="padding:10px 0;text-align:right;font-weight:700;font-size:17px;">${formatMoney(Number(q.total))}</td></tr>
+</table>
+<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:12px;margin:0 0 12px;">
+<p style="margin:0;color:#92400e;font-weight:700;">Depot (30%) : ${formatMoney(Number(q.depot_requis))}</p>
+<p style="margin:4px 0 0;color:#64748b;font-size:13px;">Solde (70%) a la fin des travaux : ${solde70}</p>
+</div>
+<div style="text-align:center;margin:12px 0;">
+<a href="https://novus-epoxy.vercel.app/reservation/${q.id}?token=${secretToken}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Choisir vos dates</a>
+</div>
+<div style="text-align:center;margin:12px 0;">
+<a href="https://novus-epoxy.vercel.app/contrat/${q.id}?token=${secretToken}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Signer le contrat</a>
+</div>
+<div style="text-align:center;margin:12px 0;">
+<a href="https://novus-epoxy.vercel.app/paiement/${q.id}?token=${secretToken}" style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Payer le depot (30%)</a>
+</div>
+<p style="color:#475569;font-size:12px;">Questions? 581-307-2678 (Jason) ou 581-307-5983 (Luca)</p>
+</div></body></html>`;
+
+          const emailRes = await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from,
+              to: [q.client_email as string],
+              subject: `Soumission Novus Epoxy #${q.id}`,
+              html,
+            }),
+          });
+
+          if (emailRes.ok) {
+            await query(`UPDATE quotes SET statut = 'envoye', sent_at = NOW() WHERE id = $1`, [quoteId]);
+            await sendTelegram(cbChatId, `Devis #${quoteId} approuve et envoye a ${q.client_nom} (${q.client_email})`);
+          } else {
+            await sendTelegram(cbChatId, `Devis #${quoteId} approuve mais erreur email. Va dans le dashboard pour envoyer manuellement.`);
+          }
+        } else {
+          // No email — send by SMS if phone available
+          if (q.client_tel) {
+            const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${SERVICES[q.type_service as ServiceType]?.label ?? q.type_service}\n${q.superficie} pi2\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nPlanifier: https://novus-epoxy.vercel.app/reservation/${q.id}\n\nQuestions? 581-307-2678`;
+            await sendSMS(q.client_tel as string, smsMsg);
+            await query(`UPDATE quotes SET statut = 'envoye', sent_at = NOW() WHERE id = $1`, [quoteId]);
+            await sendTelegram(cbChatId, `Devis #${quoteId} approuve et envoye par SMS a ${q.client_nom} (${q.client_tel})`);
+          } else {
+            await sendTelegram(cbChatId, `Devis #${quoteId} approuve mais pas d'email ni telephone. Va dans le dashboard.`);
+          }
+        }
+      } catch (err) {
+        console.error('Approve quote error:', err);
+        await sendTelegram(cbChatId, `Erreur: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // reject_quote_123
+    if (cbData.startsWith('reject_quote_')) {
+      const quoteId = parseInt(cbData.replace('reject_quote_', ''));
+      await query(`UPDATE quotes SET statut = 'refuse' WHERE id = $1`, [quoteId]);
+      await sendTelegram(cbChatId, `Devis #${quoteId} rejete.`);
+      return NextResponse.json({ ok: true });
+    }
+
+    return NextResponse.json({ ok: true });
+  }
+
   const message = body.message;
   if (!message) return NextResponse.json({ ok: true });
 

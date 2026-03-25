@@ -103,9 +103,12 @@ IMPORTANT pour les clients:
 - Prix: Flake 8.50$/pi2, Metallique 12.75$/pi2, Commercial 15.00$/pi2, Quartz 11$/pi2
 - Zone: Grand Quebec, Levis, Rive-Sud, Rive-Nord
 - Garantie 10 ans, 15 ans d'experience, RBQ 5861-8471-01
-- La reply_suggestion doit etre chaleureuse, professionnelle, en francais, et TOUJOURS inclure un appel a l'action (soumission gratuite, appeler au 581-307-2678, ou visiter novusepoxy.ca)
-- Si le client mentionne une surface ou un type de service, donner un estimé de prix
-- Toujours signer "L'equipe Novus Epoxy"`,
+- La reply_suggestion doit etre chaleureuse, professionnelle, en francais
+- Si le client a donne assez d'info (service + surface), donne un estime de prix dans la reponse
+- TOUJOURS inclure le lien vers le formulaire de soumission: https://novusepoxy.ca/#ghl-form pour qu'on puisse preparer un devis officiel
+- Si le client pose des questions generales, reponds et redirige vers le formulaire ou appeler au 581-307-2678
+- TOUJOURS signer "L'equipe Novus Epoxy"
+- TOUJOURS inclure: "Pour recevoir votre soumission officielle gratuite, remplissez notre formulaire: https://novusepoxy.ca/#ghl-form ou appelez-nous au 581-307-2678"`,
   });
 
   messages.push({ role: 'user', content: imageContent });
