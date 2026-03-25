@@ -103,11 +103,12 @@ IMPORTANT pour les clients:
 - Zone: Grand Quebec, Levis, Rive-Sud, Rive-Nord
 - Garantie 10 ans, 15 ans d'experience, RBQ 5861-8471-01
 - La reply_suggestion doit etre chaleureuse, professionnelle, en francais
-- NE JAMAIS DONNER DE PRIX dans la reponse. Jamais. Aucun montant, aucun estimé, aucun prix au pied carre. Les prix sont donnes uniquement par devis officiel approuve par l'admin.
-- TOUJOURS recolter les informations necessaires pour preparer un devis: type de service souhaite, superficie approximative en pi2, adresse complete, telephone
-- Si des infos manquent, les demander poliment dans la reponse
-- TOUJOURS rediriger vers le formulaire pour une soumission officielle: https://novusepoxy.ca/#ghl-form
-- TOUJOURS mentionner qu'ils peuvent aussi appeler au 581-307-2678 pour un service rapide
+- NE JAMAIS DONNER DE PRIX. Aucun montant, estimé ou prix au pied carre. Les prix sont donnes uniquement par devis officiel.
+- Si le client pose des questions sur les services (types d'epoxy, processus, delais, garantie, etc.): reponds clairement et avec confiance.
+- Si le client demande une soumission ou des infos pour un projet: demande les infos manquantes en UNE SEULE question (la plus importante: type de service OU superficie OU adresse). Redirige vers https://novusepoxy.ca/#contact pour la soumission officielle.
+- Si la question est trop complexe ou hors de ta portee: fournis le numero 581-307-2678 et dis que l'equipe va les rappeler.
+- Ne pose jamais plus d'une question a la fois pour eviter les boucles de courriel.
+- TOUJOURS mentionner qu'ils peuvent appeler au 581-307-2678.
 - TOUJOURS signer "L'equipe Novus Epoxy"`,
   });
 
@@ -341,10 +342,9 @@ export async function GET(req: NextRequest) {
     }
 
     // === CLIENT: Auto-reply + notify admins on Telegram ===
-    if (analysis.type === 'client') {
-      const autoReplyText = `Bonjour,\n\nMerci pour votre message ! Nous l'avons bien reçu et un membre de notre équipe vous reviendra très bientôt.\n\nEn attendant, vous pouvez remplir notre formulaire de soumission en ligne :\n👉 https://novusepoxy.ca/#ghl-form\n\nOu nous joindre directement au 581-307-2678.\n\nBonne journée,\nL'équipe Novus Epoxy`;
+    if (analysis.type === 'client' && analysis.reply_suggestion) {
       try {
-        await processAutoReply(fromEmail, subject, autoReplyText);
+        await processAutoReply(fromEmail, subject, analysis.reply_suggestion);
         repliesSent++;
       } catch { /* ignore reply errors */ }
 
@@ -354,7 +354,7 @@ export async function GET(req: NextRequest) {
           `De: ${fromHeader}\n` +
           `Sujet: ${subject}\n\n` +
           `📋 ${analysis.summary}\n` +
-          `\n✅ Reponse auto envoyee (message fixe — redirige vers formulaire)` +
+          `\n✅ Reponse auto envoyee:\n<i>${(analysis.reply_suggestion ?? '').slice(0, 500)}</i>` +
           `\n\nhttps://novus-epoxy.vercel.app/dashboard/devis`,
         );
       }
