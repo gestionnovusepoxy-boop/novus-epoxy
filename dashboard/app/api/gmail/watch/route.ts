@@ -5,7 +5,7 @@ import { google } from 'googleapis';
 // Must be called once to start, then every ~6 days to renew (expires after 7 days).
 // Add to Vercel cron or call manually via: POST /api/gmail/watch
 
-const TOPIC_NAME = 'projects/novus-epoxy/topics/gmail-notifications';
+const TOPIC_NAME = 'projects/novus-491120/topics/gmail-notifications';
 
 function getGmailClient() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
