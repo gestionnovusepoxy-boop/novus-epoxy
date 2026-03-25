@@ -1,8 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import arcjet, { shield, detectBot } from '@arcjet/next';
 
-// Rate limiting in-memory (réinitialisé à chaque cold start — suffisant pour Vercel serverless)
-// TODO: For production scale / multi-instance deployments, replace with Upstash Redis
-//       (e.g. @upstash/ratelimit) so rate limit state is shared across all serverless instances.
+// Arcjet security — shield + bot detection (only active when ARCJET_KEY is set)
+const aj = process.env.ARCJET_KEY
+  ? arcjet({
+      key: process.env.ARCJET_KEY,
+      rules: [
+        shield({ mode: 'LIVE' }),
+        detectBot({
+          mode: 'LIVE',
+          allow: ['CATEGORY:SEARCH_ENGINE', 'CATEGORY:MONITOR', 'CATEGORY:SOCIAL', 'CATEGORY:PREVIEW'],
+        }),
+      ],
+    })
+  : null;
+
+// Rate limiting in-memory (per-endpoint limits — Arcjet handles global security)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
 function isRateLimited(key: string, maxRequests: number, windowMs: number): boolean {
@@ -28,8 +41,18 @@ function corsHeaders() {
   };
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Arcjet security check (shield + bot detection)
+  if (aj) {
+    try {
+      const decision = await aj.protect(req);
+      if (decision.isDenied()) {
+        return NextResponse.json({ error: 'Blocked' }, { status: 403 });
+      }
+    } catch { /* fail open if Arcjet is unavailable */ }
+  }
 
   // CORS preflight for all public endpoints
   if (req.method === 'OPTIONS' && (

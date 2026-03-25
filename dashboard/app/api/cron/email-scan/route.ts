@@ -340,15 +340,20 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === CLIENT: Notify admins on Telegram (no auto-reply — admins handle manually) ===
-    if (analysis.type === 'client') {
+    // === CLIENT: Auto-reply + notify admins on Telegram ===
+    if (analysis.type === 'client' && analysis.reply_suggestion) {
+      try {
+        await processAutoReply(fromEmail, subject, analysis.reply_suggestion);
+        repliesSent++;
+      } catch { /* ignore reply errors */ }
+
       for (const chatId of ADMIN_CHAT_IDS()) {
         await sendTelegram(chatId,
           `👤 <b>Email client recu</b>\n\n` +
           `De: ${fromHeader}\n` +
           `Sujet: ${subject}\n\n` +
           `📋 ${analysis.summary}\n` +
-          (analysis.reply_suggestion ? `\n💡 Suggestion: ${analysis.reply_suggestion}` : '') +
+          `\n✅ Reponse auto envoyee:\n<i>${(analysis.reply_suggestion ?? '').slice(0, 500)}</i>` +
           `\n\nhttps://novus-epoxy.vercel.app/dashboard/devis`,
         );
       }
