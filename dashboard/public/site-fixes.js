@@ -98,10 +98,10 @@
     serviceSelect.addEventListener('change', checkColorService);
     checkColorService();
 
-    // Show chosen color badge if saved in localStorage
+    // Show chosen color badge if saved in localStorage — right after service select
     var chosenBadge = document.createElement('div');
-    chosenBadge.style.cssText = 'display:none;margin:8px 0;padding:10px 16px;background:#065f46;color:#a7f3d0;border-radius:8px;font-size:14px;font-weight:600;border:1px solid #059669;';
-    serviceSelect.parentNode.insertBefore(chosenBadge, metalNote.nextSibling);
+    chosenBadge.style.cssText = 'display:none;margin:10px 0;padding:12px 16px;background:#065f46;color:#d1fae5;border-radius:8px;font-size:15px;font-weight:700;border:2px solid #10b981;text-align:center;';
+    colorLink.parentNode.insertBefore(chosenBadge, colorLink.nextSibling);
 
     // Hidden input to include color in form data
     var colorInput = document.querySelector('#novus-contact-form input[name="couleur"]');
@@ -131,8 +131,13 @@
       if (colorInput) colorInput.value = '';
     }
     showChosenColor();
-    // Check again when page gets focus (user coming back from color page)
+    // Check again when user comes back from color page tab
     window.addEventListener('focus', showChosenColor);
+    document.addEventListener('visibilitychange', function() {
+      if (!document.hidden) showChosenColor();
+    });
+    // Also poll every 2 seconds in case events don't fire
+    setInterval(showChosenColor, 2000);
   }
 
   // Add Open Graph meta tags for Facebook/LinkedIn sharing
