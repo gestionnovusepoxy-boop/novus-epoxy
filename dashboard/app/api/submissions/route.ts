@@ -185,7 +185,9 @@ async function notifyAdminsWithQuote(
           parse_mode: 'HTML',
           reply_markup: buttons,
         }),
-      }).catch(() => {})
+      }).then(async r => {
+        if (!r.ok) console.error('Telegram sendMessage error:', await r.text().catch(() => r.status));
+      }).catch(err => console.error('Telegram fetch error:', err))
     ));
   }
 

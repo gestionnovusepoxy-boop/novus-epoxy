@@ -54,6 +54,37 @@
     if (inp.placeholder === 'Quebec, Levis...') inp.placeholder = 'Qu\u00e9bec, L\u00e9vis...';
   });
 
+  // Color catalog link — appears when Flake, Couleur unie, or Quartz is selected
+  var serviceSelect = document.querySelector('#novus-contact-form select');
+  if (serviceSelect) {
+    var colorLink = document.createElement('a');
+    colorLink.href = 'https://novus-epoxy.vercel.app/couleurs';
+    colorLink.target = '_blank';
+    colorLink.rel = 'noopener';
+    colorLink.style.cssText = 'display:none;margin:8px 0 4px;padding:10px 16px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;text-align:center;cursor:pointer;transition:all 0.3s;';
+    colorLink.textContent = '\ud83c\udfa8 Voir nos couleurs disponibles';
+    colorLink.onmouseenter = function() { this.style.transform = 'scale(1.02)'; };
+    colorLink.onmouseleave = function() { this.style.transform = 'scale(1)'; };
+    serviceSelect.parentNode.insertBefore(colorLink, serviceSelect.nextSibling);
+
+    var colorServices = ['flake', 'flocon', 'couleur unie', 'quartz', 'metallique', 'm\u00e9tallique'];
+    function checkColorService() {
+      var val = (serviceSelect.value || '').toLowerCase();
+      var text = (serviceSelect.options[serviceSelect.selectedIndex]?.text || '').toLowerCase();
+      var show = colorServices.some(function(s) { return val.includes(s) || text.includes(s); });
+      colorLink.style.display = show ? 'block' : 'none';
+
+      // Set tab parameter based on service
+      var tab = 'flake';
+      if (val.includes('couleur') || text.includes('couleur') || val.includes('unie') || text.includes('unie')) tab = 'pigments';
+      else if (val.includes('quartz') || text.includes('quartz')) tab = 'solides';
+      else if (val.includes('metallique') || val.includes('m\u00e9tallique') || text.includes('metallique') || text.includes('m\u00e9tallique')) tab = 'pigments';
+      colorLink.href = 'https://novus-epoxy.vercel.app/couleurs?tab=' + tab;
+    }
+    serviceSelect.addEventListener('change', checkColorService);
+    checkColorService();
+  }
+
   // Add Open Graph meta tags for Facebook/LinkedIn sharing
   var ogTags = {
     'og:title': 'Novus Epoxy \u2014 Planchers \u00c9poxy Haut de Gamme \u00e0 Qu\u00e9bec',
