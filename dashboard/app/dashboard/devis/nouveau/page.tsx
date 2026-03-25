@@ -19,7 +19,7 @@ export default function NouveauDevisPage() {
     superficie: '',
     etat_plancher: '',
     notes: '',
-    rabais_pct: 0,
+    rabais_pct: 20,
   });
 
   const sup = parseFloat(form.superficie) || 0;
