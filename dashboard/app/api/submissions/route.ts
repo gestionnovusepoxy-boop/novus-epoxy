@@ -119,6 +119,40 @@ async function sendSMSNotif(phone: string, msg: string) {
   }).catch(() => {});
 }
 
+async function analyzeLeadWithClaude(submission: {
+  nom: string; telephone: string | null; service: string | null;
+  surface_estimee: string | null; ville: string | null; type_projet: string | null;
+}): Promise<{ temperature: string; urgence: string; action: string; raison: string; emoji: string } | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  try {
+    const details = [
+      `Nom: ${submission.nom}`,
+      submission.telephone ? `Tel: ${submission.telephone}` : 'Pas de telephone',
+      submission.service ? `Service: ${submission.service}` : 'Service non specifie',
+      submission.surface_estimee ? `Surface: ${submission.surface_estimee}` : 'Surface non specifiee',
+      submission.ville ? `Ville: ${submission.ville}` : '',
+      submission.type_projet ? `Type projet: ${submission.type_projet}` : '',
+    ].filter(Boolean).join('\n');
+
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 200,
+        messages: [{ role: 'user', content: `Lead pour entreprise epoxy Quebec:\n\n${details}\n\nReponds en JSON strict:\n{"temperature":"chaud|tiede|froid","urgence":"urgent|normal|pas_presse","action":"appeler_maintenant|envoyer_devis|attendre_infos|relancer_semaine","raison":"1 phrase max"}` }],
+      }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const parsed = JSON.parse((data.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+    const emojiMap: Record<string, string> = { chaud: '🔥', tiede: '🟡', froid: '🔵' };
+    const actionLabel: Record<string, string> = { appeler_maintenant: 'Appeler maintenant', envoyer_devis: 'Envoyer devis', attendre_infos: 'Attendre infos', relancer_semaine: 'Relancer dans 1 sem' };
+    return { ...parsed, emoji: emojiMap[parsed.temperature] ?? '📋', action: actionLabel[parsed.action] ?? parsed.action };
+  } catch { return null; }
+}
+
 async function notifyAdminsWithQuote(
   submission: { nom: string; email: string; telephone: string | null; service: string | null; ville: string | null; surface_estimee: string | null; adresse: string | null; type_projet: string | null },
   quoteId: number | null,
@@ -126,6 +160,7 @@ async function notifyAdminsWithQuote(
   quoteDepot: string | null,
   serviceLabel: string | null,
   superficie: number | null,
+  analysis?: { temperature: string; urgence: string; action: string; raison: string; emoji: string } | null,
 ) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
@@ -133,6 +168,7 @@ async function notifyAdminsWithQuote(
   // Build Telegram message
   const lines = [
     `📋 <b>Nouvelle soumission!</b>`,
+    analysis ? `${analysis.emoji} <b>${analysis.temperature.toUpperCase()}</b> — ${analysis.raison}` : '',
     ``,
     `👤 ${submission.nom}`,
     submission.email ? `📧 ${submission.email}` : '',
@@ -142,6 +178,11 @@ async function notifyAdminsWithQuote(
     submission.service ? `🔧 ${submission.service}` : '',
     submission.surface_estimee ? `📐 ${submission.surface_estimee} pi²` : '',
   ].filter(Boolean);
+
+  if (analysis) {
+    lines.push('');
+    lines.push(`➡️ <b>Action:</b> ${analysis.action}`);
+  }
 
   if (quoteId && quoteTotal) {
     lines.push('');
@@ -286,6 +327,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Analyze lead with Claude before notifying
+  const leadAnalysis = await analyzeLeadWithClaude({
+    nom: body.nom,
+    telephone: body.telephone ?? null,
+    service: body.service ?? null,
+    surface_estimee: body.surface_estimee ?? null,
+    ville: body.ville ?? null,
+    type_projet: body.type_projet ?? null,
+  });
+
   // Notify admins via Telegram (with buttons) + SMS
   await notifyAdminsWithQuote(
     {
@@ -303,6 +354,7 @@ export async function POST(req: NextRequest) {
     quoteDepot,
     serviceLabel,
     superficie,
+    leadAnalysis,
   );
 
   // Special alert for metallique — Jason must contact client for in-person color selection

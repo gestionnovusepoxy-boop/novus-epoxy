@@ -179,6 +179,18 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: 'analyser_leads',
+    description: 'Recupere les soumissions/leads recents du formulaire de contact pour analyse et classification. Inclut nom, telephone, service, surface, ville. Utilise quand on demande "mes leads", "les soumissions", "nouveaux leads", "classer les leads".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        jours: { type: 'number', description: 'Leads des X derniers jours (defaut: 14)', default: 14 },
+        statut: { type: 'string', description: 'Filtrer par statut: nouveau, lu, en_traitement, ferme (defaut: tous sauf ferme)', default: '' },
+      },
+      required: [],
+    },
+  },
 ];
 
 // Execute tool calls
@@ -420,6 +432,27 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify(rows);
     }
 
+    case 'analyser_leads': {
+      const days = Math.min(Number(input.jours) || 14, 90);
+      const statut = input.statut as string;
+      const validStatuts = ['nouveau', 'lu', 'en_traitement', 'ferme'];
+      const safeStatut = statut && validStatuts.includes(statut) ? statut : '';
+      const rows = safeStatut
+        ? await query(
+            `SELECT id, nom, email, telephone, service, surface_estimee, ville, type_projet, statut, created_at
+             FROM submissions WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL AND statut = $2
+             ORDER BY created_at DESC LIMIT 20`,
+            [days, safeStatut]
+          )
+        : await query(
+            `SELECT id, nom, email, telephone, service, surface_estimee, ville, type_projet, statut, created_at
+             FROM submissions WHERE created_at >= NOW() - ($1 || ' days')::INTERVAL AND statut != 'ferme'
+             ORDER BY created_at DESC LIMIT 20`,
+            [days]
+          );
+      return JSON.stringify({ leads: rows, periode: `${days} derniers jours`, total: rows.length });
+    }
+
     default:
       return JSON.stringify({ error: `Outil inconnu: ${name}` });
   }
@@ -440,6 +473,8 @@ TU PEUX:
 - Lire et resumer les emails recus (Gmail)
 - Ajouter des photos au portfolio (envoie une photo avec caption "portfolio")
 - Scanner des recus/factures (envoie une photo du recu)
+- Analyser et classer les leads/soumissions recents (chaud/tiede/froid, urgence, action suggeree)
+- Repondre aux questions sur les clients et leur suivi
 
 PRIX:
 - Flake (Flocon): 8.50$/pi2
@@ -468,6 +503,8 @@ IMPORTANT:
 - Quand on te demande d'envoyer un devis, utilise l'outil creer_devis_sms
 - Quand on te demande les stats, utilise stats_business
 - Quand on te demande les emails/courriels/messages recus, utilise resume_emails
+- Quand on te demande les leads, soumissions, nouveaux contacts, ou de classer les leads, utilise analyser_leads puis classe chaque lead: 🔥 CHAUD (pret a acheter, projet precis) / 🟡 TIEDE (interesse mais vague) / 🔵 FROID (pas presse), avec action suggeree
+- Pour le suivi client, utilise liste_clients ou detail_devis pour donner des infos precises
 - Sois bref dans tes reponses — c'est un chat Telegram
 - Formate les numeros de telephone a 10 chiffres (ex: 4186092084)
 - Si des infos manquent pour un devis, demande-les
