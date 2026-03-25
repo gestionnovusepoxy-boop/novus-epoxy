@@ -90,13 +90,22 @@ Reponds en JSON strict:
 }
 
 - type "facture" = c'est une facture/invoice/receipt qu'on a recue (depense)
-- type "client" = un client potentiel ou existant qui ecrit
+- type "client" = un client potentiel ou existant qui ecrit (demande de soumission, questions sur les services, reponse a une offre de service)
 - type "important" = message important (gouvernement, banque, urgent, etc.)
 - type "spam" = pub, newsletter, spam
 - type "autre" = autre chose
 - Pour les taxes Quebec: TPS = 5%, TVQ = 9.975%
 - Si c'est une image de facture, extrais les montants de l'image
-- Categorie seulement si type = facture`,
+- Categorie seulement si type = facture
+
+IMPORTANT pour les clients:
+- Novus Epoxy offre: planchers epoxy metallique, flake/flocon, couleur unie, commercial, quartz, revetement balcons/escaliers, reparation beton
+- Prix: Flake 8.50$/pi2, Metallique 12.75$/pi2, Commercial 15.00$/pi2, Quartz 11$/pi2
+- Zone: Grand Quebec, Levis, Rive-Sud, Rive-Nord
+- Garantie 10 ans, 15 ans d'experience, RBQ 5861-8471-01
+- La reply_suggestion doit etre chaleureuse, professionnelle, en francais, et TOUJOURS inclure un appel a l'action (soumission gratuite, appeler au 581-307-2678, ou visiter novusepoxy.ca)
+- Si le client mentionne une surface ou un type de service, donner un estimé de prix
+- Toujours signer "L'equipe Novus Epoxy"`,
   });
 
   messages.push({ role: 'user', content: imageContent });
@@ -156,12 +165,18 @@ async function processAutoReply(
   );
 }
 
+// POST handler — allows external triggers (e.g., cron-job.org, Gmail push)
+export async function POST(req: NextRequest) {
+  return GET(req);
+}
+
 export async function GET(req: NextRequest) {
-  // Auth
+  // Auth — accept CRON_SECRET or ADMIN_API_KEY
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.replace('Bearer ', '');
   const secret = CRON_SECRET();
-  if (secret && token !== secret) {
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  if (secret && token !== secret && token !== adminKey) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
