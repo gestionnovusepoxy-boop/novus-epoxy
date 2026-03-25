@@ -57,29 +57,43 @@
   // Color catalog link — appears when Flake, Couleur unie, or Quartz is selected
   var serviceSelect = document.querySelector('#novus-contact-form select');
   if (serviceSelect) {
+    // Color link (for flake, couleur unie, quartz)
     var colorLink = document.createElement('a');
-    colorLink.href = 'https://novus-epoxy.vercel.app/couleurs';
     colorLink.target = '_blank';
     colorLink.rel = 'noopener';
     colorLink.style.cssText = 'display:none;margin:8px 0 4px;padding:10px 16px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;text-align:center;cursor:pointer;transition:all 0.3s;';
-    colorLink.textContent = '\ud83c\udfa8 Voir nos couleurs disponibles';
     colorLink.onmouseenter = function() { this.style.transform = 'scale(1.02)'; };
     colorLink.onmouseleave = function() { this.style.transform = 'scale(1)'; };
     serviceSelect.parentNode.insertBefore(colorLink, serviceSelect.nextSibling);
 
-    var colorServices = ['flake', 'flocon', 'couleur unie', 'quartz', 'metallique', 'm\u00e9tallique'];
+    // Info note (for metallique)
+    var metalNote = document.createElement('div');
+    metalNote.style.cssText = 'display:none;margin:8px 0 4px;padding:10px 16px;background:#1e293b;color:#f8fafc;border-radius:8px;font-size:13px;line-height:1.5;border:1px solid #334155;';
+    metalNote.innerHTML = '\ud83c\udfa8 Les couleurs m\u00e9talliques sont choisies en personne avec Jason pour un r\u00e9sultat parfait. Il vous contactera apr\u00e8s votre soumission!';
+    serviceSelect.parentNode.insertBefore(metalNote, colorLink.nextSibling);
+
     function checkColorService() {
       var val = (serviceSelect.value || '').toLowerCase();
       var text = (serviceSelect.options[serviceSelect.selectedIndex]?.text || '').toLowerCase();
-      var show = colorServices.some(function(s) { return val.includes(s) || text.includes(s); });
-      colorLink.style.display = show ? 'block' : 'none';
+      var isFlake = val.includes('flake') || val.includes('flocon') || text.includes('flake') || text.includes('flocon');
+      var isCouleurUnie = val.includes('couleur') || val.includes('unie') || text.includes('couleur') || text.includes('unie');
+      var isQuartz = val.includes('quartz') || text.includes('quartz');
+      var isMetallique = val.includes('metallique') || val.includes('m\u00e9tallique') || text.includes('metallique') || text.includes('m\u00e9tallique');
 
-      // Set tab parameter based on service
-      var tab = 'flake';
-      if (val.includes('couleur') || text.includes('couleur') || val.includes('unie') || text.includes('unie')) tab = 'pigments';
-      else if (val.includes('quartz') || text.includes('quartz')) tab = 'solides';
-      else if (val.includes('metallique') || val.includes('m\u00e9tallique') || text.includes('metallique') || text.includes('m\u00e9tallique')) tab = 'pigments';
-      colorLink.href = 'https://novus-epoxy.vercel.app/couleurs?tab=' + tab;
+      // Show color link for flake, couleur unie, quartz
+      if (isFlake || isCouleurUnie || isQuartz) {
+        colorLink.style.display = 'block';
+        var tab = 'flake';
+        if (isCouleurUnie) tab = 'pigment';
+        else if (isQuartz) tab = 'quartz';
+        colorLink.href = 'https://novus-epoxy.vercel.app/couleurs?tab=' + tab;
+        colorLink.textContent = '\ud83c\udfa8 Choisissez votre couleur';
+      } else {
+        colorLink.style.display = 'none';
+      }
+
+      // Show metallic note
+      metalNote.style.display = isMetallique ? 'block' : 'none';
     }
     serviceSelect.addEventListener('change', checkColorService);
     checkColorService();
