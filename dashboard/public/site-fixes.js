@@ -97,6 +97,42 @@
     }
     serviceSelect.addEventListener('change', checkColorService);
     checkColorService();
+
+    // Show chosen color badge if saved in localStorage
+    var chosenBadge = document.createElement('div');
+    chosenBadge.style.cssText = 'display:none;margin:8px 0;padding:10px 16px;background:#065f46;color:#a7f3d0;border-radius:8px;font-size:14px;font-weight:600;border:1px solid #059669;';
+    serviceSelect.parentNode.insertBefore(chosenBadge, metalNote.nextSibling);
+
+    // Hidden input to include color in form data
+    var colorInput = document.querySelector('#novus-contact-form input[name="couleur"]');
+    if (!colorInput) {
+      colorInput = document.createElement('input');
+      colorInput.type = 'hidden';
+      colorInput.name = 'couleur';
+      var form = document.getElementById('novus-contact-form');
+      if (form) form.appendChild(colorInput);
+    }
+
+    function showChosenColor() {
+      try {
+        var stored = localStorage.getItem('ne_color_chosen');
+        if (stored) {
+          var data = JSON.parse(stored);
+          // Only show if chosen less than 2 hours ago
+          if (data.name && data.ts && (Date.now() - data.ts) < 7200000) {
+            chosenBadge.textContent = '\u2705 Couleur choisie: ' + data.name + (data.code ? ' (' + data.code + ')' : '');
+            chosenBadge.style.display = 'block';
+            if (colorInput) colorInput.value = data.name + (data.code ? ' (' + data.code + ')' : '');
+            return;
+          }
+        }
+      } catch(e) {}
+      chosenBadge.style.display = 'none';
+      if (colorInput) colorInput.value = '';
+    }
+    showChosenColor();
+    // Check again when page gets focus (user coming back from color page)
+    window.addEventListener('focus', showChosenColor);
   }
 
   // Add Open Graph meta tags for Facebook/LinkedIn sharing
