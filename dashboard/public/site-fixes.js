@@ -1,5 +1,21 @@
 // Novus Epoxy - Site fixes (nav links, smooth scroll, OG tags, form accents)
 (function() {
+  // Replace header + footer logos with full Novus Epoxy logo
+  var newLogoUrl = 'https://novus-epoxy.vercel.app/logo.jpg';
+  function replaceLogo() {
+    var imgs = document.querySelectorAll('.logo-img, .footer-logo-img');
+    imgs.forEach(function(img) {
+      img.src = newLogoUrl;
+      img.style.maxHeight = '80px';
+      img.style.width = 'auto';
+    });
+  }
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', replaceLogo);
+  } else {
+    replaceLogo();
+  }
+
   // Fix nav + footer links
   var navMap = {
     'Accueil': '#hero',
