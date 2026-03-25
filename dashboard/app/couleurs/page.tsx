@@ -43,27 +43,28 @@ function CouleursContent() {
   });
 
   async function chooseColor(color: AnyColor) {
-    if (!visitorId || sending) return;
     setSending(true);
 
-    const typeLabel = tab === 'flake' ? 'Flocon' : tab === 'pigment' ? 'Pigment' : tab === 'quartz' ? 'Quartz' : 'Uni';
+    const typeLabel = tab === 'flake' ? 'Flocon' : tab === 'pigment' ? 'Pigment' : tab === 'quartz' ? 'Quartz' : 'Couleur unie';
     const message = `J'ai choisi la couleur ${color.name} (${typeLabel})`;
 
     try {
-      await fetch('https://novus-epoxy.vercel.app/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, visitor_id: visitorId }),
-      });
+      // If from chatbot, send to chat API
+      if (visitorId) {
+        await fetch('https://novus-epoxy.vercel.app/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message, visitor_id: visitorId }),
+        });
+      }
 
-      // Store the color choice so the widget picks it up
+      // Store the color choice so the form/widget picks it up
       try {
-        localStorage.setItem('ne_color_chosen', JSON.stringify({ name: color.name, type: typeLabel, message, ts: Date.now() }));
+        localStorage.setItem('ne_color_chosen', JSON.stringify({ name: color.name, code: color.code, type: typeLabel, message, ts: Date.now() }));
       } catch {}
 
+      setSent(color.name);
       setSelected(null);
-      // Redirect back to novusepoxy.ca — the chat widget will pick up the new messages
-      window.location.href = 'https://novusepoxy.ca?chatResume=1';
     } catch {
       alert('Erreur — reessayez');
     } finally {
@@ -87,6 +88,7 @@ function CouleursContent() {
 
   // Success confirmation
   if (sent) {
+    const isFromForm = locked || !visitorId;
     return (
       <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ textAlign: 'center', padding: '40px' }}>
@@ -96,7 +98,9 @@ function CouleursContent() {
             Vous avez choisi <strong style={{ color: '#f59e0b' }}>{sent}</strong>
           </p>
           <p style={{ color: '#64748b', fontSize: '14px', margin: '0 0 24px' }}>
-            Votre choix a ete envoye dans le chat. Retournez a la conversation pour continuer!
+            {isFromForm
+              ? 'Retournez au formulaire pour completer votre soumission!'
+              : 'Votre choix a ete envoye dans le chat. Retournez a la conversation pour continuer!'}
           </p>
           <button
             onClick={() => { setSent(null); }}
@@ -109,14 +113,20 @@ function CouleursContent() {
             Choisir une autre couleur
           </button>
           <button
-            onClick={() => { window.close(); }}
+            onClick={() => {
+              if (isFromForm) {
+                window.location.href = 'https://novusepoxy.ca/#ghl-form';
+              } else {
+                window.location.href = 'https://novusepoxy.ca?chatResume=1';
+              }
+            }}
             style={{
               padding: '12px 24px', background: '#f59e0b', color: '#0f172a',
               border: 'none', borderRadius: '8px', fontSize: '14px',
               fontWeight: 700, cursor: 'pointer',
             }}
           >
-            Retourner au chat
+            {isFromForm ? 'Retourner au formulaire' : 'Retourner au chat'}
           </button>
         </div>
       </div>
@@ -310,31 +320,18 @@ function CouleursContent() {
                 </p>
               )}
 
-              {/* Choose button — only if coming from chat */}
-              {visitorId ? (
-                <button
-                  onClick={() => chooseColor(selected)}
-                  disabled={sending}
-                  style={{
-                    marginTop: '16px', width: '100%', padding: '14px',
-                    background: '#f59e0b', color: '#0f172a', border: 'none',
-                    borderRadius: '8px', fontSize: '16px', fontWeight: 700, cursor: 'pointer',
-                  }}
-                >
-                  {sending ? 'Envoi...' : 'Choisir cette couleur'}
-                </button>
-              ) : (
-                <button
-                  onClick={() => setSelected(null)}
-                  style={{
-                    marginTop: '16px', width: '100%', padding: '12px',
-                    background: '#f59e0b', color: '#0f172a', border: 'none',
-                    borderRadius: '8px', fontSize: '14px', fontWeight: 700, cursor: 'pointer',
-                  }}
-                >
-                  Fermer
-                </button>
-              )}
+              {/* Choose button */}
+              <button
+                onClick={() => chooseColor(selected)}
+                disabled={sending}
+                style={{
+                  marginTop: '16px', width: '100%', padding: '14px',
+                  background: '#f59e0b', color: '#0f172a', border: 'none',
+                  borderRadius: '8px', fontSize: '16px', fontWeight: 700, cursor: 'pointer',
+                }}
+              >
+                {sending ? 'Envoi...' : 'Choisir cette couleur'}
+              </button>
             </div>
           </div>
         </div>
