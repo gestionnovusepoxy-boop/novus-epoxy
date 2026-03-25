@@ -503,6 +503,79 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // confirm_deposit_123 — manually confirm deposit received (Interac/cheque)
+    if (cbData.startsWith('confirm_deposit_')) {
+      const quoteId = parseInt(cbData.replace('confirm_deposit_', ''));
+      try {
+        const rows = await query('SELECT * FROM quotes WHERE id = $1', [quoteId]);
+        const q = rows[0];
+        if (!q) {
+          await sendTelegram(cbChatId, `Devis #${quoteId} introuvable.`);
+          return NextResponse.json({ ok: true });
+        }
+        if (q.statut === 'depot_paye') {
+          await sendTelegram(cbChatId, `Devis #${quoteId} — depot deja confirme.`);
+          return NextResponse.json({ ok: true });
+        }
+
+        // Confirm booking if exists
+        if (q.booking_id) {
+          await query(`UPDATE bookings SET statut = 'confirme' WHERE id = $1`, [q.booking_id]);
+        }
+
+        // Update quote
+        await query(
+          `UPDATE quotes SET statut = 'depot_paye', paid_at = NOW(), deposit_paid_at = NOW() WHERE id = $1`,
+          [quoteId]
+        );
+
+        // Send confirmation email to client
+        const apiKey = process.env.RESEND_API_KEY;
+        const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
+        if (apiKey && q.client_email) {
+          const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+<div style="background:#0f172a;color:white;padding:20px 24px;border-radius:8px 8px 0 0;">
+<h2 style="margin:0;font-size:20px;">Depot recu!</h2>
+<p style="margin:4px 0 0;color:#f59e0b;font-size:14px;">Novus Epoxy — Devis #${quoteId}</p>
+</div>
+<div style="padding:20px 24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+<p>Bonjour ${q.client_nom},</p>
+<p>Nous avons bien recu votre depot de <strong>${formatMoney(Number(q.depot_requis))}</strong>.</p>
+<p style="color:#16a34a;font-weight:600;">Vos dates de travaux sont maintenant confirmees!</p>
+<p style="color:#64748b;font-size:13px;">Le solde de ${formatMoney(Number(q.total) - Number(q.depot_requis))} sera a payer a la fin des travaux.</p>
+<p style="color:#64748b;font-size:13px;">Questions? Contactez-nous:<br/>
+<strong>Luca:</strong> 581-307-5983 | <strong>Jason:</strong> 581-307-2678</p>
+</div></div></body></html>`;
+
+          await fetch('https://api.resend.com/emails', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              from,
+              to: [q.client_email as string],
+              subject: `Depot recu — Novus Epoxy #${quoteId}`,
+              html,
+            }),
+          }).catch(err => console.error('Deposit email error:', err));
+        }
+
+        // SMS to client
+        if (q.client_tel) {
+          await sendSMS(q.client_tel as string, `Novus Epoxy: Votre depot a ete recu! Vos dates sont confirmees. Merci! Questions? 581-307-2678`).catch(() => {});
+        }
+
+        // Notify all admins
+        for (const chatId of ADMIN_CHAT_IDS()) {
+          await sendTelegram(chatId, `✅ Depot confirme manuellement pour devis #${quoteId} — ${q.client_nom}.\nDates confirmees, email envoye au client.`);
+        }
+      } catch (err) {
+        console.error('Confirm deposit error:', err);
+        await sendTelegram(cbChatId, `Erreur: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     // reject_quote_123
     if (cbData.startsWith('reject_quote_')) {
       const quoteId = parseInt(cbData.replace('reject_quote_', ''));

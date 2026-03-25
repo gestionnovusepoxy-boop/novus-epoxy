@@ -116,10 +116,40 @@ export async function POST(req: NextRequest) {
     } catch (err) { console.error('Booking notification email failed:', err); }
   }
 
-  // SMS to admin
-  const adminPhone = process.env.ADMIN_PHONE;
-  if (adminPhone) {
-    await sendSMS(adminPhone, `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} AM, Jour 2: ${jour2Date} ${jour2Slot === 'matin' ? 'AM' : 'PM'}. Devis #${quoteId}`).catch(() => {});
+  // SMS to admins (both Luca + Jason) with dashboard link
+  const adminPhones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];
+  const smsText = `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} AM, Jour 2: ${jour2Date} ${jour2Slot === 'matin' ? 'AM' : 'PM'}. Devis #${quoteId}\nhttps://novus-epoxy.vercel.app/dashboard/devis`;
+  await Promise.all(adminPhones.map(phone => sendSMS(phone, smsText).catch(() => {})));
+
+  // Telegram to admins with "Confirmer depot recu" button
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  if (botToken) {
+    const j1 = new Date(jour1Date + 'T12:00:00');
+    const j2 = new Date(jour2Date + 'T12:00:00');
+    const fmtD = (d: Date) => d.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
+    const slotLbl = jour2Slot === 'matin' ? 'AM' : 'PM';
+
+    const tgMsg = `📅 <b>Nouvelle reservation!</b>\n\n👤 ${escapeHtml(q.client_nom as string)}\n📞 ${escapeHtml((q.client_tel || 'N/A') as string)}\n💰 Total: ${formatMoney(Number(q.total))} | Depot: ${formatMoney(Number(q.depot_requis))}\n\n📆 Jour 1: ${fmtD(j1)} — AM\n📆 Jour 2: ${fmtD(j2)} — ${slotLbl}\n\n⏳ En attente du depot (30%)`;
+
+    const buttons = {
+      inline_keyboard: [
+        [
+          { text: '✅ Depot recu — Confirmer', callback_data: `confirm_deposit_${quoteId}` },
+        ],
+        [
+          { text: '📋 Voir le devis', url: `https://novus-epoxy.vercel.app/dashboard/devis` },
+        ],
+      ],
+    };
+
+    await Promise.all(chatIds.map(chatId =>
+      fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId.trim(), text: tgMsg, parse_mode: 'HTML', reply_markup: buttons }),
+      }).catch(err => console.error('Telegram booking notif error:', err))
+    ));
   }
 
   return NextResponse.json({ ok: true, booking_id: bookingId });

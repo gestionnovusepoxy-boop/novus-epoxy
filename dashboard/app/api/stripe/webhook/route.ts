@@ -154,8 +154,8 @@ ${calendarHtml}
       // Notify admins via SMS
       const adminPhones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];
       const smsMsg = datesAvailable
-        ? `Novus Epoxy: Depot recu pour devis #${quoteId}! Dates confirmees. ${formatMoney(Number(quote.depot_requis))} de ${clientName}.`
-        : `Novus Epoxy: Depot recu pour devis #${quoteId} MAIS dates en conflit! ${formatMoney(Number(quote.depot_requis))} de ${clientName}. Verifier ASAP!`;
+        ? `Novus Epoxy: Depot recu pour devis #${quoteId}! Dates confirmees. ${formatMoney(Number(quote.depot_requis))} de ${clientName}.\nhttps://novus-epoxy.vercel.app/dashboard/devis`
+        : `Novus Epoxy: Depot recu pour devis #${quoteId} MAIS dates en conflit! ${formatMoney(Number(quote.depot_requis))} de ${clientName}. Verifier ASAP!\nhttps://novus-epoxy.vercel.app/dashboard/devis`;
       await Promise.all(adminPhones.map(phone => sendSMS(phone, smsMsg)));
 
       // Notify admins via Telegram
@@ -190,7 +190,7 @@ ${calendarHtml}
 
       // Notify admins
       const adminPhones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];
-      const smsMsg = `Novus Epoxy: Solde final recu pour devis #${quoteId}! ${formatMoney(Number(quote.total) - Number(quote.depot_requis))} de ${clientName}.`;
+      const smsMsg = `Novus Epoxy: Solde final recu pour devis #${quoteId}! ${formatMoney(Number(quote.total) - Number(quote.depot_requis))} de ${clientName}.\nhttps://novus-epoxy.vercel.app/dashboard/devis`;
       await Promise.all(adminPhones.map(phone => sendSMS(phone, smsMsg)));
 
       await notifyTelegram(
