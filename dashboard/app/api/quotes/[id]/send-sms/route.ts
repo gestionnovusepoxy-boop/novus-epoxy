@@ -38,7 +38,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     `Adresse: ${quote.client_adresse ?? 'Non specifiee'}`,
     ``,
     `Pour planifier vos travaux:`,
-    `https://novus-epoxy.vercel.app/reservation/${quote.id}?token=${secretToken}`,
+    `https://novus-epoxy.vercel.app/reservation/${quote.id}?token=${encodeURIComponent(secretToken)}`,
     ``,
     `Questions? 581-307-2678`,
   ].join('\n');

@@ -143,7 +143,7 @@ ${datesAvailable ? '<p style="color:#16a34a;font-weight:600;">Vos dates de trava
 ${calendarHtml}
 <p style="color:#64748b;font-size:13px;">Le solde de ${formatMoney(Number(quote.total) - Number(quote.depot_requis))} sera a payer a la fin des travaux.</p>
 <div style="text-align:center;margin:20px 0;">
-<a href="https://novus-epoxy.vercel.app/paiement/${quoteId}?token=${secretToken}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Voir mon paiement</a>
+<a href="https://novus-epoxy.vercel.app/paiement/${quoteId}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:14px;">Voir mon paiement</a>
 </div>
 <p style="color:#64748b;font-size:13px;">Questions? Contactez-nous:<br/>
 <strong>Luca:</strong> 581-307-5983 | <strong>Jason:</strong> 581-307-2678</p>

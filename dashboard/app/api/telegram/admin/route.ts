@@ -457,13 +457,13 @@ export async function POST(req: NextRequest) {
 <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Solde (70%) a la fin des travaux : ${solde70}</p>
 </div>
 <div style="text-align:center;margin:12px 0;">
-<a href="https://novus-epoxy.vercel.app/reservation/${q.id}?token=${secretToken}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Choisir vos dates</a>
+<a href="https://novus-epoxy.vercel.app/reservation/${q.id}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Choisir vos dates</a>
 </div>
 <div style="text-align:center;margin:12px 0;">
-<a href="https://novus-epoxy.vercel.app/contrat/${q.id}?token=${secretToken}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Signer le contrat</a>
+<a href="https://novus-epoxy.vercel.app/contrat/${q.id}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Signer le contrat</a>
 </div>
 <div style="text-align:center;margin:12px 0;">
-<a href="https://novus-epoxy.vercel.app/paiement/${q.id}?token=${secretToken}" style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Payer le depot (30%)</a>
+<a href="https://novus-epoxy.vercel.app/paiement/${q.id}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Payer le depot (30%)</a>
 </div>
 <p style="color:#475569;font-size:12px;">Questions? 581-307-2678 (Jason) ou 581-307-5983 (Luca)</p>
 </div></body></html>`;
