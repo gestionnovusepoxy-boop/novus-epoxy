@@ -13,6 +13,8 @@ interface PaymentData {
   statut: string;
   deposit_paid_at: string | null;
   balance_paid_at: string | null;
+  contrat_signe_at: string | null;
+  secret_token: string;
   jour1_date?: string;
   jour1_slot?: string;
   jour2_date?: string;
@@ -27,6 +29,15 @@ const SERVICE_LABELS: Record<string, string> = {
 
 function formatMoney(n: number) {
   return new Intl.NumberFormat('fr-CA', { style: 'currency', currency: 'CAD' }).format(n);
+}
+
+function formatDate(d: string) {
+  const date = new Date(d + 'T12:00:00');
+  return date.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+function slotLabel(s: string) {
+  return s === 'matin' ? 'AM (8h-12h)' : 'PM (12h-16h)';
 }
 
 export default function PaiementPage() {
@@ -104,6 +115,50 @@ export default function PaiementPage() {
             <div style={{ fontSize: '48px', marginBottom: '8px' }}>&#10060;</div>
             <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 8px', color: '#ef4444' }}>Paiement annule</h2>
             <p style={{ color: '#fca5a5', fontSize: '14px', margin: '0 0 16px' }}>Le paiement n&apos;a pas ete complete. Vous pouvez reessayer.</p>
+          </div>
+        )}
+
+        {/* Progress steps */}
+        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '16px', border: '1px solid #334155' }}>
+          {/* Step 1: Dates */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: data.jour1_date ? '#22c55e' : '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: data.jour1_date ? '#fff' : '#94a3b8' }}>{data.jour1_date ? '\u2713' : '1'}</div>
+            <span style={{ color: data.jour1_date ? '#94a3b8' : '#f8fafc', fontSize: '14px', textDecoration: data.jour1_date ? 'line-through' : 'none', flex: 1 }}>Choisir vos dates</span>
+            {data.jour1_date && !depositPaid && (
+              <a
+                href={`/reservation/${data.id}?token=${encodeURIComponent(token)}`}
+                style={{ background: 'none', border: '1px solid #475569', color: '#94a3b8', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', textDecoration: 'none' }}
+              >
+                Changer
+              </a>
+            )}
+          </div>
+          {/* Step 2: Contrat */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: data.contrat_signe_at ? '#22c55e' : '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: data.contrat_signe_at ? '#fff' : '#94a3b8' }}>{data.contrat_signe_at ? '\u2713' : '2'}</div>
+            <span style={{ color: data.contrat_signe_at ? '#94a3b8' : '#f8fafc', fontSize: '14px', textDecoration: data.contrat_signe_at ? 'line-through' : 'none' }}>Signer le contrat</span>
+          </div>
+          {/* Step 3: Depot */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: depositPaid ? '#22c55e' : '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#0f172a' }}>{depositPaid ? '\u2713' : '3'}</div>
+            <span style={{ color: depositPaid ? '#94a3b8' : '#f8fafc', fontSize: '14px', fontWeight: depositPaid ? 400 : 700, textDecoration: depositPaid ? 'line-through' : 'none' }}>Payer le depot (30%)</span>
+          </div>
+        </div>
+
+        {/* Chosen dates */}
+        {data.jour1_date && data.jour2_date && (
+          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '16px', border: '1px solid #334155' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 12px', color: '#f59e0b' }}>Dates choisies</h3>
+            <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px', marginBottom: '8px' }}>
+              <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '12px' }}>JOUR 1 — Preparation</div>
+              <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '4px' }}>{formatDate(data.jour1_date)}</div>
+              <div style={{ color: '#94a3b8', fontSize: '13px' }}>{slotLabel(data.jour1_slot || 'matin')}</div>
+            </div>
+            <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px' }}>
+              <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '12px' }}>JOUR 2 — Finition</div>
+              <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '4px' }}>{formatDate(data.jour2_date)}</div>
+              <div style={{ color: '#94a3b8', fontSize: '13px' }}>{slotLabel(data.jour2_slot || 'apres-midi')}</div>
+            </div>
           </div>
         )}
 

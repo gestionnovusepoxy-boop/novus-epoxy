@@ -12,7 +12,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const rows = await query(
     `SELECT id, client_nom, type_service, superficie, total, depot_requis, statut,
-            deposit_paid_at, balance_paid_at, booking_id
+            deposit_paid_at, balance_paid_at, booking_id, contrat_signe_at, secret_token
      FROM quotes WHERE id = $1 AND secret_token = $2`,
     [parseInt(id), token]
   );
@@ -29,9 +29,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Cette page n\'est pas encore disponible' }, { status: 400 });
   }
 
-  // Include booking dates if deposit is paid
-  const depositStatuts = ['depot_paye', 'planifie', 'complete'];
-  if (depositStatuts.includes(quote.statut as string) && quote.booking_id) {
+  // Include booking dates if booking exists (any status)
+  if (quote.booking_id) {
     const bookingRows = await query(
       'SELECT jour1_date, jour1_slot, jour2_date, jour2_slot FROM bookings WHERE id = $1',
       [quote.booking_id]
