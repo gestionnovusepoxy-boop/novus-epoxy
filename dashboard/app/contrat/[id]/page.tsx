@@ -137,6 +137,20 @@ export default function ContratPage() {
           client_email: quote.client_email,
           signature_nom: signatureNom.trim(),
           token,
+          signature_image: (() => {
+            const canvas = canvasRef.current;
+            if (!canvas) return null;
+            // Draw on white background for export
+            const exportCanvas = document.createElement('canvas');
+            exportCanvas.width = canvas.width;
+            exportCanvas.height = canvas.height;
+            const ctx = exportCanvas.getContext('2d');
+            if (!ctx) return null;
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, exportCanvas.width, exportCanvas.height);
+            ctx.drawImage(canvas, 0, 0);
+            return exportCanvas.toDataURL('image/png');
+          })(),
         }),
       });
       const data = await res.json();

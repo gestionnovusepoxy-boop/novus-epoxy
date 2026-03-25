@@ -90,9 +90,10 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   // Sign the contract
   const signatureNom = (body.signature_nom as string).trim();
+  const signatureImage = (body.signature_image as string) || null;
   await query(
-    `UPDATE quotes SET statut = 'contrat_signe', contrat_signe_at = NOW(), contrat_signature_nom = $1 WHERE id = $2`,
-    [signatureNom, quoteId]
+    `UPDATE quotes SET statut = 'contrat_signe', contrat_signe_at = NOW(), contrat_signature_nom = $1, contrat_signature_image = $2 WHERE id = $3`,
+    [signatureNom, signatureImage, quoteId]
   );
 
   // Send confirmation email to client
