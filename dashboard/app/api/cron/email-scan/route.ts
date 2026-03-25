@@ -236,6 +236,24 @@ export async function GET(req: NextRequest) {
     // Skip our own emails
     if (fromEmail.includes('novusepoxy')) continue;
 
+    // Skip auto-replies (noreply, mailer-daemon, auto-responders)
+    const autoSubmitted = headers.find(h => h.name?.toLowerCase() === 'auto-submitted')?.value ?? '';
+    const precedence = headers.find(h => h.name?.toLowerCase() === 'precedence')?.value ?? '';
+    const isAutoReply =
+      autoSubmitted.includes('auto-replied') ||
+      autoSubmitted.includes('auto-generated') ||
+      precedence === 'bulk' ||
+      precedence === 'auto_reply' ||
+      /noreply|no-reply|mailer-daemon|postmaster/i.test(fromEmail) ||
+      /\b(auto.?r[eé]ponse|auto.?reply|out of office|absence|r[eé]ception de votre message)\b/i.test(subject);
+    if (isAutoReply) {
+      console.log(`[Email Scan] Skipping auto-reply from ${fromEmail}: ${subject}`);
+      try {
+        await gmail.users.messages.modify({ userId: 'me', id: msg.id, requestBody: { removeLabelIds: ['UNREAD'] } });
+      } catch { /* ignore */ }
+      continue;
+    }
+
     // Get body text
     let bodyText = '';
     const parts = fullMsg.data.payload?.parts ?? [];
@@ -322,12 +340,19 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === CLIENT: Auto-reply with chatbot ===
-    if (analysis.type === 'client' && analysis.reply_suggestion) {
-      try {
-        await processAutoReply(fromEmail, subject, analysis.reply_suggestion);
-        repliesSent++;
-      } catch { /* ignore reply errors */ }
+    // === CLIENT: Notify admins on Telegram (no auto-reply — admins handle manually) ===
+    if (analysis.type === 'client') {
+      for (const chatId of ADMIN_CHAT_IDS()) {
+        await sendTelegram(chatId,
+          `👤 <b>Email client recu</b>\n\n` +
+          `De: ${fromHeader}\n` +
+          `Sujet: ${subject}\n\n` +
+          `📋 ${analysis.summary}\n` +
+          (analysis.reply_suggestion ? `\n💡 Suggestion: ${analysis.reply_suggestion}` : '') +
+          `\n\nhttps://novus-epoxy.vercel.app/dashboard/devis`,
+        );
+      }
+      alertsSent++;
     }
 
     // === IMPORTANT / NEEDS ATTENTION: Alert admin ===
