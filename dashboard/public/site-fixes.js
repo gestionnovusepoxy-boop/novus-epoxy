@@ -84,7 +84,7 @@
       if (isFlake || isCouleurUnie || isQuartz) {
         colorLink.style.display = 'block';
         var tab = 'flake';
-        if (isCouleurUnie) tab = 'pigment';
+        if (isCouleurUnie) tab = 'solid';
         else if (isQuartz) tab = 'quartz';
         colorLink.href = 'https://novus-epoxy.vercel.app/couleurs?tab=' + tab;
         colorLink.textContent = '\ud83c\udfa8 Choisissez votre couleur';
