@@ -202,7 +202,7 @@ async function notifyAdminsWithQuote(
 
   if (quoteId && quoteTotal) {
     smsLines.push(`Devis #${quoteId}: ${quoteTotal}`);
-    smsLines.push(`Approuve dans Telegram ou dashboard`);
+    smsLines.push(`https://novus-epoxy.vercel.app/dashboard/devis`);
   }
 
   const smsMsg = smsLines.join('\n');
