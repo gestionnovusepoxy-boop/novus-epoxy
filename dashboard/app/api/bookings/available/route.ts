@@ -19,13 +19,14 @@ export async function GET(req: NextRequest) {
   }
 
   // Check if a booking already exists for this quote
+  const forceNew = req.nextUrl.searchParams.get('force_new') === '1';
   const existingBooking = await query(
     `SELECT b.jour1_date, b.jour1_slot, b.jour2_date, b.jour2_slot, b.statut AS booking_statut
      FROM bookings b WHERE b.quote_id = $1 ORDER BY b.created_at DESC LIMIT 1`,
     [parseInt(quoteId)]
   );
 
-  if (existingBooking.length > 0) {
+  if (existingBooking.length > 0 && !forceNew) {
     const eb = existingBooking[0];
     return NextResponse.json({
       already_booked: true,

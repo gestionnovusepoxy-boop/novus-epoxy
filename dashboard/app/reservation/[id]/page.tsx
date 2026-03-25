@@ -118,6 +118,14 @@ export default function ReservationPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
               <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0 }}>&#10003;</div>
               <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>Choisir vos dates</span>
+              {!isPaid && (
+                <button
+                  onClick={() => { setExistingBooking(null); setLoading(true); fetch(`/api/bookings/available?quote_id=${id}&force_new=1`).then(r => r.json()).then(data => { if (data.available) setSlots(data.available); if (data.client_email) setClientEmail(data.client_email); if (data.secret_token) setSecretToken(data.secret_token); }).catch(() => {}).finally(() => setLoading(false)); }}
+                  style={{ marginLeft: 'auto', background: 'none', border: '1px solid #475569', color: '#94a3b8', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', cursor: 'pointer' }}
+                >
+                  Changer la date
+                </button>
+              )}
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
               <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isSigned ? '#22c55e' : '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#0f172a' }}>{isSigned ? '\u2713' : '2'}</div>
