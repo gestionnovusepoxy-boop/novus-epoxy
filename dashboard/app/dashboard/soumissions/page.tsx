@@ -21,7 +21,7 @@ const LABEL: Record<Submission['statut'], string> = {
   ferme:          'Fermé',
 };
 
-function SubmissionRow({ s, onUpdate }: { s: Submission; onUpdate: () => void }) {
+function DetailPanel({ s, onClose, onUpdate }: { s: Submission; onClose: () => void; onUpdate: () => void }) {
   const [loading, setLoading] = useState(false);
 
   async function handleStatut(statut: Submission['statut']) {
@@ -32,18 +32,147 @@ function SubmissionRow({ s, onUpdate }: { s: Submission; onUpdate: () => void })
   }
 
   return (
-    <tr className="border-b border-slate-700 hover:bg-slate-700/50 transition">
+    <div className="fixed inset-0 z-50 flex justify-end" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/50" />
+      <div
+        className="relative w-full max-w-lg bg-slate-800 border-l border-slate-700 h-full overflow-y-auto shadow-2xl"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="sticky top-0 bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between z-10">
+          <h3 className="text-lg font-bold text-white">Soumission #{s.id}</h3>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+        </div>
+
+        <div className="p-6 space-y-5">
+          {/* Client info */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-medium uppercase tracking-wider text-slate-500">Client</h4>
+            <div className="bg-slate-900 rounded-lg p-4 space-y-2">
+              <div className="flex justify-between">
+                <span className="text-slate-400 text-sm">Nom</span>
+                <span className="text-white text-sm font-medium">{s.nom}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400 text-sm">Email</span>
+                <a href={`mailto:${s.email}`} className="text-amber-400 text-sm hover:underline">{s.email}</a>
+              </div>
+              {s.telephone && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400 text-sm">Téléphone</span>
+                  <a href={`tel:${s.telephone}`} className="text-amber-400 text-sm hover:underline">{s.telephone}</a>
+                </div>
+              )}
+              {s.ville && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400 text-sm">Ville</span>
+                  <span className="text-white text-sm">{s.ville}</span>
+                </div>
+              )}
+              {s.adresse && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400 text-sm">Adresse</span>
+                  <span className="text-white text-sm text-right max-w-[60%]">{s.adresse}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Projet */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-medium uppercase tracking-wider text-slate-500">Projet</h4>
+            <div className="bg-slate-900 rounded-lg p-4 space-y-2">
+              {s.service && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400 text-sm">Service</span>
+                  <span className="text-white text-sm">{s.service}</span>
+                </div>
+              )}
+              {s.type_projet && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400 text-sm">Type de projet</span>
+                  <span className="text-white text-sm">{s.type_projet}</span>
+                </div>
+              )}
+              {s.surface_estimee && (
+                <div className="flex justify-between">
+                  <span className="text-slate-400 text-sm">Surface estimée</span>
+                  <span className="text-white text-sm">{s.surface_estimee} pi²</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Message */}
+          {s.message && (
+            <div className="space-y-3">
+              <h4 className="text-xs font-medium uppercase tracking-wider text-slate-500">Message</h4>
+              <div className="bg-slate-900 rounded-lg p-4">
+                <p className="text-slate-300 text-sm whitespace-pre-wrap">{s.message}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Statut */}
+          <div className="space-y-3">
+            <h4 className="text-xs font-medium uppercase tracking-wider text-slate-500">Statut</h4>
+            <select
+              value={s.statut}
+              disabled={loading}
+              onChange={e => handleStatut(e.target.value as Submission['statut'])}
+              className={`w-full text-sm font-medium px-3 py-2 rounded-lg border bg-transparent cursor-pointer ${BADGE[s.statut]}`}
+            >
+              {STATUTS.map(st => (
+                <option key={st} value={st} className="bg-slate-800 text-white">
+                  {LABEL[st]}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Date */}
+          <div className="text-slate-500 text-xs">
+            Reçue le {formatDate(s.created_at)}
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-2 pt-2">
+            <a
+              href={`/dashboard/devis?from_submission=${s.id}&nom=${encodeURIComponent(s.nom)}&email=${encodeURIComponent(s.email)}&tel=${encodeURIComponent(s.telephone || '')}&service=${encodeURIComponent(s.service || '')}&surface=${encodeURIComponent(s.surface_estimee || '')}&adresse=${encodeURIComponent(s.adresse || '')}`}
+              className="block w-full text-center bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold py-3 rounded-lg transition"
+            >
+              Créer un devis
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SubmissionRow({ s, onUpdate, onClick }: { s: Submission; onUpdate: () => void; onClick: () => void }) {
+  const [loading, setLoading] = useState(false);
+
+  async function handleStatut(e: React.ChangeEvent<HTMLSelectElement>) {
+    e.stopPropagation();
+    setLoading(true);
+    await updateSubmissionStatus(s.id, e.target.value as Submission['statut']);
+    onUpdate();
+    setLoading(false);
+  }
+
+  return (
+    <tr className="border-b border-slate-700 hover:bg-slate-700/50 transition cursor-pointer" onClick={onClick}>
       <td className="px-4 py-3">
         <p className="text-white text-sm font-medium">{s.nom}</p>
         <p className="text-slate-400 text-xs">{s.email}</p>
       </td>
       <td className="px-4 py-3 text-slate-300 text-sm">{s.telephone ?? '—'}</td>
       <td className="px-4 py-3 text-slate-300 text-sm">{s.service ?? '—'}</td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
         <select
           value={s.statut}
           disabled={loading}
-          onChange={e => handleStatut(e.target.value as Submission['statut'])}
+          onChange={handleStatut}
           className={`text-xs font-medium px-2 py-1 rounded border bg-transparent cursor-pointer ${BADGE[s.statut]}`}
         >
           {STATUTS.map(st => (
@@ -64,12 +193,18 @@ function PageContent() {
   const [page, setPage]       = useState(1);
   const [statut, setStatut]   = useState('');
   const [search, setSearch]   = useState('');
+  const [selected, setSelected] = useState<Submission | null>(null);
 
   const load = useCallback(async () => {
     const res = await fetchSubmissions({ page, limit: 25, statut: statut || undefined, search: search || undefined });
     setData(res.data);
     setTotal(res.total);
-  }, [page, statut, search]);
+    // Update selected if still open
+    if (selected) {
+      const updated = res.data.find(s => s.id === selected.id);
+      if (updated) setSelected(updated);
+    }
+  }, [page, statut, search, selected]);
 
   return (
     <PollingProvider onRefresh={load}>
@@ -114,7 +249,9 @@ function PageContent() {
               {data.length === 0 && (
                 <tr><td colSpan={5} className="text-center py-8 text-slate-500 text-sm">Aucune soumission</td></tr>
               )}
-              {data.map(s => <SubmissionRow key={s.id} s={s} onUpdate={load} />)}
+              {data.map(s => (
+                <SubmissionRow key={s.id} s={s} onUpdate={load} onClick={() => setSelected(s)} />
+              ))}
             </tbody>
           </table>
         </div>
@@ -140,6 +277,11 @@ function PageContent() {
               Suivant →
             </button>
           </div>
+        )}
+
+        {/* Detail panel */}
+        {selected && (
+          <DetailPanel s={selected} onClose={() => setSelected(null)} onUpdate={load} />
         )}
       </div>
     </PollingProvider>

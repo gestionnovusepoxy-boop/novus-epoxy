@@ -34,7 +34,7 @@ export async function GET(req: NextRequest) {
   const [countRow, rows] = await Promise.all([
     db(`SELECT COUNT(*)::int AS total FROM submissions ${where}`, params),
     db(
-      `SELECT id, nom, email, telephone, service, statut, created_at, updated_at
+      `SELECT id, nom, email, telephone, service, message, ville, adresse, surface_estimee, type_projet, statut, created_at, updated_at
        FROM submissions ${where}
        ORDER BY created_at DESC
        LIMIT $${idx} OFFSET $${idx + 1}`,

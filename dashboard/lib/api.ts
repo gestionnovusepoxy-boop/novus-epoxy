@@ -23,6 +23,11 @@ export interface Submission {
   email:      string;
   telephone:  string | null;
   service:    string | null;
+  message:    string | null;
+  ville:      string | null;
+  adresse:    string | null;
+  surface_estimee: string | null;
+  type_projet: string | null;
   statut:     'nouveau' | 'lu' | 'en_traitement' | 'ferme';
   created_at: string;
   updated_at: string;
