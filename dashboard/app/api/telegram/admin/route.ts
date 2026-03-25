@@ -122,6 +122,52 @@ const TOOLS = [
     },
   },
   {
+    name: 'confirmer_paiement',
+    description: 'Confirme manuellement un paiement depot ou solde pour un devis (Interac ou autre).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'ID du devis' },
+        type: { type: 'string', enum: ['depot', 'solde'], description: 'Type de paiement' },
+      },
+      required: ['id', 'type'],
+    },
+  },
+  {
+    name: 'modifier_statut_devis',
+    description: 'Change le statut d\'un devis (ex: envoye, planifie, complete, refuse).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'ID du devis' },
+        statut: { type: 'string', description: 'Nouveau statut' },
+      },
+      required: ['id', 'statut'],
+    },
+  },
+  {
+    name: 'liste_clients',
+    description: 'Liste les clients avec leur historique de devis.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'relancer_client',
+    description: 'Envoie un SMS de relance a un client pour un devis en attente.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'number', description: 'ID du devis' },
+        message: { type: 'string', description: 'Message personnalise (optionnel)' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'voir_conversations',
+    description: 'Voir les conversations recentes du chatbot Nova avec les clients.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
     name: 'resume_emails',
     description: 'Lit les derniers emails recus sur gestionnovusepoxy@gmail.com et retourne un resume. Utile quand on demande "les emails", "resume emails", "nouveaux messages".',
     input_schema: {
@@ -327,6 +373,51 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         emails.push({ from, subject, date, snippet: snippet.slice(0, 200), non_lu: isUnread });
       }
       return JSON.stringify(emails);
+    }
+
+    case 'confirmer_paiement': {
+      const id = Number(input.id);
+      const type = input.type as string; // 'depot' ou 'solde'
+      const col = type === 'solde' ? 'balance_paid_at' : 'deposit_paid_at';
+      const newStatut = type === 'solde' ? 'complete' : 'planifie';
+      await query(`UPDATE quotes SET ${col} = NOW(), statut = $1 WHERE id = $2`, [newStatut, id]);
+      return JSON.stringify({ ok: true, devis_id: id, paiement: type, nouveau_statut: newStatut });
+    }
+
+    case 'modifier_statut_devis': {
+      const id = Number(input.id);
+      const statut = input.statut as string;
+      const validStatuts = ['brouillon','en_attente','approuve','envoye','contrat_signe','depot_paye','planifie','complete','refuse'];
+      if (!validStatuts.includes(statut)) return JSON.stringify({ error: 'Statut invalide' });
+      await query(`UPDATE quotes SET statut = $1 WHERE id = $2`, [statut, id]);
+      return JSON.stringify({ ok: true, devis_id: id, nouveau_statut: statut });
+    }
+
+    case 'liste_clients': {
+      const rows = await query(
+        `SELECT DISTINCT client_nom, client_tel, client_email, MAX(created_at) as dernier_devis, COUNT(*) as nb_devis
+         FROM quotes GROUP BY client_nom, client_tel, client_email ORDER BY dernier_devis DESC LIMIT 15`
+      );
+      return JSON.stringify(rows);
+    }
+
+    case 'relancer_client': {
+      const id = Number(input.id);
+      const q = await query(`SELECT client_nom, client_tel, statut FROM quotes WHERE id = $1`, [id]);
+      if (!q.length) return JSON.stringify({ error: 'Devis introuvable' });
+      const { client_nom, client_tel, statut } = q[0] as { client_nom: string; client_tel: string; statut: string };
+      const msg = input.message as string || `Bonjour ${client_nom}! Avez-vous eu la chance de regarder votre soumission Novus Epoxy #${id}? On est disponibles pour repondre a vos questions. 581-307-2678`;
+      await sendSMS(client_tel as string, msg);
+      return JSON.stringify({ ok: true, client: client_nom, statut, sms_envoye: true });
+    }
+
+    case 'voir_conversations': {
+      const rows = await query(
+        `SELECT c.id, c.statut, c.created_at,
+           (SELECT m.content FROM messages m WHERE m.conversation_id = c.id AND m.role = 'user' ORDER BY m.created_at DESC LIMIT 1) as dernier_message
+         FROM conversations c ORDER BY c.updated_at DESC LIMIT 10`
+      );
+      return JSON.stringify(rows);
     }
 
     default:
