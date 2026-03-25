@@ -341,9 +341,10 @@ export async function GET(req: NextRequest) {
     }
 
     // === CLIENT: Auto-reply + notify admins on Telegram ===
-    if (analysis.type === 'client' && analysis.reply_suggestion) {
+    if (analysis.type === 'client') {
+      const autoReplyText = `Bonjour,\n\nMerci pour votre message ! Nous l'avons bien reçu et un membre de notre équipe vous reviendra très bientôt.\n\nEn attendant, vous pouvez remplir notre formulaire de soumission en ligne :\n👉 https://novusepoxy.ca/#ghl-form\n\nOu nous joindre directement au 581-307-2678.\n\nBonne journée,\nL'équipe Novus Epoxy`;
       try {
-        await processAutoReply(fromEmail, subject, analysis.reply_suggestion);
+        await processAutoReply(fromEmail, subject, autoReplyText);
         repliesSent++;
       } catch { /* ignore reply errors */ }
 
@@ -353,7 +354,7 @@ export async function GET(req: NextRequest) {
           `De: ${fromHeader}\n` +
           `Sujet: ${subject}\n\n` +
           `📋 ${analysis.summary}\n` +
-          `\n✅ Reponse auto envoyee:\n<i>${(analysis.reply_suggestion ?? '').slice(0, 500)}</i>` +
+          `\n✅ Reponse auto envoyee (message fixe — redirige vers formulaire)` +
           `\n\nhttps://novus-epoxy.vercel.app/dashboard/devis`,
         );
       }
