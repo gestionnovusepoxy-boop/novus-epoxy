@@ -18,6 +18,30 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Ce devis ne peut pas etre planifie' }, { status: 400 });
   }
 
+  // Check if a booking already exists for this quote
+  const existingBooking = await query(
+    `SELECT b.jour1_date, b.jour1_slot, b.jour2_date, b.jour2_slot, b.statut AS booking_statut
+     FROM bookings b WHERE b.quote_id = $1 ORDER BY b.created_at DESC LIMIT 1`,
+    [parseInt(quoteId)]
+  );
+
+  if (existingBooking.length > 0) {
+    const eb = existingBooking[0];
+    return NextResponse.json({
+      already_booked: true,
+      booking: {
+        jour1_date: (eb.jour1_date as Date).toISOString().split('T')[0],
+        jour1_slot: eb.jour1_slot,
+        jour2_date: (eb.jour2_date as Date).toISOString().split('T')[0],
+        jour2_slot: eb.jour2_slot,
+        statut: eb.booking_statut,
+      },
+      quote_statut: q.statut,
+      client_email: q.client_email,
+      secret_token: q.secret_token,
+    });
+  }
+
   // Get all CONFIRMED booked slots for next 60 days (en_attente bookings don't block)
   const bookedRows = await query(
     `SELECT jour1_date, jour1_slot, jour2_date, jour2_slot
