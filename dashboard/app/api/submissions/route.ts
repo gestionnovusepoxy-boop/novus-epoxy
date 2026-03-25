@@ -305,6 +305,37 @@ export async function POST(req: NextRequest) {
     superficie,
   );
 
+  // Special alert for metallique — Jason must contact client for in-person color selection
+  const serviceLower = (body.service ?? '').toLowerCase();
+  if (serviceLower.includes('metallique') || serviceLower.includes('m\u00e9tallique')) {
+    const clientName = body.nom;
+    const clientTel = body.telephone ?? 'pas de tel';
+    const clientEmail = body.email;
+    const clientVille = body.ville ?? '';
+
+    const jasonSms = `METALLIQUE - Appelle ${clientName} pour choisir les couleurs en personne!\nTel: ${clientTel}\nEmail: ${clientEmail}${clientVille ? `\nVille: ${clientVille}` : ''}`;
+    const lucaSms = `Metallique: Jason doit contacter ${clientName} (${clientTel}) pour couleurs en personne.`;
+
+    const jasonPhone = process.env.JASON_PHONE;
+    const adminPhone = process.env.ADMIN_PHONE;
+    if (jasonPhone) await sendSMSNotif(jasonPhone, jasonSms);
+    if (adminPhone) await sendSMSNotif(adminPhone, lucaSms);
+
+    // Also Telegram
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+    if (botToken) {
+      const tgMsg = `\ud83c\udfa8 <b>METALLIQUE — Couleurs en personne</b>\n\nJason, appelle ${clientName} pour choisir les couleurs!\n\ud83d\udcde ${clientTel}\n\ud83d\udce7 ${clientEmail}${clientVille ? `\n\ud83d\udccd ${clientVille}` : ''}`;
+      await Promise.all(chatIds.map(chatId =>
+        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: chatId.trim(), text: tgMsg, parse_mode: 'HTML' }),
+        }).catch(() => {})
+      ));
+    }
+  }
+
   return NextResponse.json({ ok: true }, { status: 201 });
 }
 
