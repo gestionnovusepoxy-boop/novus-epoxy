@@ -100,15 +100,15 @@ Reponds en JSON strict:
 
 IMPORTANT pour les clients:
 - Novus Epoxy offre: planchers epoxy metallique, flake/flocon, couleur unie, commercial, quartz, revetement balcons/escaliers, reparation beton
-- Prix: Flake 8.50$/pi2, Metallique 12.75$/pi2, Commercial 15.00$/pi2, Quartz 11$/pi2
 - Zone: Grand Quebec, Levis, Rive-Sud, Rive-Nord
 - Garantie 10 ans, 15 ans d'experience, RBQ 5861-8471-01
 - La reply_suggestion doit etre chaleureuse, professionnelle, en francais
-- Si le client a donne assez d'info (service + surface), donne un estime de prix dans la reponse
-- TOUJOURS inclure le lien vers le formulaire de soumission: https://novusepoxy.ca/#ghl-form pour qu'on puisse preparer un devis officiel
-- Si le client pose des questions generales, reponds et redirige vers le formulaire ou appeler au 581-307-2678
-- TOUJOURS signer "L'equipe Novus Epoxy"
-- TOUJOURS inclure: "Pour recevoir votre soumission officielle gratuite, remplissez notre formulaire: https://novusepoxy.ca/#ghl-form ou appelez-nous au 581-307-2678"`,
+- NE JAMAIS DONNER DE PRIX dans la reponse. Jamais. Aucun montant, aucun estimé, aucun prix au pied carre. Les prix sont donnes uniquement par devis officiel approuve par l'admin.
+- TOUJOURS recolter les informations necessaires pour preparer un devis: type de service souhaite, superficie approximative en pi2, adresse complete, telephone
+- Si des infos manquent, les demander poliment dans la reponse
+- TOUJOURS rediriger vers le formulaire pour une soumission officielle: https://novusepoxy.ca/#ghl-form
+- TOUJOURS mentionner qu'ils peuvent aussi appeler au 581-307-2678 pour un service rapide
+- TOUJOURS signer "L'equipe Novus Epoxy"`,
   });
 
   messages.push({ role: 'user', content: imageContent });
