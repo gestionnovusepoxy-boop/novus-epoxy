@@ -1,0 +1,18 @@
+name: Email Scan (every 5 min)
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Trigger email scan
+        run: |
+          curl -s -X POST "https://novus-epoxy.vercel.app/api/cron/email-scan" \
+            -H "Authorization: Bearer ${{ secrets.ADMIN_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            --max-time 30
