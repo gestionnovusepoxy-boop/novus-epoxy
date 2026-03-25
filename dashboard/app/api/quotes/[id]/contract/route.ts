@@ -117,8 +117,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 </div>
 <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
 <p style="margin:0;color:#92400e;font-weight:700;">Prochaine etape: payer le depot</p>
-<p style="margin:4px 0 0;color:#78716c;font-size:13px;">Pour confirmer votre reservation, veuillez effectuer le depot de ${formatMoney(Number(quote.depot_requis))} par virement Interac ou cheque.</p>
+<p style="margin:4px 0 0;color:#78716c;font-size:13px;">Pour confirmer votre reservation, veuillez effectuer le depot de ${formatMoney(Number(quote.depot_requis))}.</p>
 </div>
+<div style="text-align:center;margin:20px 0;">
+<a href="https://novus-epoxy.vercel.app/paiement/${quoteId}?token=${encodeURIComponent(quote.secret_token as string)}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:16px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Payer le depot maintenant — ${formatMoney(Number(quote.depot_requis))}</a>
+</div>
+<p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 16px;">Ou par virement Interac a <strong>gestionnovusepoxy@gmail.com</strong></p>
 <p style="color:#64748b;font-size:13px;">Des questions? Contactez-nous:<br/>
 <strong>Luca:</strong> 581-307-5983<br/>
 <strong>Jason:</strong> 581-307-2678</p>
