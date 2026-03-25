@@ -21,6 +21,7 @@ function CouleursContent() {
   const searchParams = useSearchParams();
   const visitorId = searchParams.get('vid');
   const initialTab = (searchParams.get('tab') as Tab) || 'flake';
+  const locked = searchParams.get('locked') === '1';
 
   const [tab, setTab] = useState<Tab>(['flake', 'pigment', 'solid', 'quartz'].includes(initialTab) ? initialTab : 'flake');
   const [selected, setSelected] = useState<AnyColor | null>(null);
@@ -80,7 +81,7 @@ function CouleursContent() {
   const tabLabels: Record<Tab, string> = {
     flake: `Flocon (${FLAKE_COLORS.length})`,
     quartz: `Quartz (${QUARTZ_COLORS.length})`,
-    solid: `Unis (${SOLID_COLORS.length})`,
+    solid: `Couleur unie (${SOLID_COLORS.length})`,
     pigment: `Pigment (${PIGMENT_COLORS.length})`,
   };
 
@@ -136,7 +137,8 @@ function CouleursContent() {
         </p>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — hidden when locked from form */}
+      {!locked && (
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '16px 16px 0', display: 'flex', gap: '4px', overflowX: 'auto' }}>
         {(['flake', 'quartz', 'solid', 'pigment'] as Tab[]).map(t => (
           <button key={t} onClick={() => { setTab(t); setFilter('all'); setSearch(''); }} style={tabStyle(t)}>
@@ -144,6 +146,7 @@ function CouleursContent() {
           </button>
         ))}
       </div>
+      )}
 
       <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '16px' }}>
         {/* Empty state */}

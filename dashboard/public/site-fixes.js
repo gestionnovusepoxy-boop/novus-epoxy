@@ -86,7 +86,7 @@
         var tab = 'flake';
         if (isCouleurUnie) tab = 'solid';
         else if (isQuartz) tab = 'quartz';
-        colorLink.href = 'https://novus-epoxy.vercel.app/couleurs?tab=' + tab;
+        colorLink.href = 'https://novus-epoxy.vercel.app/couleurs?tab=' + tab + '&locked=1';
         colorLink.textContent = '\ud83c\udfa8 Choisissez votre couleur';
       } else {
         colorLink.style.display = 'none';
