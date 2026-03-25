@@ -962,7 +962,13 @@ Reponds en JSON strict:
       if (!claudeRes.ok) {
         const err = await claudeRes.text();
         console.error('Claude API error:', err);
-        await sendTelegram(chatId, 'Erreur API Claude. Reessaie.');
+        let errMsg = 'Erreur API Claude.';
+        try {
+          const parsed = JSON.parse(err);
+          if (parsed?.error?.message) errMsg += ' ' + parsed.error.message;
+          else if (parsed?.error?.type) errMsg += ' ' + parsed.error.type;
+        } catch { errMsg += ' ' + err.slice(0, 200); }
+        await sendTelegram(chatId, errMsg);
         return NextResponse.json({ ok: true });
       }
 
