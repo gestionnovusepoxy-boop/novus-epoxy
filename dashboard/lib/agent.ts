@@ -299,40 +299,48 @@ async function createQuoteFromConversation(conversationId: number, data: {
   await query(`UPDATE conversations SET submission_id = $1 WHERE id = $2`, [subId, conversationId]);
   await query(`UPDATE quotes SET submission_id = $1 WHERE id = $2`, [subId, quoteId]);
 
-  // Notify admin via email
-  const apiKey = process.env.RESEND_API_KEY;
-  const adminEmail = process.env.ADMIN_EMAIL;
-  const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
-  if (apiKey && adminEmail) {
-    try {
-      await fetch('https://api.resend.com/emails', {
+  // Notify admins via Telegram with approve/reject buttons (same as form submissions)
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  if (botToken && chatIds.length > 0) {
+    const serviceLabel = SERVICES[data.type_service as ServiceType]?.label ?? data.type_service;
+    const tgLines = [
+      `📋 <b>Nouveau devis #${quoteId} (chatbot)</b>`,
+      ``,
+      `👤 ${escapeHtml(data.nom)}`,
+      data.email ? `📧 ${escapeHtml(data.email)}` : '',
+      data.tel ? `📞 ${escapeHtml(data.tel)}` : '',
+      data.adresse ? `🏠 ${escapeHtml(data.adresse)}` : '',
+      `🔧 ${serviceLabel} — ${data.superficie} pi²`,
+      ``,
+      `💰 Total: ${formatMoney(calc.total)}`,
+      `💳 Depot: ${formatMoney(calc.depot_requis)}`,
+    ].filter(Boolean).join('\n');
+
+    const buttons = {
+      inline_keyboard: [
+        [
+          { text: '✅ Approuver et envoyer', callback_data: `approve_quote_${quoteId}` },
+          { text: '❌ Rejeter', callback_data: `reject_quote_${quoteId}` },
+        ],
+        [
+          { text: '📋 Voir dashboard', url: `https://novus-epoxy.vercel.app/dashboard/devis` },
+        ],
+      ],
+    };
+
+    await Promise.all(chatIds.map(chatId =>
+      fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from,
-          to: [adminEmail],
-          subject: `Nouveau devis #${quoteId} a approuver — ${data.nom}`,
-          html: `
-            <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-              <h2 style="color:#1e293b;">Nouveau devis a approuver</h2>
-              <p><strong>Client:</strong> ${escapeHtml(data.nom)} (${escapeHtml(data.email)})</p>
-              <p><strong>Service:</strong> ${SERVICES[data.type_service as ServiceType].label}</p>
-              <p><strong>Superficie:</strong> ${data.superficie} pi²</p>
-              <p><strong>Total:</strong> ${formatMoney(calc.total)}</p>
-              <p><strong>Depot:</strong> ${formatMoney(calc.depot_requis)}</p>
-              <p style="margin-top:20px;">
-                <a href="https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}"
-                   style="background:#f59e0b;color:#0f172a;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;">
-                  Voir et approuver le devis
-                </a>
-              </p>
-            </div>`,
-        }),
-      });
-    } catch (err) { console.error('Failed to send admin notification email:', err); }
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId.trim(), text: tgLines, parse_mode: 'HTML', reply_markup: buttons }),
+      }).then(async r => {
+        if (!r.ok) console.error('Telegram error:', await r.text().catch(() => r.status));
+      }).catch(err => console.error('Telegram fetch error:', err))
+    ));
   }
 
-  // SMS notification to admin
+  // SMS to both admins with dashboard link
   await notifyAdminSMS(quoteId, data.nom).catch(err => console.error('SMS notification failed:', err));
 
   return { quoteId, total: calc.total, depot: calc.depot_requis };
