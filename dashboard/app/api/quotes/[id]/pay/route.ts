@@ -89,8 +89,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         },
       ],
       mode: 'payment',
-      success_url: `${baseUrl}/paiement/${quoteId}?success=true`,
-      cancel_url: `${baseUrl}/paiement/${quoteId}?cancelled=true`,
+      success_url: `${baseUrl}/paiement/${quoteId}?success=true&token=${encodeURIComponent(token as string)}`,
+      cancel_url: `${baseUrl}/paiement/${quoteId}?cancelled=true&token=${encodeURIComponent(token as string)}`,
       metadata: {
         quote_id: String(quoteId),
         payment_type: paymentType,
