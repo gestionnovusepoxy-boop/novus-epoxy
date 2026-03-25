@@ -935,7 +935,16 @@ Reponds en JSON strict:
     // Call Claude with tools
     type ContentBlock = { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> };
     type ClaudeMessage = { role: 'user' | 'assistant'; content: string | ContentBlock[] };
-    const messages: ClaudeMessage[] = [{ role: 'user', content: text }];
+
+    // Load conversation history from DB (last 10 messages per chat)
+    const historyKey = `tg_history_${chatId}`;
+    let history: ClaudeMessage[] = [];
+    try {
+      const histRow = await query(`SELECT value FROM kv_store WHERE key = $1`, [historyKey]);
+      if (histRow.length > 0) history = JSON.parse(histRow[0].value as string);
+    } catch { /* start fresh */ }
+
+    const messages: ClaudeMessage[] = [...history, { role: 'user', content: text }];
 
     let finalResponse = '';
     let iterations = 0;
@@ -1008,6 +1017,13 @@ Reponds en JSON strict:
 
     if (finalResponse) {
       await sendTelegram(chatId, finalResponse);
+      // Save conversation history (keep last 10 exchanges = 20 messages)
+      const newHistory: ClaudeMessage[] = [...messages, { role: 'assistant', content: finalResponse }];
+      const trimmed = newHistory.slice(-20);
+      await query(
+        `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+        [historyKey, JSON.stringify(trimmed)],
+      ).catch(() => {});
     }
   } catch (err) {
     console.error('Telegram admin bot error:', err);
