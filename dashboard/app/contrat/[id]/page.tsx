@@ -178,6 +178,7 @@ export default function ContratPage() {
 
   // Already signed
   if (alreadySigned) {
+    const isPaid = quote?.statut === 'depot_paye' || quote?.statut === 'planifie' || quote?.statut === 'complete';
     return (
       <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f8fafc', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px' }}>
         <div style={{ textAlign: 'center', maxWidth: '500px' }}>
@@ -187,22 +188,44 @@ export default function ContratPage() {
             {quote?.contrat_signature_nom && `Signe par ${quote.contrat_signature_nom}`}
             {quote?.contrat_signe_at && ` le ${formatDate(quote.contrat_signe_at)}`}
           </p>
-          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', textAlign: 'left', border: '1px solid #334155' }}>
-            <p style={{ color: '#f59e0b', fontWeight: 600, fontSize: '14px', margin: '0 0 8px' }}>Prochaine etape: Payer le depot</p>
-            <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 12px' }}>Payez le depot de {quote ? formatMoney(Number(quote.depot_requis)) : ''} dans les 48 heures pour confirmer vos dates.</p>
-            <a
-              href={`/api/quotes/${id}/pay?token=${encodeURIComponent(token)}`}
-              style={{
-                display: 'block', width: '100%', padding: '14px',
-                background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px',
-                fontSize: '16px', fontWeight: 700, textAlign: 'center', textDecoration: 'none',
-                cursor: 'pointer', boxSizing: 'border-box', marginBottom: '12px',
-              }}
-            >
-              Payer le depot en ligne
-            </a>
-            <p style={{ color: '#94a3b8', fontSize: '13px', margin: '0 0 4px', textAlign: 'center' }}>Ou par virement Interac a gestionnovusepoxy@gmail.com</p>
+
+          {/* Progress steps */}
+          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '20px', border: '1px solid #334155', textAlign: 'left' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#fff' }}>{'\u2713'}</div>
+              <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>Choisir vos dates</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#fff' }}>{'\u2713'}</div>
+              <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>Signer le contrat</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isPaid ? '#22c55e' : '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: isPaid ? '#fff' : '#0f172a' }}>{isPaid ? '\u2713' : '3'}</div>
+              <span style={{ color: isPaid ? '#94a3b8' : '#f8fafc', fontSize: '14px', fontWeight: isPaid ? 400 : 700, textDecoration: isPaid ? 'line-through' : 'none' }}>Payer le depot (30%)</span>
+            </div>
           </div>
+
+          {!isPaid && (
+            <>
+              <a
+                href={`/paiement/${id}?token=${encodeURIComponent(token)}`}
+                style={{
+                  display: 'block', width: '100%', padding: '14px',
+                  background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px',
+                  fontSize: '16px', fontWeight: 700, textAlign: 'center', textDecoration: 'none',
+                  cursor: 'pointer', boxSizing: 'border-box', marginBottom: '12px',
+                }}
+              >
+                Etape suivante: Payer le depot — {quote ? formatMoney(Number(quote.depot_requis)) : ''}
+              </a>
+              <p style={{ color: '#94a3b8', fontSize: '12px', textAlign: 'center', margin: '0' }}>Ou par virement Interac a <strong>gestionnovusepoxy@gmail.com</strong></p>
+            </>
+          )}
+          {isPaid && (
+            <div style={{ background: '#065f46', border: '1px solid #10b981', borderRadius: '8px', padding: '16px', color: '#d1fae5', fontWeight: 600 }}>
+              Tout est confirme! Merci pour votre confiance.
+            </div>
+          )}
         </div>
       </div>
     );
@@ -218,8 +241,25 @@ export default function ContratPage() {
           <p style={{ color: '#94a3b8', fontSize: '14px', marginBottom: '20px' }}>
             Merci {signatureNom}! Vous recevrez une confirmation par email.
           </p>
+
+          {/* Progress steps */}
+          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '20px', border: '1px solid #334155', textAlign: 'left' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#fff' }}>{'\u2713'}</div>
+              <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>Choisir vos dates</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#fff' }}>{'\u2713'}</div>
+              <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>Signer le contrat</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#0f172a' }}>3</div>
+              <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: 700 }}>Payer le depot (30%)</span>
+            </div>
+          </div>
+
           <a
-            href={`/api/quotes/${id}/pay?token=${encodeURIComponent(token)}`}
+            href={`/paiement/${id}?token=${encodeURIComponent(token)}`}
             style={{
               display: 'block', width: '100%', padding: '16px',
               background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px',
@@ -227,16 +267,10 @@ export default function ContratPage() {
               cursor: 'pointer', boxSizing: 'border-box', marginBottom: '16px',
             }}
           >
-            Payer le depot — {quote ? formatMoney(Number(quote.depot_requis)) : ''}
+            Etape suivante: Payer le depot — {quote ? formatMoney(Number(quote.depot_requis)) : ''}
           </a>
-          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', textAlign: 'left', border: '1px solid #334155' }}>
-            <p style={{ color: '#f59e0b', fontWeight: 600, fontSize: '14px', margin: '0 0 8px' }}>Ou payez par virement dans les 48 heures</p>
-            <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px', marginBottom: '8px' }}>
-              <p style={{ margin: '2px 0', color: '#cbd5e1', fontSize: '13px' }}><strong>Virement Interac:</strong> gestionnovusepoxy@gmail.com</p>
-              <p style={{ margin: '2px 0', color: '#cbd5e1', fontSize: '13px' }}><strong>Cheque:</strong> a l&apos;ordre de Novus Epoxy</p>
-            </div>
-            <p style={{ color: '#ef4444', fontSize: '12px', margin: '8px 0 0' }}>Si le depot n&apos;est pas recu dans les 48 heures, vos dates pourraient etre attribuees a un autre client.</p>
-          </div>
+          <p style={{ color: '#94a3b8', fontSize: '12px', textAlign: 'center', margin: '0 0 8px' }}>Ou par virement Interac a <strong>gestionnovusepoxy@gmail.com</strong></p>
+          <p style={{ color: '#ef4444', fontSize: '12px', margin: '0' }}>Si le depot n&apos;est pas recu dans les 48 heures, vos dates pourraient etre attribuees a un autre client.</p>
         </div>
       </div>
     );
@@ -266,6 +300,22 @@ export default function ContratPage() {
       </div>
 
       <div style={{ maxWidth: '700px', margin: '0 auto', padding: '16px' }}>
+        {/* Progress steps */}
+        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '16px', border: '1px solid #334155' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: quote.booking_jour1_date ? '#22c55e' : '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: quote.booking_jour1_date ? '#fff' : '#94a3b8' }}>{quote.booking_jour1_date ? '\u2713' : '1'}</div>
+            <span style={{ color: quote.booking_jour1_date ? '#94a3b8' : '#f8fafc', fontSize: '14px', textDecoration: quote.booking_jour1_date ? 'line-through' : 'none' }}>Choisir vos dates</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#0f172a' }}>2</div>
+            <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: 700 }}>Signer le contrat</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#94a3b8' }}>3</div>
+            <span style={{ color: '#64748b', fontSize: '14px' }}>Payer le depot (30%)</span>
+          </div>
+        </div>
+
         {error && (
           <div style={{ background: '#7f1d1d', border: '1px solid #dc2626', borderRadius: '8px', padding: '12px', marginBottom: '16px', color: '#fca5a5', fontSize: '14px' }}>
             {error}
