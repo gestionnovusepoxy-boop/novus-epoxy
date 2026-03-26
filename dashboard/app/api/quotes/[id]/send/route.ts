@@ -61,31 +61,14 @@ ${Number(quote.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><
 <p style="margin:0;color:#64748b;font-size:13px;border-top:1px dashed #d6d3d1;padding-top:6px;">Solde (70%) à la fin des travaux : <strong>${solde70}</strong></p>
 </div>
 <div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 12px;">
-<p style="margin:0 0 8px;color:#1e293b;font-weight:700;font-size:14px;">Comment proceder:</p>
-<p style="margin:0 0 4px;color:#475569;font-size:13px;">1. Choisissez vos dates de travaux</p>
-<p style="margin:0 0 4px;color:#475569;font-size:13px;">2. Signez le contrat</p>
-<p style="margin:0 0 0;color:#475569;font-size:13px;">3. <a href="https://novus-epoxy.vercel.app/paiement/${quote.id}?token=${encodeURIComponent(secretToken)}" style="color:#2563eb;text-decoration:underline;">Payez le depot (30%)</a> dans les 48h pour confirmer vos dates</p>
+<p style="margin:0 0 8px;color:#1e293b;font-weight:700;font-size:14px;">Prochaine etape :</p>
+<p style="margin:0;color:#475569;font-size:13px;">Choisissez vos dates de travaux pour reserver votre place. Ensuite, vous pourrez signer le contrat et confirmer avec le depot.</p>
 </div>
-<div style="text-align:center;margin:0 0 8px;">
+<div style="text-align:center;margin:0 0 12px;">
 <a href="https://novus-epoxy.vercel.app/reservation/${quote.id}?token=${encodeURIComponent(secretToken)}"
-   style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
-  Choisir vos dates
+   style="display:inline-block;background:#f59e0b;color:#0f172a;padding:16px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:17px;">
+  Choisir mes dates de travaux
 </a>
-</div>
-<div style="text-align:center;margin:0 0 8px;">
-<a href="https://novus-epoxy.vercel.app/contrat/${quote.id}?token=${encodeURIComponent(secretToken)}"
-   style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
-  Signer le contrat
-</a>
-</div>
-<div style="text-align:center;margin:0 0 8px;">
-<a href="https://novus-epoxy.vercel.app/paiement/${quote.id}?token=${encodeURIComponent(secretToken)}"
-   style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
-  Payer le depot (30%)
-</a>
-</div>
-<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:12px;margin:0 0 12px;">
-<p style="margin:0;color:#92400e;font-weight:600;font-size:13px;">Payer le depot de 30% dans les 48h suivant la signature du contrat en ligne ou par virement Interac a gestionnovusepoxy@gmail.com pour confirmer vos dates.</p>
 </div>
 <div style="background:#f1f5f9;border-radius:6px;padding:10px;margin:0 0 12px;font-size:12px;color:#475569;">
 <strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>

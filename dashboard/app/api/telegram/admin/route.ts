@@ -807,9 +807,16 @@ export async function POST(req: NextRequest) {
 <p>Bonjour ${q.client_nom},</p>
 <p>Nous avons bien recu votre depot de <strong>${formatMoney(Number(q.depot_requis))}</strong>.</p>
 <p style="color:#16a34a;font-weight:600;">Vos dates de travaux sont maintenant confirmees!</p>
-<p style="color:#64748b;font-size:13px;">Le solde de ${formatMoney(Number(q.total) - Number(q.depot_requis))} sera a payer a la fin des travaux.</p>
-<p style="color:#64748b;font-size:13px;">Questions? Contactez-nous:<br/>
-<strong>Luca:</strong> 581-307-5983 | <strong>Jason:</strong> 581-307-2678</p>
+<p style="color:#475569;font-size:14px;">Nous vous contacterons la veille de vos travaux avec les details d'arrivee de l'equipe.</p>
+<div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:16px 0;">
+<p style="margin:0 0 4px;color:#1e293b;font-weight:700;">Solde restant (70%) :</p>
+<p style="margin:0 0 8px;color:#475569;font-size:13px;">Le solde de <strong>${formatMoney(Number(q.total) - Number(q.depot_requis))}</strong> sera a payer a la fin des travaux.</p>
+<p style="margin:0;color:#94a3b8;font-size:12px;">Vous recevrez un lien de paiement a la completion des travaux.</p>
+</div>
+<div style="background:#f1f5f9;border-radius:6px;padding:10px;margin:0 0 12px;font-size:12px;color:#475569;">
+<strong>Facturation / Soumission :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
+<strong>Chantier / Soumission :</strong> Jason — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>
+</div>
 </div></div></body></html>`;
 
           sendEmail({ to: q.client_email as string, subject: `Depot recu — Novus Epoxy #${quoteId}`, html })

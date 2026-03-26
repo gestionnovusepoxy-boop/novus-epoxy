@@ -101,6 +101,50 @@ export async function POST(req: NextRequest) {
     } catch (err) { console.error('Booking notification email failed:', err); }
   }
 
+  // Email client — next step: sign contract
+  if (q.client_email) {
+    const secretToken = q.secret_token as string;
+    const j1 = new Date(jour1Date + 'T12:00:00');
+    const j2 = new Date(jour2Date + 'T12:00:00');
+    const fmtDate = (d: Date) => d.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
+    const slotText = jour2Slot === 'matin' ? '8h a 12h' : '12h a 16h';
+
+    try {
+      await sendEmail({
+        to: q.client_email as string,
+        subject: `Dates confirmees — Prochaine etape: signer le contrat — Novus Epoxy #${quoteId}`,
+        html: `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:16px;background:#ffffff;">
+<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #e2e8f0;margin-bottom:16px;"><tr>
+<td style="padding:12px 0;text-align:center;">
+<img src="https://novus-epoxy.vercel.app/logo-email.jpg" alt="Novus Epoxy" width="100" height="100" style="border-radius:8px;" />
+</td></tr></table>
+<h2 style="color:#1e293b;margin:0 0 12px;font-size:20px;">Vos dates sont reservees!</h2>
+<p style="margin:0 0 12px;">Bonjour ${escapeHtml(q.client_nom as string)},</p>
+<div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:16px;margin:0 0 16px;">
+<p style="margin:0 0 6px;font-weight:700;color:#166534;">Dates provisoires :</p>
+<p style="margin:0 0 4px;color:#1e293b;">📆 <strong>Jour 1 (preparation):</strong> ${fmtDate(j1)} — 8h a 12h</p>
+<p style="margin:0;color:#1e293b;">📆 <strong>Jour 2 (finition):</strong> ${fmtDate(j2)} — ${slotText}</p>
+</div>
+<div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 16px;">
+<p style="margin:0 0 4px;color:#1e293b;font-weight:700;">Prochaine etape :</p>
+<p style="margin:0;color:#475569;font-size:13px;">Signez le contrat pour officialiser votre reservation. Vos dates seront confirmees des la reception du depot.</p>
+</div>
+<div style="text-align:center;margin:0 0 16px;">
+<a href="https://novus-epoxy.vercel.app/contrat/${quoteId}?token=${encodeURIComponent(secretToken)}"
+   style="display:inline-block;background:#0f172a;color:#ffffff;padding:16px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:17px;">
+  Signer le contrat
+</a>
+</div>
+<div style="background:#f1f5f9;border-radius:6px;padding:10px;margin:0 0 12px;font-size:12px;color:#475569;">
+<strong>Facturation / Soumission :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
+<strong>Chantier / Soumission :</strong> Jason — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>
+</div>
+</div></body></html>`,
+      });
+    } catch (err) { console.error('Client booking email failed:', err); }
+  }
+
   // SMS to admins (both Luca + Jason) with dashboard link
   const adminPhones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];
   const smsText = `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} AM, Jour 2: ${jour2Date} ${jour2Slot === 'matin' ? 'AM' : 'PM'}. Devis #${quoteId}\nhttps://novus-epoxy.vercel.app/dashboard/devis`;
