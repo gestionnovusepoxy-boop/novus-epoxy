@@ -307,28 +307,22 @@ Reponds en JSON strict (sans markdown):
     return;
   }
 
-  // 6. Send reply email via Gmail with branding
+  // 6. Notify admins with suggested reply (no auto-send)
   if (parsed.reponse) {
-    const replyHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
-      <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
-        <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
-      </div>
-      <div style="padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
-        <p style="color:#1e293b;line-height:1.6;">${parsed.reponse.replace(/\n/g, '<br/>')}</p>
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
-        <p style="color:#64748b;font-size:12px;margin:0;">
-          Novus Epoxy — Planchers epoxy haut de gamme<br/>
-          RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/>
-          581-307-5983 (Luca) | 581-307-2678 (Jason) | <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
-        </p>
-      </div>
-    </div>`;
-
-    await sendEmail({
-      to: fromEmail,
-      subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
-      html: replyHtml,
-    }).catch(() => {});
+    for (const chatId of ADMIN_CHAT_IDS()) {
+      await sendTelegram(chatId, [
+        `👤 <b>Lead CRM a repondu</b>`,
+        ``,
+        `De: ${fromEmail}`,
+        `Sujet: ${subject}`,
+        `🏷 ${parsed.type} — ${parsed.intent}`,
+        ``,
+        `💡 <b>Reponse suggeree:</b>`,
+        `<i>${parsed.reponse.slice(0, 500)}</i>`,
+        ``,
+        `⚠️ Reponse NON envoyee — approuver manuellement`,
+      ].join('\n'));
+    }
   }
 
   // 7. Save conversation history to kv_store (keep last 10 exchanges)
@@ -651,24 +645,17 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === CLIENT: Auto-reply + notify admins on Telegram ===
+    // === CLIENT: Notify admins with suggested reply (no auto-send) ===
     if (analysis.type === 'client' && analysis.reply_suggestion) {
-      // Check if already replied to this email (dedup by Gmail message ID)
-      const alreadyReplied = await query(
+      const alreadyProcessed = await query(
         `SELECT id FROM email_logs WHERE resend_id = $1`,
         [`gmail-${msg.id}`],
       );
-      if (alreadyReplied.length === 0) {
-        // Mark as processed immediately to prevent duplicate from parallel runs
+      if (alreadyProcessed.length === 0) {
         await query(
           `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
-          [`gmail-${msg.id}`, fromEmail, subject ? `Re: ${subject}` : 'Auto-reply', 'processing'],
+          [`gmail-${msg.id}`, fromEmail, subject, 'pending_approval'],
         );
-        try {
-          await processAutoReply(fromEmail, subject, analysis.reply_suggestion);
-          await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`gmail-${msg.id}`]);
-          repliesSent++;
-        } catch { /* ignore reply errors */ }
 
         for (const chatId of ADMIN_CHAT_IDS()) {
           await sendTelegram(chatId,
@@ -676,8 +663,8 @@ export async function GET(req: NextRequest) {
             `De: ${fromHeader}\n` +
             `Sujet: ${subject}\n\n` +
             `📋 ${analysis.summary}\n` +
-            `\n✅ Reponse auto envoyee:\n<i>${(analysis.reply_suggestion ?? '').slice(0, 500)}</i>` +
-            `\n\nhttps://novus-epoxy.vercel.app/dashboard/devis`,
+            `\n💡 <b>Reponse suggeree:</b>\n<i>${(analysis.reply_suggestion ?? '').slice(0, 500)}</i>` +
+            `\n\n⚠️ Reponse NON envoyee — approuver manuellement si necessaire`,
           );
         }
         alertsSent++;
