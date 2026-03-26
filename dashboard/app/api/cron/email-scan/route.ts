@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { query } from '@/lib/db';
+import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 
 const CRON_SECRET = () => process.env.CRON_SECRET ?? '';
 const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
@@ -169,6 +170,156 @@ async function processAutoReply(
   );
 }
 
+async function handleLeadFollowUp(
+  msgId: string,
+  fromEmail: string,
+  subject: string,
+  bodyText: string,
+  leadId: number,
+  leadNom: string,
+): Promise<void> {
+  const histKey = `lead_email_${fromEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
+
+  const alreadyHandled = await query(`SELECT id FROM email_logs WHERE resend_id = $1`, [`lead-${msgId}`]);
+  if (alreadyHandled.length > 0) return;
+
+  await query(
+    `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1,$2,$3,'processing')`,
+    [`lead-${msgId}`, fromEmail, subject]
+  );
+
+  const histRow = await query(`SELECT value FROM kv_store WHERE key = $1`, [histKey]);
+  const history: { step: string; collected: Record<string, string> } = histRow.length > 0
+    ? JSON.parse(histRow[0].value as string)
+    : { step: 'initial', collected: {} };
+
+  const apiKey = ANTHROPIC_KEY();
+  const alreadyCollected = Object.entries(history.collected).map(([k, v]) => `${k}: ${v}`).join(', ') || 'rien';
+
+  const promptRes = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 800,
+      messages: [{ role: 'user', content: `Tu geres le suivi par email pour Novus Epoxy (planchers epoxy, Quebec).
+Un prospect (${leadNom}) a repondu a notre email de prospection initial envoye par Jason.
+
+Infos deja collectees: ${alreadyCollected}
+Infos encore manquantes: ${['service','superficie','adresse'].filter(k => !history.collected[k]).join(', ')}
+
+Message du prospect:
+---
+${bodyText.slice(0, 2000)}
+---
+
+Instructions:
+1. Extrait toute info utile du message (type de service, superficie, adresse/ville)
+2. Si infos manquantes: pose UNE SEULE question (la plus importante en premier: service → superficie → adresse)
+3. Si tu as service + superficie + adresse → statut = "complet"
+4. Offre les options: continuer par email, appeler 581-307-2678, ou formulaire novusepoxy.ca/#contact
+5. Sois chaleureux, professionnel, francais. MAX 120 mots. NE JAMAIS donner de prix.
+6. Signe "L'equipe Novus Epoxy"
+
+JSON strict:
+{"service":"flake|metallique|commercial|quartz|couleur_unie|null","superficie":"nombre pi2 ou null","adresse":"adresse ou ville ou null","statut":"en_cours|complet","reponse":"texte email"}` }],
+    }),
+  });
+
+  if (!promptRes.ok) {
+    await query(`UPDATE email_logs SET statut = 'error' WHERE resend_id = $1`, [`lead-${msgId}`]);
+    return;
+  }
+
+  const promptData = await promptRes.json();
+  let parsed: { service?: string; superficie?: string; adresse?: string; statut: string; reponse: string };
+  try {
+    parsed = JSON.parse((promptData.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+  } catch {
+    await query(`UPDATE email_logs SET statut = 'error' WHERE resend_id = $1`, [`lead-${msgId}`]);
+    return;
+  }
+
+  const newCollected = { ...history.collected };
+  if (parsed.service && parsed.service !== 'null') newCollected.service = parsed.service;
+  if (parsed.superficie && parsed.superficie !== 'null') newCollected.superficie = parsed.superficie;
+  if (parsed.adresse && parsed.adresse !== 'null') newCollected.adresse = parsed.adresse;
+
+  await query(
+    `INSERT INTO kv_store (key, value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+    [histKey, JSON.stringify({ step: parsed.statut, collected: newCollected })]
+  );
+
+  await query(`UPDATE crm_leads SET statut = 'contacte', updated_at = NOW() WHERE id = $1`, [leadId]);
+
+  const resendKey = process.env.RESEND_API_KEY;
+  const from = process.env.EMAIL_FROM ?? 'info@novusepoxy.ca';
+  if (resendKey && parsed.reponse) {
+    await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        from,
+        to: [fromEmail],
+        subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+          <p>${parsed.reponse.replace(/\n/g, '<br/>')}</p>
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
+          <p style="color:#64748b;font-size:12px;">Novus Epoxy — Planchers epoxy haut de gamme<br/>
+          581-307-5983 | novusepoxy.ca</p>
+        </div>`,
+      }),
+    }).catch(() => {});
+  }
+
+  await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`lead-${msgId}`]);
+
+  if (parsed.statut === 'complet' && newCollected.service && newCollected.superficie) {
+    const surf = parseFloat((newCollected.superficie).replace(/[^\d.]/g, ''));
+    const validServices: ServiceType[] = ['flake', 'metallique', 'commercial', 'quartz', 'couleur_unie'];
+    const serviceKey: ServiceType = validServices.includes(newCollected.service as ServiceType)
+      ? (newCollected.service as ServiceType) : 'flake';
+
+    if (!isNaN(surf) && surf > 0) {
+      try {
+        const calc = calculateQuote(serviceKey, surf);
+        const quoteRows = await query(
+          `INSERT INTO quotes (client_nom, client_email, client_adresse, type_service, superficie,
+           prix_pied_carre, sous_total, tps, tvq, total, depot_requis, statut, notes)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'brouillon',$12) RETURNING id`,
+          [leadNom, fromEmail, newCollected.adresse || '', serviceKey, surf,
+           calc.prix_pied_carre, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
+           `Lead CRM #${leadId} — collecte via email`]
+        );
+        const quoteId = (quoteRows[0] as { id: number }).id;
+        await query(`UPDATE crm_leads SET statut = 'devis_envoye', updated_at = NOW() WHERE id = $1`, [leadId]);
+
+        for (const chatId of ADMIN_CHAT_IDS()) {
+          await sendTelegram(chatId, [
+            `📧 Lead CRM a repondu — Devis pret!`,
+            ``,
+            `👤 ${leadNom} (${fromEmail})`,
+            `🔧 ${SERVICES[serviceKey]?.label || serviceKey} — ${surf} pi²`,
+            newCollected.adresse ? `📍 ${newCollected.adresse}` : '',
+            `💰 Total: ${formatMoney(calc.total)}`,
+            ``,
+            `Devis #${quoteId} en brouillon — approuver:`,
+            `https://novus-epoxy.vercel.app/dashboard/devis`,
+          ].filter(Boolean).join('\n'));
+        }
+      } catch { /* quote creation failed */ }
+    }
+  } else {
+    for (const chatId of ADMIN_CHAT_IDS()) {
+      await sendTelegram(chatId, [
+        `📧 Lead CRM a repondu: ${leadNom}`,
+        Object.entries(newCollected).map(([k, v]) => `${k}: ${v}`).join(' | '),
+        `En cours — collecte d'infos`,
+      ].filter(Boolean).join('\n'));
+    }
+  }
+}
+
 // POST handler — allows external triggers (e.g., cron-job.org, Gmail push)
 export async function POST(req: NextRequest) {
   return GET(req);
@@ -335,6 +486,17 @@ export async function GET(req: NextRequest) {
         } catch { /* skip attachment errors */ }
         break; // Only process first attachment
       }
+    }
+
+    // Check if sender is a CRM lead replying to Jason's outreach
+    const crmLeadRows = await query(
+      `SELECT id, nom FROM crm_leads WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+      [fromEmail]
+    );
+    if (crmLeadRows.length > 0) {
+      const lead = crmLeadRows[0] as { id: number; nom: string };
+      await handleLeadFollowUp(msg.id, fromEmail, subject, bodyText, lead.id, lead.nom);
+      continue;
     }
 
     // Analyze with Claude
