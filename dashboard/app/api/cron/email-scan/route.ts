@@ -307,21 +307,46 @@ Reponds en JSON strict (sans markdown):
     return;
   }
 
-  // 6. Notify admins with suggested reply (no auto-send)
+  // 6. Send reply email via Gmail with branding + notify admins
   if (parsed.reponse) {
+    const replyHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
+      <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
+        <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
+      </div>
+      <div style="padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+        <p style="color:#1e293b;line-height:1.6;">${parsed.reponse.replace(/\n/g, '<br/>')}</p>
+        <div style="text-align:center;margin:24px 0;">
+          <a href="https://novusepoxy.ca/#contact" style="background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">Demander ma soumission gratuite</a>
+        </div>
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
+        <p style="color:#64748b;font-size:12px;margin:0;">
+          Novus Epoxy — Planchers epoxy haut de gamme<br/>
+          RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/>
+          581-307-5983 (Luca) | 581-307-2678 (Jason) | <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
+        </p>
+      </div>
+    </div>`;
+
+    await sendEmail({
+      to: fromEmail,
+      subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+      html: replyHtml,
+    }).catch(() => {});
+
+    // Notify admins on Telegram
     for (const chatId of ADMIN_CHAT_IDS()) {
       await sendTelegram(chatId, [
-        `👤 <b>Lead CRM a repondu</b>`,
+        `🤖 <b>Closer — reponse envoyee</b>`,
         ``,
-        `De: ${fromEmail}`,
-        `Sujet: ${subject}`,
+        `👤 ${leadNom} (${fromEmail})`,
         `🏷 ${parsed.type} — ${parsed.intent}`,
+        parsed.service_detecte && parsed.service_detecte !== 'null' ? `🔧 ${parsed.service_detecte}` : '',
+        parsed.superficie_detectee && parsed.superficie_detectee !== 'null' ? `📐 ${parsed.superficie_detectee} pi²` : '',
         ``,
-        `💡 <b>Reponse suggeree:</b>`,
-        `<i>${parsed.reponse.slice(0, 500)}</i>`,
+        `💬 <i>${parsed.reponse.slice(0, 400)}</i>`,
         ``,
-        `⚠️ Reponse NON envoyee — approuver manuellement`,
-      ].join('\n'));
+        `https://novus-epoxy.vercel.app/dashboard/crm`,
+      ].filter(Boolean).join('\n'));
     }
   }
 
@@ -528,18 +553,21 @@ export async function GET(req: NextRequest) {
     } catch { /* ignore */ }
 
     // Skip our own emails
-    if (fromEmail.includes('novusepoxy')) continue;
+    if (fromEmail.includes('novusepoxy') || fromEmail.includes('gestionnovusepoxy')) continue;
 
-    // Skip auto-replies (noreply, mailer-daemon, auto-responders)
+    // Skip auto-replies, newsletters, notifications, bulk senders
     const autoSubmitted = headers.find(h => h.name?.toLowerCase() === 'auto-submitted')?.value ?? '';
     const precedence = headers.find(h => h.name?.toLowerCase() === 'precedence')?.value ?? '';
+    const listUnsubscribe = headers.find(h => h.name?.toLowerCase() === 'list-unsubscribe')?.value ?? '';
     const isAutoReply =
       autoSubmitted.includes('auto-replied') ||
       autoSubmitted.includes('auto-generated') ||
       precedence === 'bulk' ||
+      precedence === 'list' ||
       precedence === 'auto_reply' ||
-      /noreply|no-reply|mailer-daemon|postmaster/i.test(fromEmail) ||
-      /\b(auto.?r[eé]ponse|auto.?reply|out of office|absence|r[eé]ception de votre message)\b/i.test(subject);
+      listUnsubscribe.length > 0 ||
+      /noreply|no-reply|no_reply|mailer-daemon|postmaster|notifications?@|newsletter|updates?@|support@|billing@|info@.*\.(com|ca|net|org)|marketing@|promo|digest/i.test(fromEmail) ||
+      /\b(auto.?r[eé]ponse|auto.?reply|out of office|absence|r[eé]ception de votre message|unsubscribe|d[eé]sabonne|newsletter)\b/i.test(subject);
     if (isAutoReply) {
       console.log(`[Email Scan] Skipping auto-reply from ${fromEmail}: ${subject}`);
       try {
@@ -645,26 +673,54 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === CLIENT: Notify admins with suggested reply (no auto-send) ===
+    // === CLIENT: Auto-reply + notify admins ===
     if (analysis.type === 'client' && analysis.reply_suggestion) {
-      const alreadyProcessed = await query(
+      const alreadyReplied = await query(
         `SELECT id FROM email_logs WHERE resend_id = $1`,
         [`gmail-${msg.id}`],
       );
-      if (alreadyProcessed.length === 0) {
+      if (alreadyReplied.length === 0) {
         await query(
           `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
-          [`gmail-${msg.id}`, fromEmail, subject, 'processing'],
+          [`gmail-${msg.id}`, fromEmail, subject ? `Re: ${subject}` : 'Auto-reply', 'processing'],
         );
+        try {
+          // Send branded reply with CTA to quote form
+          const clientReplyHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
+            <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
+              <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
+            </div>
+            <div style="padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+              <p style="color:#1e293b;line-height:1.6;">${analysis.reply_suggestion.replace(/\n/g, '<br/>')}</p>
+              <div style="text-align:center;margin:24px 0;">
+                <a href="https://novusepoxy.ca/#contact" style="background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">Demander ma soumission gratuite</a>
+              </div>
+              <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
+              <p style="color:#64748b;font-size:12px;margin:0;">
+                Novus Epoxy — Planchers epoxy haut de gamme<br/>
+                RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/>
+                581-307-5983 (Luca) | 581-307-2678 (Jason) | <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
+              </p>
+            </div>
+          </div>`;
+
+          await sendEmail({
+            to: fromEmail,
+            subject: subject ? `Re: ${subject}` : 'Novus Epoxy — Reponse',
+            html: clientReplyHtml,
+          });
+          await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`gmail-${msg.id}`]);
+          repliesSent++;
+        } catch { /* ignore reply errors */ }
 
         for (const chatId of ADMIN_CHAT_IDS()) {
           await sendTelegram(chatId,
-            `👤 <b>Email client recu</b>\n\n` +
+            `🤖 <b>Email client — reponse envoyee</b>\n\n` +
             `De: ${fromHeader}\n` +
             `Sujet: ${subject}\n\n` +
             `📋 ${analysis.summary}\n` +
-            `\n💡 <b>Reponse suggeree:</b>\n<i>${(analysis.reply_suggestion ?? '').slice(0, 500)}</i>` +
-            `\n\n⚠️ Reponse NON envoyee — approuver manuellement si necessaire`,
+            `\n💬 <i>${(analysis.reply_suggestion ?? '').slice(0, 400)}</i>` +
+            `\n\nhttps://novus-epoxy.vercel.app/dashboard/crm`,
           );
         }
         alertsSent++;
