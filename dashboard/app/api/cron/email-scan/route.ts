@@ -178,95 +178,159 @@ async function handleLeadFollowUp(
   leadId: number,
   leadNom: string,
 ): Promise<void> {
-  const histKey = `lead_email_${fromEmail.toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
-
+  // 1. Dedup check
   const alreadyHandled = await query(`SELECT id FROM email_logs WHERE resend_id = $1`, [`lead-${msgId}`]);
   if (alreadyHandled.length > 0) return;
 
+  // 2. Mark as processing
   await query(
     `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1,$2,$3,'processing')`,
     [`lead-${msgId}`, fromEmail, subject]
   );
 
-  const histRow = await query(`SELECT value FROM kv_store WHERE key = $1`, [histKey]);
-  const history: { step: string; collected: Record<string, string> } = histRow.length > 0
-    ? JSON.parse(histRow[0].value as string)
-    : { step: 'initial', collected: {} };
+  // 3. Load conversation history from kv_store
+  const sanitizedEmail = fromEmail.toLowerCase().replace(/[^a-z0-9]/g, '_');
+  const convKey = `lead_conv_${sanitizedEmail}`;
+  const convRow = await query(`SELECT value FROM kv_store WHERE key = $1`, [convKey]);
+  const conv: { exchanges: Array<{ role: 'lead' | 'novus'; content: string }>; type: string } =
+    convRow.length > 0
+      ? JSON.parse(convRow[0].value as string)
+      : { exchanges: [], type: '' };
 
+  const historyText = conv.exchanges.length > 0
+    ? conv.exchanges.map(e => `[${e.role === 'lead' ? 'CLIENT' : 'NOVUS EPOXY'}]: ${e.content}`).join('\n\n')
+    : 'Aucun historique — premier contact.';
+
+  // 4. Call Claude Sonnet 4.6 as closer agent
   const apiKey = ANTHROPIC_KEY();
-  const alreadyCollected = Object.entries(history.collected).map(([k, v]) => `${k}: ${v}`).join(', ') || 'rien';
-
-  const promptRes = await fetch('https://api.anthropic.com/v1/messages', {
+  const closerRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
-      max_tokens: 800,
-      messages: [{ role: 'user', content: `Tu geres le suivi par email pour Novus Epoxy (planchers epoxy, Quebec).
-Un prospect (${leadNom}) a repondu a notre email de prospection initial envoye par Jason.
+      max_tokens: 1200,
+      system: `Tu es l'agent commercial senior de Novus Epoxy (planchers epoxy premium, Quebec). Tu reponds au nom de l'equipe Novus Epoxy.
 
-Infos deja collectees: ${alreadyCollected}
+MISSION: Analyser l'email, identifier l'intention, generer une reponse qui maximise la conversion. Tu es un CLOSER — pas un robot.
 
-Message du prospect:
+TYPES DE LEADS:
+- CLIENT_RESIDENTIEL: garage, sous-sol, balcon, escalier, condo
+- CLIENT_COMMERCIAL: restaurant, entrepot, commerce, bureau, industriel
+- SOUS_TRAITANT: entrepreneur, renovateur, peintre qui veut travailler avec nous
+- QUESTION_GENERALE: curieux, veut en savoir plus sur les services
+- CONCURRENT: competitor fishing pour info
+- NON_INTERESSE: se desabonne ou mauvais destinataire
+- SPAM
+
+STRATEGIE:
+CLIENT (residentiel ou commercial):
+- Reconnais le projet specifiquement
+- Montre l'expertise (types epoxy, durabilite, processus 2 jours)
+- Si demande prix: donne les fourchettes ci-dessous, ancre sur valeur (garantie 10 ans, RBQ, 15 ans experience)
+- Urgence naturelle: "on commence a avoir les agendas charges pour le printemps"
+- Push: formulaire https://novusepoxy.ca/#contact (choisissent leurs couleurs)
+- Alternative: appeler Luca 581-307-5983 ou Jason 581-307-2678
+
+SOUS_TRAITANT:
+- Professionnel et ouvert
+- Demande specialite, region, capacite
+- "Jason vous contactera sous peu"
+
+QUESTION_GENERALE: reponds avec expertise, transforme en opportunite de quote
+
+CONCURRENT / NON_INTERESSE: reponse courte polie, rien de plus
+
+PRIX (donner si demandes, pas d'hesitation):
+- Flake/flocon (garage, sous-sol): a partir de 8.50$/pi²
+- Metallique (premium): a partir de 12.75$/pi²
+- Quartz (balcons, ext): a partir de 11$/pi²
+- Commercial/industriel: a partir de 15$/pi²
+- Prix final selon superficie, preparation beton, complexite — soumission gratuite
+
+REGLES:
+- Francais quebecois professionnel et chaleureux, MAX 180 mots
+- NE JAMAIS citer un prix exact ou faire une promesse ferme
+- Signe: "L'equipe Novus Epoxy"
+- RBQ: 5861-8471-01 | Garantie 10 ans | 15 ans d'experience`,
+      messages: [{
+        role: 'user',
+        content: `Nom du lead: ${leadNom}
+Email: ${fromEmail}
+
+Historique de la conversation:
+${historyText}
+
+Nouveau message recu:
 ---
 ${bodyText.slice(0, 2000)}
 ---
 
-Instructions:
-1. Extrait TOUTES les infos du message (service, superficie, adresse/ville)
-2. Si statut = "initial" (premier contact): envoie UNE reponse avec la LISTE COMPLETE des infos dont tu as besoin (service, superficie, adresse) — ne pas les poser une par une sur plusieurs emails
-3. Si le client a deja fourni des infos: extrait ce qu'il a donne, et si il manque encore des elements, demande uniquement ce qui manque
-4. Si tu as service + superficie + adresse → statut = "complet"
-5. TOUJOURS proposer EN PREMIER le formulaire (le meilleur choix — le client peut choisir ses couleurs et options): https://novusepoxy.ca/#contact
-6. Ensuite offrir les alternatives: appeler Luca (581-307-5983) ou Jason (581-307-2678), OU repondre par email avec les infos
-7. Chaleureux, professionnel, francais. MAX 150 mots. NE JAMAIS donner de prix.
-8. Signe "L'equipe Novus Epoxy"
-
-Structure de la reponse:
-- Remercie le client d'avoir repondu
-- Recommande le formulaire en premier (rapide, peut choisir couleurs/options)
-- Donne les alternatives (appel ou email)
-- Si le client a deja fourni des infos: reconnais-le et indique que le formulaire permet de preciser les details
-
-Infos necessaires (si le client veut repondre par email):
-- Type de service (metallique, flake/flocon, commercial, quartz, couleur unie)
-- Superficie approximative
-- Adresse ou ville
-
-JSON strict:
-{"service":"flake|metallique|commercial|quartz|couleur_unie|null","superficie":"nombre pi2 ou null","adresse":"adresse ou ville ou null","statut":"en_cours|complet","reponse":"texte email"}` }],
+Reponds en JSON strict (sans markdown):
+{
+  "type": "CLIENT_RESIDENTIEL|CLIENT_COMMERCIAL|SOUS_TRAITANT|QUESTION_GENERALE|CONCURRENT|NON_INTERESSE|SPAM",
+  "intent": "1 phrase resume",
+  "priority": "haute|normale|basse",
+  "reponse": "texte complet de la reponse email",
+  "service_detecte": "flake|metallique|commercial|quartz|couleur_unie|null",
+  "superficie_detectee": "nombre string ou null",
+  "adresse_detectee": "adresse/ville ou null",
+  "info_complete": true/false
+}`,
+      }],
     }),
   });
 
-  if (!promptRes.ok) {
+  if (!closerRes.ok) {
     await query(`UPDATE email_logs SET statut = 'error' WHERE resend_id = $1`, [`lead-${msgId}`]);
     return;
   }
 
-  const promptData = await promptRes.json();
-  let parsed: { service?: string; superficie?: string; adresse?: string; statut: string; reponse: string };
+  const closerData = await closerRes.json();
+  const rawText = (closerData.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  let parsed: {
+    type: string;
+    intent: string;
+    priority: string;
+    reponse: string;
+    service_detecte: string | null;
+    superficie_detectee: string | null;
+    adresse_detectee: string | null;
+    info_complete: boolean;
+  };
   try {
-    parsed = JSON.parse((promptData.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+    const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+    parsed = JSON.parse(jsonMatch?.[0] ?? '{}');
   } catch {
     await query(`UPDATE email_logs SET statut = 'error' WHERE resend_id = $1`, [`lead-${msgId}`]);
     return;
   }
 
-  const newCollected = { ...history.collected };
-  if (parsed.service && parsed.service !== 'null') newCollected.service = parsed.service;
-  if (parsed.superficie && parsed.superficie !== 'null') newCollected.superficie = parsed.superficie;
-  if (parsed.adresse && parsed.adresse !== 'null') newCollected.adresse = parsed.adresse;
+  // 5. If spam/concurrent/non-interesse: close lead
+  if (['SPAM', 'CONCURRENT', 'NON_INTERESSE'].includes(parsed.type)) {
+    await query(`UPDATE crm_leads SET statut = 'ferme', updated_at = NOW() WHERE id = $1`, [leadId]);
+    await query(`UPDATE email_logs SET statut = 'skipped' WHERE resend_id = $1`, [`lead-${msgId}`]);
+    return;
+  }
 
-  await query(
-    `INSERT INTO kv_store (key, value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value = $2`,
-    [histKey, JSON.stringify({ step: parsed.statut, collected: newCollected })]
-  );
-
-  await query(`UPDATE crm_leads SET statut = 'contacte', updated_at = NOW() WHERE id = $1`, [leadId]);
-
+  // 6. Send reply email via Resend with branding
   const resendKey = process.env.RESEND_API_KEY;
   const from = process.env.EMAIL_FROM ?? 'info@novusepoxy.ca';
   if (resendKey && parsed.reponse) {
+    const replyHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
+      <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
+        <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
+      </div>
+      <div style="padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+        <p style="color:#1e293b;line-height:1.6;">${parsed.reponse.replace(/\n/g, '<br/>')}</p>
+        <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
+        <p style="color:#64748b;font-size:12px;margin:0;">
+          Novus Epoxy — Planchers epoxy haut de gamme<br/>
+          RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/>
+          581-307-5983 (Luca) | 581-307-2678 (Jason) | <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
+        </p>
+      </div>
+    </div>`;
+
     await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
@@ -274,23 +338,45 @@ JSON strict:
         from,
         to: [fromEmail],
         subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
-        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-          <p>${parsed.reponse.replace(/\n/g, '<br/>')}</p>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
-          <p style="color:#64748b;font-size:12px;">Novus Epoxy — Planchers epoxy haut de gamme<br/>
-          581-307-5983 | novusepoxy.ca</p>
-        </div>`,
+        html: replyHtml,
       }),
     }).catch(() => {});
   }
 
+  // 7. Save conversation history to kv_store (keep last 10 exchanges)
+  const newExchanges = [
+    ...conv.exchanges,
+    { role: 'lead' as const, content: bodyText.slice(0, 1000) },
+    { role: 'novus' as const, content: parsed.reponse },
+  ].slice(-10);
+  await query(
+    `INSERT INTO kv_store (key, value) VALUES ($1,$2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+    [convKey, JSON.stringify({ exchanges: newExchanges, type: parsed.type })]
+  );
+
+  // 8. Update crm_leads statut + temperature + last_agent_reply_at
+  const temperature = parsed.priority === 'haute' ? 'chaud' : parsed.priority === 'basse' ? 'froid' : 'tiede';
+  await query(
+    `UPDATE crm_leads SET statut = 'contacte', temperature = $1, last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $2`,
+    [temperature, leadId]
+  );
+
+  // 9. Mark email_logs as sent
   await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`lead-${msgId}`]);
 
-  if (parsed.statut === 'complet' && newCollected.service && newCollected.superficie) {
-    const surf = parseFloat((newCollected.superficie).replace(/[^\d.]/g, ''));
+  // 10. If info_complete + service + superficie: create draft quote, notify admins with details
+  if (
+    parsed.info_complete &&
+    parsed.service_detecte &&
+    parsed.service_detecte !== 'null' &&
+    parsed.superficie_detectee &&
+    parsed.superficie_detectee !== 'null'
+  ) {
+    const surf = parseFloat(String(parsed.superficie_detectee).replace(/[^\d.]/g, ''));
     const validServices: ServiceType[] = ['flake', 'metallique', 'commercial', 'quartz', 'couleur_unie'];
-    const serviceKey: ServiceType = validServices.includes(newCollected.service as ServiceType)
-      ? (newCollected.service as ServiceType) : 'flake';
+    const serviceKey: ServiceType = validServices.includes(parsed.service_detecte as ServiceType)
+      ? (parsed.service_detecte as ServiceType)
+      : 'flake';
 
     if (!isNaN(surf) && surf > 0) {
       try {
@@ -299,34 +385,48 @@ JSON strict:
           `INSERT INTO quotes (client_nom, client_email, client_adresse, type_service, superficie,
            prix_pied_carre, sous_total, tps, tvq, total, depot_requis, statut, notes)
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'brouillon',$12) RETURNING id`,
-          [leadNom, fromEmail, newCollected.adresse || '', serviceKey, surf,
-           calc.prix_pied_carre, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
-           `Lead CRM #${leadId} — collecte via email`]
+          [
+            leadNom, fromEmail, parsed.adresse_detectee || '', serviceKey, surf,
+            calc.prix_pied_carre, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
+            `Lead CRM #${leadId} — agent closer`,
+          ]
         );
         const quoteId = (quoteRows[0] as { id: number }).id;
-        await query(`UPDATE crm_leads SET statut = 'devis_envoye', updated_at = NOW() WHERE id = $1`, [leadId]);
+        await query(
+          `UPDATE crm_leads SET statut = 'devis_envoye', updated_at = NOW() WHERE id = $1`,
+          [leadId]
+        );
 
         for (const chatId of ADMIN_CHAT_IDS()) {
           await sendTelegram(chatId, [
-            `📧 Lead CRM a repondu — Devis pret!`,
+            `🔥 <b>Lead pret pour devis!</b>`,
             ``,
             `👤 ${leadNom} (${fromEmail})`,
+            `🏷 ${parsed.type} — ${parsed.intent}`,
             `🔧 ${SERVICES[serviceKey]?.label || serviceKey} — ${surf} pi²`,
-            newCollected.adresse ? `📍 ${newCollected.adresse}` : '',
-            `💰 Total: ${formatMoney(calc.total)}`,
+            parsed.adresse_detectee ? `📍 ${parsed.adresse_detectee}` : '',
+            `💰 Total estimé: ${formatMoney(calc.total)}`,
             ``,
             `Devis #${quoteId} en brouillon — approuver:`,
             `https://novus-epoxy.vercel.app/dashboard/devis`,
           ].filter(Boolean).join('\n'));
         }
-      } catch { /* quote creation failed */ }
+      } catch { /* quote creation failed — still notify */ }
     }
   } else {
+    // 11. Notify admins with priority + summary
+    const emoji = parsed.priority === 'haute' ? '🔥' : parsed.priority === 'basse' ? '🔵' : '🟡';
     for (const chatId of ADMIN_CHAT_IDS()) {
       await sendTelegram(chatId, [
-        `📧 Lead CRM a repondu: ${leadNom}`,
-        Object.entries(newCollected).map(([k, v]) => `${k}: ${v}`).join(' | '),
-        `En cours — collecte d'infos`,
+        `${emoji} <b>Email lead CRM</b>`,
+        ``,
+        `👤 ${leadNom} (${fromEmail})`,
+        `🏷 ${parsed.type}`,
+        `💬 ${parsed.intent}`,
+        parsed.service_detecte && parsed.service_detecte !== 'null' ? `🔧 Service: ${parsed.service_detecte}` : '',
+        parsed.superficie_detectee && parsed.superficie_detectee !== 'null' ? `📐 Superficie: ${parsed.superficie_detectee} pi²` : '',
+        ``,
+        `https://novus-epoxy.vercel.app/dashboard/crm`,
       ].filter(Boolean).join('\n'));
     }
   }

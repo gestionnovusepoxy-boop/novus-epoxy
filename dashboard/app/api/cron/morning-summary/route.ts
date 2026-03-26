@@ -75,6 +75,29 @@ export async function GET(req: NextRequest) {
     []
   );
 
+  // CRM stats
+  const crmChauds = await query(
+    `SELECT COUNT(*)::int AS count FROM crm_leads WHERE temperature = 'chaud' AND statut NOT IN ('ferme', 'froid')`,
+    []
+  ).catch(() => [{ count: 0 }]);
+
+  const crmConversations = await query(
+    `SELECT COUNT(*)::int AS count FROM crm_leads WHERE statut = 'contacte'`,
+    []
+  ).catch(() => [{ count: 0 }]);
+
+  const crmQuotesToday = await query(
+    `SELECT COUNT(*)::int AS count FROM quotes
+     WHERE notes LIKE 'Lead CRM%' AND created_at::date = CURRENT_DATE`,
+    []
+  ).catch(() => [{ count: 0 }]);
+
+  const crmFroidsToday = await query(
+    `SELECT COUNT(*)::int AS count FROM crm_leads
+     WHERE statut = 'froid' AND updated_at::date = CURRENT_DATE`,
+    []
+  ).catch(() => [{ count: 0 }]);
+
   // Build message
   const subCount = (newSubs[0] as { count: number }).count;
   const pendingCount = (pendingQuotes[0] as { count: number }).count;
@@ -85,6 +108,10 @@ export async function GET(req: NextRequest) {
   const unreadCount = (unreadEmails[0] as { count: number }).count;
   const monthDep = Number((monthRevenue[0] as { deposits: number }).deposits);
   const monthBal = Number((monthRevenue[0] as { balances: number }).balances);
+  const crmChaudsCount = (crmChauds[0] as { count: number }).count;
+  const crmConvCount = (crmConversations[0] as { count: number }).count;
+  const crmQuotesCount = (crmQuotesToday[0] as { count: number }).count;
+  const crmFroidsCount = (crmFroidsToday[0] as { count: number }).count;
 
   const lines = [
     `☀️ <b>Résumé du matin — Novus Epoxy</b>`,
@@ -111,6 +138,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  lines.push('');
+  lines.push(`📊 <b>CRM Leads</b>`);
+  lines.push(`🔥 Chauds: ${crmChaudsCount} | 🟡 En conversation: ${crmConvCount} | 🔵 Froids aujourd'hui: ${crmFroidsCount}`);
+  lines.push(`Devis crees (CRM): ${crmQuotesCount}`);
   lines.push('');
   lines.push(`💰 <b>Revenus ce mois:</b> ${formatMoney(monthDep + monthBal)}`);
   lines.push('');
