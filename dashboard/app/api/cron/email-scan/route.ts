@@ -654,7 +654,7 @@ export async function GET(req: NextRequest) {
       if (alreadyProcessed.length === 0) {
         await query(
           `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
-          [`gmail-${msg.id}`, fromEmail, subject, 'pending_approval'],
+          [`gmail-${msg.id}`, fromEmail, subject, 'processing'],
         );
 
         for (const chatId of ADMIN_CHAT_IDS()) {
