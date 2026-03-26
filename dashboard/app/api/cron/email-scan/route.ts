@@ -153,8 +153,8 @@ function brandedEmailHtml(bodyHtml: string, showQuoteButton = true): string {
       <p style="color:#64748b;font-size:12px;margin:0;line-height:1.6;">
         <b>Novus Epoxy</b> — Planchers epoxy haut de gamme<br/>
         RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/><br/>
-        📞 <b>Luca</b> : <a href="tel:5813075983" style="color:#f59e0b;">581-307-5983</a><br/>
-        📞 <b>Jason</b> : <a href="tel:5813072678" style="color:#f59e0b;">581-307-2678</a><br/>
+        📞 <b>Luca</b> (facturation / soumission) : <a href="tel:5813075983" style="color:#f59e0b;">581-307-5983</a><br/>
+        📞 <b>Jason</b> (chantier / soumission) : <a href="tel:5813072678" style="color:#f59e0b;">581-307-2678</a><br/>
         🌐 <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
       </p>
     </div>
