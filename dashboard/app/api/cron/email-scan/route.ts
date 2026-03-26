@@ -139,29 +139,26 @@ IMPORTANT pour les clients:
   return JSON.parse(jsonMatch?.[0] ?? '{}');
 }
 
-async function processAutoReply(
-  fromEmail: string,
-  subject: string,
-  replyText: string,
-) {
-  if (!replyText) return;
-
-  await sendEmail({
-    to: fromEmail,
-    subject: subject ? `Re: ${subject}` : 'Novus Epoxy — Reponse',
-    html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-      <p>${replyText.replace(/\n/g, '<br/>')}</p>
-      <hr style="border:none;border-top:1px solid #e2e8f0;margin:30px 0;" />
-      <p style="color:#64748b;font-size:12px;">Novus Epoxy — Planchers epoxy haut de gamme<br/>
-      581-307-5983 | novusepoxy.ca</p>
-    </div>`,
-  });
-
-  // Log it
-  await query(
-    `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
-    ['auto-reply', fromEmail, subject ? `Re: ${subject}` : 'Auto-reply', 'sent'],
-  );
+function brandedEmailHtml(bodyHtml: string, showQuoteButton = true): string {
+  return `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
+    <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
+      <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
+    </div>
+    <div style="padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+      <div style="color:#1e293b;line-height:1.7;">${bodyHtml}</div>
+      ${showQuoteButton ? `<div style="text-align:center;margin:28px 0;">
+        <a href="https://novusepoxy.ca/#contact" style="background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;font-size:15px;">Demander ma soumission gratuite</a>
+      </div>` : ''}
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
+      <p style="color:#64748b;font-size:12px;margin:0;line-height:1.6;">
+        <b>Novus Epoxy</b> — Planchers epoxy haut de gamme<br/>
+        RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/><br/>
+        📞 <b>Luca</b> : <a href="tel:5813075983" style="color:#f59e0b;">581-307-5983</a><br/>
+        📞 <b>Jason</b> : <a href="tel:5813072678" style="color:#f59e0b;">581-307-2678</a><br/>
+        🌐 <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
+      </p>
+    </div>
+  </div>`;
 }
 
 async function handleLeadFollowUp(
@@ -309,23 +306,7 @@ Reponds en JSON strict (sans markdown):
 
   // 6. Send reply email via Gmail with branding + notify admins
   if (parsed.reponse) {
-    const replyHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
-      <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
-        <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
-      </div>
-      <div style="padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
-        <p style="color:#1e293b;line-height:1.6;">${parsed.reponse.replace(/\n/g, '<br/>')}</p>
-        <div style="text-align:center;margin:24px 0;">
-          <a href="https://novusepoxy.ca/#contact" style="background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">Demander ma soumission gratuite</a>
-        </div>
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
-        <p style="color:#64748b;font-size:12px;margin:0;">
-          Novus Epoxy — Planchers epoxy haut de gamme<br/>
-          RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/>
-          581-307-5983 (Luca) | 581-307-2678 (Jason) | <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
-        </p>
-      </div>
-    </div>`;
+    const replyHtml = brandedEmailHtml(`<p>${parsed.reponse.replace(/\n/g, '<br/>')}</p>`);
 
     await sendEmail({
       to: fromEmail,
@@ -686,28 +667,10 @@ export async function GET(req: NextRequest) {
         );
         try {
           // Send branded reply with CTA to quote form
-          const clientReplyHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
-            <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
-              <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
-            </div>
-            <div style="padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
-              <p style="color:#1e293b;line-height:1.6;">${analysis.reply_suggestion.replace(/\n/g, '<br/>')}</p>
-              <div style="text-align:center;margin:24px 0;">
-                <a href="https://novusepoxy.ca/#contact" style="background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:bold;display:inline-block;">Demander ma soumission gratuite</a>
-              </div>
-              <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
-              <p style="color:#64748b;font-size:12px;margin:0;">
-                Novus Epoxy — Planchers epoxy haut de gamme<br/>
-                RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/>
-                581-307-5983 (Luca) | 581-307-2678 (Jason) | <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
-              </p>
-            </div>
-          </div>`;
-
           await sendEmail({
             to: fromEmail,
             subject: subject ? `Re: ${subject}` : 'Novus Epoxy — Reponse',
-            html: clientReplyHtml,
+            html: brandedEmailHtml(`<p>${analysis.reply_suggestion.replace(/\n/g, '<br/>')}</p>`),
           });
           await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`gmail-${msg.id}`]);
           repliesSent++;
