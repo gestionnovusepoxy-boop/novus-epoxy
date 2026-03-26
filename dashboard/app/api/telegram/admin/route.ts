@@ -192,6 +192,18 @@ const TOOLS = [
     },
   },
   {
+    name: 'importer_leads_liste',
+    description: 'Importe une liste de leads en bulk dans la banque CRM. Chaque ligne = 1 lead. Accepte du texte brut, CSV, ou format libre. Utilise quand Jason envoie une liste de plusieurs contacts/leads a la fois.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        liste: { type: 'string', description: 'Liste brute des leads (une personne par ligne, format libre: nom, tel, email, service, ville)' },
+        source: { type: 'string', description: 'Source des leads (ex: champlain, google_ads, referencement, jason)', default: 'jason' },
+      },
+      required: ['liste'],
+    },
+  },
+  {
     name: 'traiter_lead_externe',
     description: 'Traite un lead/contact fourni par Jason ou Luca. Classifie le lead (chaud/tiede/froid), cree une fiche dans la base de donnees, genere un message de prospection personnalise et l\'envoie par SMS au client. A utiliser AUTOMATIQUEMENT des que Jason ou Luca fournit les coordonnees d\'un prospect (nom + telephone ou email). Jason dit par exemple "j\'ai un lead: Mario Tremblay 4186092084 garage flake" et le bot doit traiter ce lead sans qu\'on le lui demande explicitement.',
     input_schema: {
@@ -449,6 +461,76 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify(rows);
     }
 
+    case 'importer_leads_liste': {
+      const liste = (input.liste as string).trim();
+      const source = (input.source as string) || 'jason';
+
+      if (!liste) return JSON.stringify({ error: 'Liste vide' });
+
+      const apiKeyBulk = process.env.ANTHROPIC_API_KEY;
+      if (!apiKeyBulk) return JSON.stringify({ error: 'ANTHROPIC_API_KEY manquant' });
+
+      // Parse the list with Claude
+      const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKeyBulk, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 4000,
+          messages: [{ role: 'user', content: `Parse cette liste de leads pour une entreprise de planchers epoxy au Quebec. Extrait chaque personne.\n\nLISTE:\n${liste.slice(0, 8000)}\n\nReponds UNIQUEMENT avec un JSON array (pas de texte avant ou apres):\n[{"nom":"Prenom Nom","telephone":"10 chiffres ou vide","email":"email ou vide","service":"flake|metallique|commercial|quartz|couleur_unie ou vide","superficie":"nombre ou vide","ville":"ville ou vide","notes":"autres infos ou vide"}]` }],
+        }),
+      });
+
+      if (!parseRes.ok) return JSON.stringify({ error: 'Erreur parsing Claude' });
+
+      const parseData = await parseRes.json();
+      const rawText = (parseData.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+
+      let leads: Array<{ nom: string; telephone: string; email: string; service: string; superficie: string; ville: string; notes: string }> = [];
+      try {
+        leads = JSON.parse(rawText);
+      } catch {
+        return JSON.stringify({ error: 'Erreur parsing reponse Claude', raw: rawText.slice(0, 200) });
+      }
+
+      if (!Array.isArray(leads) || leads.length === 0) {
+        return JSON.stringify({ error: 'Aucun lead detecte dans la liste' });
+      }
+
+      // Bulk insert into crm_leads
+      let imported = 0;
+      let skipped = 0;
+      for (const lead of leads) {
+        if (!lead.nom || lead.nom.trim().length < 2) { skipped++; continue; }
+        try {
+          await query(
+            `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nouveau','tiede')`,
+            [
+              lead.nom.trim().slice(0, 120),
+              (lead.telephone || '').replace(/\D/g, '').slice(-10) || null,
+              (lead.email || '').slice(0, 255) || null,
+              lead.service || null,
+              lead.superficie || null,
+              (lead.ville || '').slice(0, 120) || null,
+              lead.notes || null,
+              source,
+            ]
+          );
+          imported++;
+        } catch { skipped++; }
+      }
+
+      return JSON.stringify({
+        ok: true,
+        importes: imported,
+        ignores: skipped,
+        total_detectes: leads.length,
+        source,
+        dashboard: 'https://novus-epoxy.vercel.app/dashboard/crm',
+      });
+    }
+
     case 'traiter_lead_externe': {
       const nom = (input.nom as string).trim();
       const telephone = ((input.telephone as string) || '').replace(/\D/g, '').slice(-10);
@@ -587,6 +669,7 @@ TU PEUX:
 - Lire et resumer les emails recus (Gmail)
 - Ajouter des photos au portfolio (envoie une photo avec caption "portfolio")
 - Scanner des recus/factures (envoie une photo du recu)
+- Importer une liste de leads en bulk dans la banque CRM (outil importer_leads_liste)
 - Traiter les leads externes fournis par Jason/Luca: classifier + envoyer SMS personnalise automatiquement
 - Analyser et classer les leads/soumissions recents (chaud/tiede/froid, urgence, action suggeree)
 - Repondre aux questions sur les clients et leur suivi
@@ -917,6 +1000,61 @@ export async function POST(req: NextRequest) {
     } catch (err) {
       console.error('Video upload error:', err);
       await sendTelegram(chatId, `Erreur upload video: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // Handle document uploads — CSV/TXT file = bulk lead import
+  if (message.document) {
+    const doc = message.document;
+    const fileName = (doc.file_name ?? '').toLowerCase();
+    const isLeadFile = fileName.endsWith('.csv') || fileName.endsWith('.txt') || fileName.endsWith('.xlsx') || (message.caption ?? '').toLowerCase().includes('lead');
+
+    if (!isLeadFile) {
+      await sendTelegram(chatId, `Fichier recu: ${doc.file_name}.\nPour importer des leads, envoie un fichier .csv ou .txt (ou ajoute la caption "leads").`);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (doc.file_size > 2 * 1024 * 1024) {
+      await sendTelegram(chatId, 'Fichier trop grand (max 2MB).');
+      return NextResponse.json({ ok: true });
+    }
+
+    await sendTelegram(chatId, `Fichier recu: ${doc.file_name}\nImportation en cours...`);
+
+    const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${doc.file_id}`);
+    const fileData = await fileRes.json();
+    const filePath = fileData.result?.file_path;
+    if (!filePath) {
+      await sendTelegram(chatId, 'Erreur: impossible de telecharger le fichier.');
+      return NextResponse.json({ ok: true });
+    }
+
+    const dlRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${filePath}`);
+    const fileText = await dlRes.text();
+
+    const caption = (message.caption ?? '').toLowerCase();
+    const source = caption.includes('champfield') ? 'champfield'
+      : caption.includes('google') ? 'google_ads'
+      : caption.includes('facebook') || caption.includes('meta') ? 'facebook'
+      : 'jason';
+
+    // Use the importer tool directly
+    const importResult = await executeTool('importer_leads_liste', { liste: fileText.slice(0, 12000), source });
+    const result = JSON.parse(importResult);
+
+    if (result.error) {
+      await sendTelegram(chatId, `Erreur import: ${result.error}`);
+    } else {
+      await sendTelegram(chatId, [
+        `Importation terminee!`,
+        ``,
+        `Importes: ${result.importes} leads`,
+        result.ignores > 0 ? `Ignores: ${result.ignores}` : '',
+        `Source: ${result.source}`,
+        ``,
+        `Voir dans le dashboard: ${result.dashboard}`,
+      ].filter(Boolean).join('\n'));
     }
     return NextResponse.json({ ok: true });
   }

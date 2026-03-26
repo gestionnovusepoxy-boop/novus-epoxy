@@ -20,9 +20,10 @@ const SECTIONS: NavSection[] = [
   {
     title: 'Clients & Ventes',
     links: [
-      { href: '/dashboard/clients',  label: 'Clients',  icon: '\u{1F465}' },
-      { href: '/dashboard/devis',    label: 'Devis',    icon: '\u{1F4DD}' },
-      { href: '/dashboard/factures', label: 'Factures', icon: '\u{1F9FE}' },
+      { href: '/dashboard/clients',  label: 'Clients',    icon: '\u{1F465}' },
+      { href: '/dashboard/crm',      label: 'CRM Leads', icon: '\u{1F4C7}' },
+      { href: '/dashboard/devis',    label: 'Devis',      icon: '\u{1F4DD}' },
+      { href: '/dashboard/factures', label: 'Factures',   icon: '\u{1F9FE}' },
     ],
   },
   {
