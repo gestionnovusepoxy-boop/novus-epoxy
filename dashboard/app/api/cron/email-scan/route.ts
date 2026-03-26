@@ -206,7 +206,6 @@ async function handleLeadFollowUp(
 Un prospect (${leadNom}) a repondu a notre email de prospection initial envoye par Jason.
 
 Infos deja collectees: ${alreadyCollected}
-Infos encore manquantes: ${['service','superficie','adresse'].filter(k => !history.collected[k]).join(', ')}
 
 Message du prospect:
 ---
@@ -214,12 +213,18 @@ ${bodyText.slice(0, 2000)}
 ---
 
 Instructions:
-1. Extrait toute info utile du message (type de service, superficie, adresse/ville)
-2. Si infos manquantes: pose UNE SEULE question (la plus importante en premier: service → superficie → adresse)
-3. Si tu as service + superficie + adresse → statut = "complet"
-4. Offre les options: continuer par email, appeler 581-307-2678, ou formulaire novusepoxy.ca/#contact
-5. Sois chaleureux, professionnel, francais. MAX 120 mots. NE JAMAIS donner de prix.
-6. Signe "L'equipe Novus Epoxy"
+1. Extrait TOUTES les infos du message (service, superficie, adresse/ville)
+2. Si statut = "initial" (premier contact): envoie UNE reponse avec la LISTE COMPLETE des infos dont tu as besoin (service, superficie, adresse) — ne pas les poser une par une sur plusieurs emails
+3. Si le client a deja fourni des infos: extrait ce qu'il a donne, et si il manque encore des elements, demande uniquement ce qui manque
+4. Si tu as service + superficie + adresse → statut = "complet"
+5. TOUJOURS offrir les 3 options: repondre par email, appeler 581-307-2678, formulaire novusepoxy.ca/#contact
+6. Chaleureux, professionnel, francais. MAX 150 mots. NE JAMAIS donner de prix.
+7. Signe "L'equipe Novus Epoxy"
+
+Infos a collecter pour la soumission:
+- Type de service (epoxy metallique, epoxy flake/flocon, commercial, quartz, couleur unie)
+- Superficie approximative (pieds carres ou metres carres)
+- Adresse ou ville des travaux
 
 JSON strict:
 {"service":"flake|metallique|commercial|quartz|couleur_unie|null","superficie":"nombre pi2 ou null","adresse":"adresse ou ville ou null","statut":"en_cours|complet","reponse":"texte email"}` }],
