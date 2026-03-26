@@ -12,6 +12,8 @@ const SECTIONS: NavSection[] = [
   {
     title: 'Principal',
     links: [
+      { href: '/dashboard/mission-control', label: 'Mission Control', icon: '🚀' },
+      { href: '/dashboard/marcel',     label: 'Marcel IA',       icon: '🤖' },
       { href: '/dashboard',            label: 'Vue d\'ensemble', icon: '\u{1F4CA}' },
       { href: '/dashboard/calendrier', label: 'Calendrier',      icon: '\u{1F4C5}' },
       { href: '/dashboard/soumissions',label: 'Soumissions',     icon: '\u{1F4CB}' },
