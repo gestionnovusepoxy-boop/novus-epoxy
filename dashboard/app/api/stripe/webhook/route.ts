@@ -4,6 +4,7 @@ import { sendSMS } from '@/lib/sms';
 import { formatMoney } from '@/lib/pricing';
 import { calendarLinksHtml } from '@/lib/calendar-links';
 import { escapeHtml } from '@/lib/utils';
+import { sendEmail } from '@/lib/send-email';
 import Stripe from 'stripe';
 
 async function notifyTelegram(message: string) {
@@ -21,16 +22,8 @@ async function notifyTelegram(message: string) {
 }
 
 async function sendConfirmationEmail(to: string, subject: string, html: string) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
-  if (!apiKey) return;
-
   try {
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from, to: [to], subject, html }),
-    });
+    await sendEmail({ to, subject, html });
   } catch (err) {
     console.error('Email send error:', err);
   }

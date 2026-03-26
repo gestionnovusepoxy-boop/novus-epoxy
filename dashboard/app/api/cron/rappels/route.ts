@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
+import { sendEmail } from '@/lib/send-email';
 
 // Vercel Cron — runs every 6 hours to send 24h reminders before work appointments
 export async function GET(req: NextRequest) {
@@ -11,9 +12,6 @@ export async function GET(req: NextRequest) {
   if (!cronSecret || !authHeader || cronSecret !== authHeader) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
 
   let rappelsJour1 = 0;
   let rappelsJour2 = 0;
@@ -31,7 +29,7 @@ export async function GET(req: NextRequest) {
 
   for (const r of jour1Rows) {
     // Email reminder
-    if (apiKey) {
+    {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <h2 style="color:#1e293b;margin:0 0 12px;">Rappel — Travaux demain matin!</h2>
@@ -47,16 +45,7 @@ export async function GET(req: NextRequest) {
 </div></body></html>`;
 
       try {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from,
-            to: [r.client_email as string],
-            subject: `Rappel — Travaux demain matin — Novus Epoxy`,
-            html,
-          }),
-        });
+        await sendEmail({ to: r.client_email as string, subject: `Rappel — Travaux demain matin — Novus Epoxy`, html });
       } catch (err) { console.error('Reminder jour1 email failed:', err); }
     }
 
@@ -87,7 +76,7 @@ export async function GET(req: NextRequest) {
     const heures = r.jour2_slot === 'matin' ? '8h' : '12h';
     const periode = r.jour2_slot === 'matin' ? 'demain matin' : 'demain apres-midi';
 
-    if (apiKey) {
+    {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <h2 style="color:#1e293b;margin:0 0 12px;">Rappel — Finition ${periode}!</h2>
@@ -99,16 +88,7 @@ export async function GET(req: NextRequest) {
 </div></body></html>`;
 
       try {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from,
-            to: [r.client_email as string],
-            subject: `Rappel — Finition ${periode} — Novus Epoxy`,
-            html,
-          }),
-        });
+        await sendEmail({ to: r.client_email as string, subject: `Rappel — Finition ${periode} — Novus Epoxy`, html });
       } catch (err) { console.error('Reminder jour2 email failed:', err); }
     }
 

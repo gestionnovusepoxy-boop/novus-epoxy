@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
+import { sendEmail } from '@/lib/send-email';
 
 // TODO: Replace with real Google review link once Google Business Profile is verified
 const GOOGLE_REVIEW_URL = process.env.GOOGLE_REVIEW_URL ?? 'https://novusepoxy.ca';
@@ -45,8 +46,6 @@ export async function GET(req: NextRequest) {
   );
 
   let sent = 0;
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
 
   for (const r of rows) {
     const prenom = (r.client_nom as string).split(' ')[0];
@@ -57,8 +56,8 @@ export async function GET(req: NextRequest) {
       `Salut ${prenom}! C'est Novus Epoxy. On espere que tu profites de ton nouveau plancher! Si t'es satisfait de notre travail, ca nous aiderait vraiment si tu pouvais nous laisser un petit avis Google: ${GOOGLE_REVIEW_URL} Merci beaucoup! 🙏`
     ).catch(() => false);
 
-    // Also send email if we have the key
-    if (apiKey && r.client_email) {
+    // Also send email
+    if (r.client_email) {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <h2 style="color:#1e293b;margin:0 0 16px;">Comment trouvez-vous votre nouveau plancher?</h2>
@@ -77,16 +76,7 @@ export async function GET(req: NextRequest) {
 </div></body></html>`;
 
       try {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from,
-            to: [r.client_email as string],
-            subject: `Comment trouvez-vous votre nouveau plancher? ⭐ — Novus Epoxy`,
-            html,
-          }),
-        });
+        await sendEmail({ to: r.client_email as string, subject: `Comment trouvez-vous votre nouveau plancher? — Novus Epoxy`, html });
       } catch (err) { console.error('Review email failed:', err); }
     }
 

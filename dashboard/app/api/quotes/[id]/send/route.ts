@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
+import { sendEmail } from '@/lib/send-email';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -24,13 +25,6 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     if (secondsSince < 60) {
       return NextResponse.json({ error: 'Email déjà envoyé il y a moins de 60 secondes' }, { status: 429 });
     }
-  }
-
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
-
-  if (!apiKey) {
-    return NextResponse.json({ error: 'RESEND_API_KEY manquant' }, { status: 500 });
   }
 
   const service = SERVICES[quote.type_service as ServiceType];
@@ -101,24 +95,17 @@ ${Number(quote.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><
 </div>
 </body></html>`;
 
-  const emailRes = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from,
-      to: [quote.client_email as string],
+  let emailData: { id: string };
+  try {
+    emailData = await sendEmail({
+      to: quote.client_email as string,
       subject: `Soumission Novus Epoxy #${quote.id}`,
       html,
-    }),
-  });
-
-  if (!emailRes.ok) {
-    const err = await emailRes.text();
-    console.error('Resend error:', err, 'from:', from, 'to:', quote.client_email);
-    return NextResponse.json({ error: `Erreur Resend: ${err}` }, { status: 500 });
+    });
+  } catch (err) {
+    console.error('Gmail send error:', err);
+    return NextResponse.json({ error: `Erreur envoi email: ${String(err)}` }, { status: 500 });
   }
-
-  const emailData = await emailRes.json();
 
   await query(
     `INSERT INTO email_logs (resend_id, destinataire, sujet, submission_id) VALUES ($1, $2, $3, $4)`,

@@ -3,6 +3,7 @@ import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 import { formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
+import { sendEmail } from '@/lib/send-email';
 
 // Vercel Cron — runs daily at 2PM UTC to send deposit reminders
 // - 24h-48h after contract signed: send reminder
@@ -13,9 +14,6 @@ export async function GET(req: NextRequest) {
   if (!cronSecret || !authHeader || cronSecret !== authHeader) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
-
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
 
   let remindersSent = 0;
   let warningsSent = 0;
@@ -42,16 +40,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Send reminder email
-    if (apiKey && q.client_email) {
+    if (q.client_email) {
       try {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from,
-            to: [q.client_email as string],
-            subject: `Rappel: depot requis — Novus Epoxy #${q.id}`,
-            html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+        await sendEmail({
+          to: q.client_email as string,
+          subject: `Rappel: depot requis — Novus Epoxy #${q.id}`,
+          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <h2 style="color:#1e293b;">Rappel: depot requis</h2>
 <p>Bonjour ${escapeHtml(q.client_nom as string)},</p>
 <p>Votre contrat est signe! Pour confirmer vos dates de travaux, veuillez effectuer le depot de <strong>${depot}</strong> dans les prochaines 24 heures.</p>
@@ -62,7 +56,6 @@ export async function GET(req: NextRequest) {
 </div>
 <p style="color:#64748b;font-size:13px;">Questions? Appelez-nous: 581-307-2678</p>
 </div>`,
-          }),
         });
       } catch (err) { console.error('Deposit reminder email failed:', err); }
     }
@@ -92,16 +85,12 @@ export async function GET(req: NextRequest) {
     }
 
     // Send warning email
-    if (apiKey && q.client_email) {
+    if (q.client_email) {
       try {
-        await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            from,
-            to: [q.client_email as string],
-            subject: `Dernier rappel: vos dates pourraient etre attribuees — Novus Epoxy #${q.id}`,
-            html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+        await sendEmail({
+          to: q.client_email as string,
+          subject: `Dernier rappel: vos dates pourraient etre attribuees — Novus Epoxy #${q.id}`,
+          html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <h2 style="color:#dc2626;">Dernier rappel: depot requis</h2>
 <p>Bonjour ${escapeHtml(q.client_nom as string)},</p>
 <p>Le delai de 48 heures pour le depot de votre devis #${q.id} est depasse. <strong>Vos dates de travaux pourraient etre attribuees a un autre client</strong> si le depot de ${depot} n'est pas recu rapidement.</p>
@@ -112,7 +101,6 @@ export async function GET(req: NextRequest) {
 </div>
 <p style="color:#64748b;font-size:13px;">Questions? Appelez-nous: 581-307-2678</p>
 </div>`,
-          }),
         });
       } catch (err) { console.error('Deposit warning email failed:', err); }
     }

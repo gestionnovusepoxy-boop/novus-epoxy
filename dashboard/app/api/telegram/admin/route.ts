@@ -4,6 +4,7 @@ import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/p
 import { sendSMS, notifyAdminSMS } from '@/lib/sms';
 import { timingSafeEqual } from 'crypto';
 import { google } from 'googleapis';
+import { sendEmail } from '@/lib/send-email';
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -559,9 +560,6 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 
       if (leads.length === 0) return JSON.stringify({ ok: true, envoyes: 0, message: 'Aucun lead nouveau avec email' });
 
-      const resendKey = process.env.RESEND_API_KEY;
-      const emailFrom = process.env.EMAIL_FROM ?? 'info@novusepoxy.ca';
-      if (!resendKey) return JSON.stringify({ error: 'RESEND_API_KEY manquant' });
 
       const priceListHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1e293b;">
     <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:50px;margin-bottom:20px;" />
@@ -592,23 +590,12 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
             'Merci de votre interet',
             `Bonjour ${firstName},\n\nMerci de votre interet`
           );
-          const res = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from: emailFrom,
-              to: [lead.email],
-              subject: 'Nos tarifs et services \u2014 Novus Epoxy',
-              html: personalizedHtml,
-            }),
-          });
-          if (res.ok) {
-            await query(
-              `UPDATE crm_leads SET statut = 'contacte', last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $1`,
-              [lead.id]
-            );
-            sent++;
-          }
+          await sendEmail({ to: lead.email, subject: 'Nos tarifs et services — Novus Epoxy', html: personalizedHtml });
+          await query(
+            `UPDATE crm_leads SET statut = 'contacte', last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $1`,
+            [lead.id]
+          );
+          sent++;
         } catch { /* continue */ }
       }
 
@@ -722,11 +709,9 @@ export async function POST(req: NextRequest) {
         await query(`UPDATE quotes SET statut = 'approuve', approved_at = NOW() WHERE id = $1`, [quoteId]);
 
         // Now send it to the client via the send logic
-        const apiKey = process.env.RESEND_API_KEY;
-        const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
         const secretToken = q.secret_token as string;
 
-        if (apiKey && q.client_email) {
+        if (q.client_email) {
           const service = SERVICES[q.type_service as ServiceType];
           const solde70 = formatMoney(Number(q.total) - Number(q.depot_requis));
 
@@ -759,21 +744,11 @@ export async function POST(req: NextRequest) {
 <p style="color:#475569;font-size:12px;">Questions? 581-307-2678 (Jason) ou 581-307-5983 (Luca)</p>
 </div></body></html>`;
 
-          const emailRes = await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from,
-              to: [q.client_email as string],
-              subject: `Soumission Novus Epoxy #${q.id}`,
-              html,
-            }),
-          });
-
-          if (emailRes.ok) {
+          try {
+            await sendEmail({ to: q.client_email as string, subject: `Soumission Novus Epoxy #${q.id}`, html });
             await query(`UPDATE quotes SET statut = 'envoye', sent_at = NOW() WHERE id = $1`, [quoteId]);
             await sendTelegram(cbChatId, `Devis #${quoteId} approuve et envoye a ${q.client_nom} (${q.client_email})`);
-          } else {
+          } catch {
             await sendTelegram(cbChatId, `Devis #${quoteId} approuve mais erreur email. Va dans le dashboard pour envoyer manuellement.`);
           }
         } else {
@@ -821,9 +796,7 @@ export async function POST(req: NextRequest) {
         );
 
         // Send confirmation email to client
-        const apiKey = process.env.RESEND_API_KEY;
-        const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
-        if (apiKey && q.client_email) {
+        if (q.client_email) {
           const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
 <div style="background:#0f172a;color:white;padding:20px 24px;border-radius:8px 8px 0 0;">
@@ -839,16 +812,8 @@ export async function POST(req: NextRequest) {
 <strong>Luca:</strong> 581-307-5983 | <strong>Jason:</strong> 581-307-2678</p>
 </div></div></body></html>`;
 
-          await fetch('https://api.resend.com/emails', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              from,
-              to: [q.client_email as string],
-              subject: `Depot recu — Novus Epoxy #${quoteId}`,
-              html,
-            }),
-          }).catch(err => console.error('Deposit email error:', err));
+          sendEmail({ to: q.client_email as string, subject: `Depot recu — Novus Epoxy #${quoteId}`, html })
+            .catch(err => console.error('Deposit email error:', err));
         }
 
         // SMS to client

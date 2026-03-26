@@ -4,6 +4,7 @@ import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
 import { sendSMS } from '@/lib/sms';
+import { sendEmail } from '@/lib/send-email';
 import { calendarLinksHtml } from '@/lib/calendar-links';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -110,11 +111,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const slotLabel = booking.jour2_slot === 'matin' ? '8h-12h' : '12h-16h';
 
   // Send confirmation email to client
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';
-
-  if (apiKey) {
+  {
     const calendarHtml = calendarLinksHtml(quoteId, baseUrl);
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
@@ -143,15 +141,10 @@ ${calendarHtml}
 </div></body></html>`;
 
     try {
-      await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from,
-          to: [quote.client_email as string],
-          subject: `Reservation confirmee — Novus Epoxy #${quoteId}`,
-          html,
-        }),
+      await sendEmail({
+        to: quote.client_email as string,
+        subject: `Reservation confirmee — Novus Epoxy #${quoteId}`,
+        html,
       });
     } catch (err) { console.error('Deposit confirmation email failed:', err); }
   }

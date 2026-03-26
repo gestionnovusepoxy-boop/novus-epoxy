@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
+import { sendEmail } from '@/lib/send-email';
 
 const CRON_SECRET = () => process.env.CRON_SECRET ?? '';
 const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
@@ -143,24 +144,17 @@ async function processAutoReply(
   subject: string,
   replyText: string,
 ) {
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'info@novusepoxy.ca';
-  if (!apiKey || !replyText) return;
+  if (!replyText) return;
 
-  await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      from,
-      to: [fromEmail],
-      subject: subject ? `Re: ${subject}` : 'Novus Epoxy — Reponse',
-      html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-        <p>${replyText.replace(/\n/g, '<br/>')}</p>
-        <hr style="border:none;border-top:1px solid #e2e8f0;margin:30px 0;" />
-        <p style="color:#64748b;font-size:12px;">Novus Epoxy — Planchers epoxy haut de gamme<br/>
-        581-307-5983 | novusepoxy.ca</p>
-      </div>`,
-    }),
+  await sendEmail({
+    to: fromEmail,
+    subject: subject ? `Re: ${subject}` : 'Novus Epoxy — Reponse',
+    html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
+      <p>${replyText.replace(/\n/g, '<br/>')}</p>
+      <hr style="border:none;border-top:1px solid #e2e8f0;margin:30px 0;" />
+      <p style="color:#64748b;font-size:12px;">Novus Epoxy — Planchers epoxy haut de gamme<br/>
+      581-307-5983 | novusepoxy.ca</p>
+    </div>`,
   });
 
   // Log it
@@ -313,10 +307,8 @@ Reponds en JSON strict (sans markdown):
     return;
   }
 
-  // 6. Send reply email via Resend with branding
-  const resendKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'info@novusepoxy.ca';
-  if (resendKey && parsed.reponse) {
+  // 6. Send reply email via Gmail with branding
+  if (parsed.reponse) {
     const replyHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
       <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
         <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
@@ -332,15 +324,10 @@ Reponds en JSON strict (sans markdown):
       </div>
     </div>`;
 
-    await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from,
-        to: [fromEmail],
-        subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
-        html: replyHtml,
-      }),
+    await sendEmail({
+      to: fromEmail,
+      subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+      html: replyHtml,
     }).catch(() => {});
   }
 

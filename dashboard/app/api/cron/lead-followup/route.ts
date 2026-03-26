@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { sendEmail } from '@/lib/send-email';
 
 const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
@@ -68,12 +69,8 @@ export async function GET(req: NextRequest) {
       const followupText = (haikuData.content?.[0]?.text ?? '').trim();
       if (!followupText) continue;
 
-      // 3. Send via Resend
-      const resendKey = process.env.RESEND_API_KEY;
-      const emailFrom = process.env.EMAIL_FROM ?? 'info@novusepoxy.ca';
-      if (!resendKey) continue;
-
-      const followupHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
+      // 3. Send via Gmail
+      const followupHtml =`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
         <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
           <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
         </div>
@@ -91,18 +88,9 @@ export async function GET(req: NextRequest) {
         </div>
       </div>`;
 
-      const emailRes = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${resendKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from: emailFrom,
-          to: [lead.email],
-          subject: `On pense a vous — Novus Epoxy`,
-          html: followupHtml,
-        }),
-      });
-
-      if (!emailRes.ok) continue;
+      try {
+        await sendEmail({ to: lead.email as string, subject: `On pense a vous — Novus Epoxy`, html: followupHtml });
+      } catch { continue; }
 
       // 4. Update followup_count and last_agent_reply_at
       const newCount = await query(

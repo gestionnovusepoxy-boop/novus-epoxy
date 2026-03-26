@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { sendEmail } from '@/lib/send-email';
 
 const OFFER_HTML = `<!DOCTYPE html>
 <html lang="fr">
@@ -174,41 +175,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Maximum 50 destinataires par envoi' }, { status: 400 });
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  const from = process.env.EMAIL_FROM ?? 'onboarding@resend.dev';
-
-  if (!apiKey) {
-    return NextResponse.json({ error: 'RESEND_API_KEY non configuré' }, { status: 500 });
-  }
-
   const results: { email: string; success: boolean; error?: string }[] = [];
 
   for (const r of recipients) {
     const html = OFFER_HTML.replace(/\{\{PRENOM\}\}/g, r.prenom || 'Bonjour');
     try {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          from,
-          to: [r.email],
-          subject: 'Partenariat planchers époxy — Novus Epoxy',
-          html,
-        }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        // Log the email
-        await query(
-          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
-          [data.id ?? '', r.email, 'Offre de service — Partenariat Novus Epoxy', 'sent'],
-        );
-        results.push({ email: r.email, success: true });
-      } else {
-        const err = await res.text();
-        results.push({ email: r.email, success: false, error: err });
-      }
+      const data = await sendEmail({ to: r.email, subject: 'Partenariat planchers epoxy — Novus Epoxy', html });
+      await query(
+        `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
+        [data.id ?? '', r.email, 'Offre de service — Partenariat Novus Epoxy', 'sent'],
+      );
+      results.push({ email: r.email, success: true });
     } catch (e: unknown) {
       results.push({ email: r.email, success: false, error: String(e) });
     }
