@@ -73,7 +73,7 @@ IMPORTANT:
 Date: ${new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
 
   const result = streamText({
-    model: anthropic('claude-sonnet-4-6'),
+    model: anthropic('claude-opus-4-6'),
     system: systemPrompt,
     messages: [
       ...historyMsgs,

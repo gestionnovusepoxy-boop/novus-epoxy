@@ -23,6 +23,22 @@ interface Props {
   initialActivity: ActivityData;
 }
 
+// ─── Terminal command labels ─────────────────────────────────────────────────
+
+const TERMINAL_COMMANDS: { key: string; label: string }[] = [
+  { key: 'deploy',     label: '🚀 Deploy Prod' },
+  { key: 'git-status', label: '📊 Git Status' },
+  { key: 'git-log',    label: '📋 Git Log' },
+  { key: 'ts-check',   label: '✅ TS Check' },
+  { key: 'git-diff',   label: '🔍 Git Diff' },
+  { key: 'git-branch', label: '🌿 Branches' },
+  { key: 'node-ver',   label: '📦 Node Version' },
+];
+
+const COMMAND_LABELS: Record<string, string> = Object.fromEntries(
+  TERMINAL_COMMANDS.map(c => [c.key, c.label])
+);
+
 // ─── Agent definitions ────────────────────────────────────────────────────────
 
 const AGENTS = [
@@ -172,19 +188,19 @@ function getConseil(id: AgentId, activity: ActivityData): string {
       const h = activity.hunter;
       if (!h) return 'Score tes leads maintenant';
       if (h.chauds > 0) return `🔥 ${h.chauds} lead${h.chauds > 1 ? 's' : ''} chaud${h.chauds > 1 ? 's' : ''} à contacter!`;
-      if (h.nouveaux > 0) return `⚡ ${h.nouveaux} nouveau${h.nouveaux > 1 ? 'x' : ''} lead${h.nouveaux > 1 ? 's' : ''} aujourd\'hui`;
+      if (h.nouveaux > 0) return `⚡ ${h.nouveaux} nouveau${h.nouveaux > 1 ? 'x' : ''} lead${h.nouveaux > 1 ? 's' : ''} aujourd'hui`;
       if (h.tièdes > 0) return `${h.tièdes} leads tièdes — score-les!`;
       return 'Lance un scoring de leads';
     }
     case 'aria': {
       const cnt = activity.aria?.emails_today ?? 0;
-      return cnt > 0 ? `${cnt} email${cnt > 1 ? 's' : ''} traité${cnt > 1 ? 's' : ''} aujourd\'hui` : 'Vérifie ta boîte Gmail';
+      return cnt > 0 ? `${cnt} email${cnt > 1 ? 's' : ''} traité${cnt > 1 ? 's' : ''} aujourd'hui` : 'Vérifie ta boîte Gmail';
     }
     case 'rex': {
       const r = activity.rex;
       if (!r) return 'Génère des relances SMS';
       if (r.en_attente > 0) return `${r.en_attente} devis en attente — relance par SMS!`;
-      if (r.devis_today > 0) return `${r.devis_today} devis créé${r.devis_today > 1 ? 's' : ''} aujourd\'hui`;
+      if (r.devis_today > 0) return `${r.devis_today} devis créé${r.devis_today > 1 ? 's' : ''} aujourd'hui`;
       return 'Aucune relance urgente';
     }
     case 'iris': {
@@ -211,8 +227,8 @@ function getConseil(id: AgentId, activity: ActivityData): string {
     case 'nova': {
       const n = activity.nova;
       if (!n) return 'Vérifie le chatbot';
-      if (n.en_attente > 0) return `⏳ ${n.en_attente} devis en attente d\'approbation`;
-      if (n.today > 0) return `${n.today} conversation${n.today > 1 ? 's' : ''} aujourd\'hui`;
+      if (n.en_attente > 0) return `⏳ ${n.en_attente} devis en attente d'approbation`;
+      if (n.today > 0) return `${n.today} conversation${n.today > 1 ? 's' : ''} aujourd'hui`;
       return 'Chatbot actif sur novusepoxy.ca';
     }
     default: return '';
@@ -295,6 +311,7 @@ function ChatPanel({
   agentColor,
   authorName,
   onClose,
+  onLoadingChange,
 }: {
   agentId: string;
   agentName: string;
@@ -302,6 +319,7 @@ function ChatPanel({
   agentColor: string;
   authorName: string;
   onClose: () => void;
+  onLoadingChange: (loading: boolean) => void;
 }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [input, setInput] = useState('');
@@ -311,6 +329,10 @@ function ChatPanel({
     api: `/api/agents/${agentId}`,
     id: `agent-chat-${agentId}`,
   });
+
+  useEffect(() => {
+    onLoadingChange(isLoading);
+  }, [isLoading, onLoadingChange]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -337,8 +359,18 @@ function ChatPanel({
           <p className="text-slate-400 text-xs">{agent?.role}</p>
         </div>
         <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition text-lg leading-none">×</button>
+          {isLoading ? (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-ping" />
+              <span className="text-green-400 text-[10px] font-bold uppercase tracking-wider">ACTIF</span>
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-emerald-400" />
+              <span className="text-emerald-400 text-[10px] font-medium uppercase tracking-wider">EN LIGNE</span>
+            </span>
+          )}
+          <button onClick={onClose} className="text-slate-400 hover:text-white transition text-lg leading-none ml-2">×</button>
         </div>
       </div>
 
@@ -441,10 +473,14 @@ function ChatPanel({
 function AgentCard({
   agent,
   activity,
+  isActive,
+  isStreaming,
   onChat,
 }: {
   agent: (typeof AGENTS)[number];
   activity: ActivityData;
+  isActive: boolean;
+  isStreaming: boolean;
   onChat: (id: AgentId) => void;
 }) {
   const conseil = getConseil(agent.id as AgentId, activity);
@@ -460,8 +496,26 @@ function AgentCard({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
+  // Status indicator
+  let statusDot: string;
+  let statusText: string;
+  let statusTextColor: string;
+  if (isStreaming) {
+    statusDot = 'bg-green-400 animate-ping';
+    statusText = 'ACTIF';
+    statusTextColor = 'text-green-400';
+  } else if (isActive) {
+    statusDot = 'bg-emerald-400';
+    statusText = 'EN LIGNE';
+    statusTextColor = 'text-emerald-400';
+  } else {
+    statusDot = 'bg-slate-500';
+    statusText = 'EN VEILLE';
+    statusTextColor = 'text-slate-500';
+  }
+
   return (
-    <div className={`relative flex flex-col bg-slate-900 border ${agent.border} rounded-2xl p-4 shadow-lg ${agent.glow} hover:border-opacity-50 transition-all duration-200 group`}>
+    <div className={`relative flex flex-col bg-slate-900 border ${agent.border} rounded-2xl p-4 shadow-lg ${agent.glow} hover:border-opacity-50 transition-all duration-200 group ${isStreaming ? 'ring-2 ring-green-500/30' : ''}`}>
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
         <div className={`w-11 h-11 rounded-xl ${agent.bg} flex items-center justify-center text-xl flex-shrink-0 shadow-lg`}>
@@ -470,7 +524,10 @@ function AgentCard({
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <h3 className="text-white font-bold text-base">{agent.name}</h3>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse flex-shrink-0" title="En ligne" />
+            <span className="flex items-center gap-1.5">
+              <span className={`w-2 h-2 rounded-full ${statusDot} flex-shrink-0`} />
+              <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTextColor}`}>{statusText}</span>
+            </span>
           </div>
           <p className={`text-xs font-medium ${agent.text}`}>{agent.role}</p>
         </div>
@@ -531,11 +588,157 @@ function AgentCard({
   );
 }
 
+// ─── Terminal Section ────────────────────────────────────────────────────────
+
+function TerminalSection() {
+  const [output, setOutput] = useState<string[]>([]);
+  const [running, setRunning] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [output]);
+
+  const runCommand = useCallback(async (commandKey: string) => {
+    setRunning(true);
+    setCollapsed(false);
+    setOutput(prev => [...prev, `\n$ ${COMMAND_LABELS[commandKey] ?? commandKey}\n`]);
+
+    try {
+      const res = await fetch('/api/terminal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: commandKey }),
+      });
+
+      if (!res.ok || !res.body) {
+        setOutput(prev => [...prev, 'Erreur: commande non autorisée\n']);
+        setRunning(false);
+        return;
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        setOutput(prev => [...prev, decoder.decode(value)]);
+      }
+
+      setOutput(prev => [...prev, '\n✓ Terminé\n']);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Erreur inconnue';
+      setOutput(prev => [...prev, `\nErreur: ${msg}\n`]);
+    }
+
+    setRunning(false);
+  }, []);
+
+  return (
+    <div className="mt-6">
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+        {/* Terminal header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-900">
+          <div className="flex items-center gap-3">
+            <div className="flex gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-red-500/80" />
+              <span className="w-3 h-3 rounded-full bg-yellow-500/80" />
+              <span className="w-3 h-3 rounded-full bg-green-500/80" />
+            </div>
+            <h2 className="text-white font-semibold text-sm flex items-center gap-2">
+              💻 TERMINAL
+              <span className="text-slate-500 text-xs font-normal">Novus Epoxy — Production</span>
+            </h2>
+          </div>
+          <div className="flex items-center gap-2">
+            {running && (
+              <span className="flex items-center gap-1.5">
+                <svg className="w-3.5 h-3.5 text-green-400 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                <span className="text-green-400 text-[10px] font-bold uppercase">Exécution...</span>
+              </span>
+            )}
+            {output.length > 0 && (
+              <button
+                onClick={() => setOutput([])}
+                className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 text-[10px] transition"
+              >
+                Clear
+              </button>
+            )}
+            <button
+              onClick={() => setCollapsed(v => !v)}
+              className="px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-400 text-xs transition"
+            >
+              {collapsed ? '▲ Ouvrir' : '▼ Réduire'}
+            </button>
+          </div>
+        </div>
+
+        {!collapsed && (
+          <>
+            {/* Quick command buttons */}
+            <div className="flex flex-wrap gap-2 px-4 py-3 border-b border-slate-800 bg-slate-900/50">
+              <span className="text-slate-500 text-xs self-center mr-1">Commandes rapides:</span>
+              {TERMINAL_COMMANDS.map(c => (
+                <button
+                  key={c.key}
+                  onClick={() => void runCommand(c.key)}
+                  disabled={running}
+                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Terminal output */}
+            <div
+              ref={scrollRef}
+              className="bg-black px-4 py-3 font-mono text-sm h-72 overflow-y-auto"
+            >
+              {output.length === 0 ? (
+                <div className="text-slate-600 flex items-center gap-2">
+                  <span className="text-green-500">$</span>
+                  <span className="animate-pulse">▋</span>
+                  <span className="text-slate-700 text-xs ml-2">Cliquez une commande pour commencer</span>
+                </div>
+              ) : (
+                output.map((line, i) => (
+                  <span
+                    key={i}
+                    className={
+                      line.startsWith('\n$') ? 'text-cyan-400 font-bold' :
+                      line.startsWith('\n✓') ? 'text-green-400 font-bold' :
+                      line.startsWith('\nErreur') || line.startsWith('Erreur') ? 'text-red-400' :
+                      'text-green-300/90'
+                    }
+                  >
+                    {line}
+                  </span>
+                ))
+              )}
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function MissionControlClient({ authorName, initialActivity }: Props) {
   const [activity, setActivity] = useState<ActivityData>(initialActivity);
   const [activeAgent, setActiveAgent] = useState<AgentId | null>(null);
+  const [activeAgents, setActiveAgents] = useState<Set<string>>(new Set());
+  const [loadingAgents, setLoadingAgents] = useState<Set<string>>(new Set());
   const [now, setNow] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -557,10 +760,45 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
 
   // Close panel on ESC
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') setActiveAgent(null); };
+    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') handleClosePanel(); };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
+  });
+
+  // Track active agent in set
+  const handleOpenChat = useCallback((id: AgentId) => {
+    setActiveAgent(id);
+    setActiveAgents(prev => new Set(prev).add(id));
   }, []);
+
+  const handleClosePanel = useCallback(() => {
+    if (activeAgent) {
+      setActiveAgents(prev => {
+        const next = new Set(prev);
+        next.delete(activeAgent);
+        return next;
+      });
+      setLoadingAgents(prev => {
+        const next = new Set(prev);
+        next.delete(activeAgent);
+        return next;
+      });
+    }
+    setActiveAgent(null);
+  }, [activeAgent]);
+
+  const handleLoadingChange = useCallback((loading: boolean) => {
+    if (!activeAgent) return;
+    if (loading) {
+      setLoadingAgents(prev => new Set(prev).add(activeAgent));
+    } else {
+      setLoadingAgents(prev => {
+        const next = new Set(prev);
+        next.delete(activeAgent);
+        return next;
+      });
+    }
+  }, [activeAgent]);
 
   const timeline = getTimelineEvents(activity);
   const activeAgentData = AGENTS.find(a => a.id === activeAgent);
@@ -592,7 +830,7 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
       <div className="px-6 py-5">
         {/* Timeline */}
         <div className="mb-6">
-          <h2 className="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-2">📡 Activité aujourd'hui</h2>
+          <h2 className="text-xs text-slate-500 uppercase tracking-widest font-semibold mb-2">📡 Activité aujourd&apos;hui</h2>
           <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-thin">
             {timeline.map((ev, i) => (
               <div key={i} className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-xl px-3 py-2 whitespace-nowrap flex-shrink-0">
@@ -613,17 +851,22 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
               key={agent.id}
               agent={agent}
               activity={activity}
-              onChat={id => setActiveAgent(id)}
+              isActive={activeAgents.has(agent.id)}
+              isStreaming={loadingAgents.has(agent.id)}
+              onChat={handleOpenChat}
             />
           ))}
         </div>
+
+        {/* Terminal */}
+        <TerminalSection />
       </div>
 
       {/* Chat overlay backdrop */}
       {activeAgent && (
         <div
           className="fixed inset-0 bg-black/40 backdrop-blur-sm z-40"
-          onClick={() => setActiveAgent(null)}
+          onClick={handleClosePanel}
         />
       )}
 
@@ -641,7 +884,8 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
             agentEmoji={activeAgentData.emoji}
             agentColor={activeAgentData.color}
             authorName={authorName}
-            onClose={() => setActiveAgent(null)}
+            onClose={handleClosePanel}
+            onLoadingChange={handleLoadingChange}
           />
         )}
       </div>

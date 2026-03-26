@@ -506,7 +506,7 @@ export async function POST(
   const userContent = `[${authorName}]: ${lastUserMsg.content}`;
 
   const result = streamText({
-    model: anthropic('claude-sonnet-4-6'),
+    model: anthropic('claude-opus-4-6'),
     system: getSystemPrompt(agentId),
     messages: [
       ...historyMsgs,
