@@ -246,6 +246,7 @@ PRIX (donner si demandes, pas d'hesitation):
 - Quartz (balcons, ext): a partir de 11$/pi²
 - Commercial/industriel: a partir de 15$/pi²
 - Prix final selon superficie, preparation beton, complexite — soumission gratuite
+- TOUJOURS mentionner: ces tarifs sont personnalisables selon le volume, le type de projet (donneur d'ouvrage, promoteur immobilier, entrepreneur general, serie de condos/logements). Les grands projets ou contrats recurrents peuvent avoir des tarifs negocies. Inviter a en parler directement avec Jason (581-307-2678).
 
 REGLES:
 - Francais quebecois professionnel et chaleureux, MAX 180 mots
