@@ -475,13 +475,17 @@ function AgentCard({
   activity,
   isActive,
   isStreaming,
+  isEnabled,
   onChat,
+  onToggle,
 }: {
   agent: (typeof AGENTS)[number];
   activity: ActivityData;
   isActive: boolean;
   isStreaming: boolean;
+  isEnabled: boolean;
   onChat: (id: AgentId) => void;
+  onToggle: (id: AgentId) => void;
 }) {
   const conseil = getConseil(agent.id as AgentId, activity);
   const metrics = getMetrics(agent.id as AgentId, activity);
@@ -500,7 +504,11 @@ function AgentCard({
   let statusDot: string;
   let statusText: string;
   let statusTextColor: string;
-  if (isStreaming) {
+  if (!isEnabled) {
+    statusDot = 'bg-red-500';
+    statusText = 'DÉSACTIVÉ';
+    statusTextColor = 'text-red-400';
+  } else if (isStreaming) {
     statusDot = 'bg-green-400 animate-ping';
     statusText = 'ACTIF';
     statusTextColor = 'text-green-400';
@@ -515,7 +523,7 @@ function AgentCard({
   }
 
   return (
-    <div className={`relative flex flex-col bg-slate-900 border ${agent.border} rounded-2xl p-4 shadow-lg ${agent.glow} hover:border-opacity-50 transition-all duration-200 group ${isStreaming ? 'ring-2 ring-green-500/30' : ''}`}>
+    <div className={`relative flex flex-col bg-slate-900 border ${agent.border} rounded-2xl p-4 shadow-lg ${agent.glow} hover:border-opacity-50 transition-all duration-200 group ${isStreaming ? 'ring-2 ring-green-500/30' : ''} ${!isEnabled ? 'opacity-50 grayscale' : ''}`}>
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
         <div className={`w-11 h-11 rounded-xl ${agent.bg} flex items-center justify-center text-xl flex-shrink-0 shadow-lg`}>
@@ -531,6 +539,14 @@ function AgentCard({
           </div>
           <p className={`text-xs font-medium ${agent.text}`}>{agent.role}</p>
         </div>
+        {/* Toggle ON/OFF */}
+        <button
+          onClick={() => onToggle(agent.id as AgentId)}
+          className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${isEnabled ? 'bg-emerald-500' : 'bg-slate-700'}`}
+          title={isEnabled ? 'Désactiver' : 'Activer'}
+        >
+          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${isEnabled ? 'left-[22px]' : 'left-0.5'}`} />
+        </button>
       </div>
 
       {/* Description */}
@@ -558,7 +574,8 @@ function AgentCard({
       <div className="flex gap-2 mt-auto">
         <button
           onClick={() => onChat(agent.id as AgentId)}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg ${agent.bg} hover:opacity-90 text-white text-xs font-medium transition`}
+          disabled={!isEnabled}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg ${agent.bg} hover:opacity-90 text-white text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed`}
         >
           <span>💬</span> Chat
         </button>
@@ -739,8 +756,24 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
   const [activeAgent, setActiveAgent] = useState<AgentId | null>(null);
   const [activeAgents, setActiveAgents] = useState<Set<string>>(new Set());
   const [loadingAgents, setLoadingAgents] = useState<Set<string>>(new Set());
+  const [disabledAgents, setDisabledAgents] = useState<Set<string>>(() => {
+    if (typeof window === 'undefined') return new Set();
+    try {
+      const saved = localStorage.getItem('mc_disabled_agents');
+      return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
+    } catch { return new Set(); }
+  });
   const [now, setNow] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
+
+  const handleToggleAgent = useCallback((id: AgentId) => {
+    setDisabledAgents(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) { next.delete(id); } else { next.add(id); }
+      localStorage.setItem('mc_disabled_agents', JSON.stringify([...next]));
+      return next;
+    });
+  }, []);
 
   // Live clock
   useEffect(() => {
@@ -811,7 +844,7 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">
               🚀 <span>Mission Control</span>
-              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-normal">10 AGENTS ACTIFS</span>
+              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-normal">{AGENTS.length - disabledAgents.size} AGENTS ACTIFS</span>
             </h1>
             <p className="text-slate-500 text-xs mt-0.5">Quartier général IA — Novus Epoxy</p>
           </div>
@@ -853,7 +886,9 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
               activity={activity}
               isActive={activeAgents.has(agent.id)}
               isStreaming={loadingAgents.has(agent.id)}
+              isEnabled={!disabledAgents.has(agent.id)}
               onChat={handleOpenChat}
+              onToggle={handleToggleAgent}
             />
           ))}
         </div>
