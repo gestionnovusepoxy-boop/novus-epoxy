@@ -1,9 +1,9 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
-interface PaymentData {
+interface QuoteData {
   id: number;
   client_nom: string;
   type_service: string;
@@ -23,8 +23,12 @@ interface PaymentData {
 
 const SERVICE_LABELS: Record<string, string> = {
   flake: 'Flocon (Flake)',
-  metallique: 'Metallique',
+  metallique: 'Métallique',
   commercial: 'Commercial',
+  quartz: 'Quartz',
+  couleur_unie: 'Couleur Unie',
+  antiderapant: 'Antidérapant',
+  meulage: 'Meulage',
 };
 
 function formatMoney(n: number) {
@@ -40,18 +44,19 @@ function slotLabel(s: string) {
   return s === 'matin' ? 'AM (8h-12h)' : 'PM (12h-16h)';
 }
 
-export default function PaiementPage() {
+export default function ClientPortalPage() {
   const { id } = useParams();
   const searchParams = useSearchParams();
   const success = searchParams.get('success') === 'true';
   const cancelled = searchParams.get('cancelled') === 'true';
   const token = searchParams.get('token') || '';
 
-  const [data, setData] = useState<PaymentData | null>(null);
+  const [data, setData] = useState<QuoteData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [interacSent, setInteracSent] = useState(false);
 
-  useEffect(() => {
+  const fetchData = useCallback(() => {
     fetch(`/api/quotes/${id}/payment-info?token=${encodeURIComponent(token)}`)
       .then(r => r.json())
       .then(d => {
@@ -60,7 +65,15 @@ export default function PaiementPage() {
       })
       .catch(() => setError('Erreur de connexion'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, token]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  // Auto-refresh every 10s to pick up status changes
+  useEffect(() => {
+    const interval = setInterval(fetchData, 10000);
+    return () => clearInterval(interval);
+  }, [fetchData]);
 
   if (loading) {
     return (
@@ -76,7 +89,7 @@ export default function PaiementPage() {
         <div style={{ textAlign: 'center', maxWidth: '400px' }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>&#9888;</div>
           <h1 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 8px' }}>Page non disponible</h1>
-          <p style={{ color: '#94a3b8', fontSize: '14px' }}>{error || 'Ce lien de paiement n\'est pas accessible.'}</p>
+          <p style={{ color: '#94a3b8', fontSize: '14px' }}>{error || 'Ce lien n\'est pas accessible.'}</p>
         </div>
       </div>
     );
@@ -85,253 +98,254 @@ export default function PaiementPage() {
   const total = Number(data.total);
   const depot = Number(data.depot_requis);
   const balance = total - depot;
-  // Mark as paid if DB confirms OR if redirected from Stripe success
   const statut = data.statut as string;
-  const depositPaid = !!data.deposit_paid_at || (success && ['contrat_signe'].includes(statut));
+
+  const hasDates = !!data.jour1_date;
+  const contractSigned = !!data.contrat_signe_at || ['contrat_signe', 'depot_paye', 'planifie', 'complete'].includes(statut);
+  const depositPaid = !!data.deposit_paid_at || (success && statut === 'contrat_signe');
   const balancePaid = !!data.balance_paid_at || (success && ['depot_paye', 'planifie'].includes(statut));
-  const fullyPaid = (!!data.deposit_paid_at && !!data.balance_paid_at) || (depositPaid && balancePaid);
+  const fullyPaid = depositPaid && balancePaid;
+
+  // Determine current step
+  const currentStep = !hasDates ? 1 : !contractSigned ? 2 : !depositPaid ? 3 : !balancePaid ? 4 : 5;
+
+  const handleInterac = async () => {
+    try {
+      await fetch(`/api/quotes/${data.id}/interac?token=${encodeURIComponent(token)}`);
+      setInteracSent(true);
+    } catch { /* ignore */ }
+  };
 
   return (
     <div style={{ minHeight: '100vh', background: '#0f172a', color: '#f8fafc' }}>
       {/* Header */}
       <div style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)', borderBottom: '1px solid #334155', padding: '24px 16px', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '24px', fontWeight: 700, margin: 0 }}>Paiement</h1>
-        <p style={{ color: '#f59e0b', margin: '4px 0 0', fontSize: '14px', fontWeight: 600 }}>Novus Epoxy — Devis #{data.id}</p>
+        <img src="/logo-email.jpg" alt="Novus Epoxy" width="60" height="60" style={{ borderRadius: '8px', marginBottom: '8px' }} />
+        <h1 style={{ fontSize: '22px', fontWeight: 700, margin: 0 }}>Votre projet Novus Epoxy</h1>
+        <p style={{ color: '#f59e0b', margin: '4px 0 0', fontSize: '14px', fontWeight: 600 }}>Devis #{data.id} — {data.client_nom}</p>
       </div>
 
       <div style={{ maxWidth: '600px', margin: '0 auto', padding: '16px' }}>
-        {/* Success message */}
+        {/* Success / Cancelled messages */}
         {success && (
           <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '12px', padding: '20px', marginBottom: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', marginBottom: '8px', color: '#22c55e' }}>&#10003;</div>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 8px', color: '#22c55e' }}>Paiement recu!</h2>
-            <p style={{ color: '#86efac', fontSize: '14px', margin: 0 }}>Merci pour votre paiement. Vous recevrez une confirmation par email.</p>
+            <div style={{ fontSize: '40px', marginBottom: '8px', color: '#22c55e' }}>&#10003;</div>
+            <h2 style={{ fontSize: '18px', fontWeight: 700, margin: '0 0 4px', color: '#22c55e' }}>Paiement recu!</h2>
+            <p style={{ color: '#86efac', fontSize: '13px', margin: 0 }}>Merci! Vous recevrez une confirmation par email.</p>
           </div>
         )}
-
-        {/* Cancelled message */}
         {cancelled && (
-          <div style={{ background: '#450a0a', border: '1px solid #ef4444', borderRadius: '12px', padding: '20px', marginBottom: '16px', textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', marginBottom: '8px' }}>&#10060;</div>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 8px', color: '#ef4444' }}>Paiement annule</h2>
-            <p style={{ color: '#fca5a5', fontSize: '14px', margin: '0 0 16px' }}>Le paiement n&apos;a pas ete complete. Vous pouvez reessayer.</p>
+          <div style={{ background: '#450a0a', border: '1px solid #ef4444', borderRadius: '12px', padding: '16px', marginBottom: '16px', textAlign: 'center' }}>
+            <p style={{ color: '#fca5a5', fontSize: '14px', margin: 0 }}>Paiement annule — vous pouvez reessayer ci-dessous.</p>
           </div>
         )}
 
         {/* Progress steps */}
         <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '16px', border: '1px solid #334155' }}>
-          {/* Step 1: Dates */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: data.jour1_date ? '#22c55e' : '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: data.jour1_date ? '#fff' : '#94a3b8' }}>{data.jour1_date ? '\u2713' : '1'}</div>
-            <span style={{ color: data.jour1_date ? '#94a3b8' : '#f8fafc', fontSize: '14px', textDecoration: data.jour1_date ? 'line-through' : 'none', flex: 1 }}>Choisir vos dates</span>
-            {data.jour1_date && !depositPaid && (
-              <a
-                href={`/reservation/${data.id}?token=${encodeURIComponent(token)}`}
-                style={{ background: 'none', border: '1px solid #475569', color: '#94a3b8', padding: '4px 12px', borderRadius: '6px', fontSize: '12px', textDecoration: 'none' }}
-              >
-                Changer
-              </a>
-            )}
-          </div>
-          {/* Step 2: Contrat */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: data.contrat_signe_at ? '#22c55e' : '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: data.contrat_signe_at ? '#fff' : '#94a3b8' }}>{data.contrat_signe_at ? '\u2713' : '2'}</div>
-            <span style={{ color: data.contrat_signe_at ? '#94a3b8' : '#f8fafc', fontSize: '14px', textDecoration: data.contrat_signe_at ? 'line-through' : 'none' }}>Signer le contrat</span>
-          </div>
-          {/* Step 3: Depot */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: depositPaid ? '#22c55e' : '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#0f172a' }}>{depositPaid ? '\u2713' : '3'}</div>
-            <span style={{ color: depositPaid ? '#94a3b8' : '#f8fafc', fontSize: '14px', fontWeight: depositPaid ? 400 : 700, textDecoration: depositPaid ? 'line-through' : 'none' }}>Payer le depot (30%)</span>
-          </div>
+          {[
+            { num: 1, label: 'Choisir vos dates', done: hasDates },
+            { num: 2, label: 'Signer le contrat', done: contractSigned },
+            { num: 3, label: `Depot 30% — ${formatMoney(depot)}`, done: depositPaid },
+            { num: 4, label: `Solde 70% — ${formatMoney(balance)}`, done: balancePaid },
+          ].map((step, i) => (
+            <div key={step.num} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: i < 3 ? '10px' : 0 }}>
+              <div style={{
+                width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
+                background: step.done ? '#22c55e' : step.num === currentStep ? '#f59e0b' : '#334155',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '13px', fontWeight: 700,
+                color: step.done || step.num === currentStep ? '#fff' : '#64748b',
+              }}>
+                {step.done ? '\u2713' : step.num}
+              </div>
+              <span style={{
+                color: step.done ? '#94a3b8' : step.num === currentStep ? '#f8fafc' : '#64748b',
+                fontSize: '14px',
+                fontWeight: step.num === currentStep ? 700 : 400,
+                textDecoration: step.done ? 'line-through' : 'none',
+                flex: 1,
+              }}>
+                {step.label}
+              </span>
+            </div>
+          ))}
         </div>
 
-        {/* Chosen dates */}
-        {data.jour1_date && data.jour2_date && (
+        {/* Dates display */}
+        {hasDates && data.jour2_date && (
           <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '16px', border: '1px solid #334155' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 12px', color: '#f59e0b' }}>Dates choisies</h3>
-            <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px', marginBottom: '8px' }}>
-              <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '12px' }}>JOUR 1 — Preparation</div>
-              <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '4px' }}>{formatDate(data.jour1_date)}</div>
-              <div style={{ color: '#94a3b8', fontSize: '13px' }}>{slotLabel(data.jour1_slot || 'matin')}</div>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 10px', color: '#f59e0b' }}>
+              {depositPaid ? 'Dates confirmees' : 'Dates provisoires'}
+            </h3>
+            <div style={{ background: '#0f172a', borderRadius: '8px', padding: '10px', marginBottom: '6px' }}>
+              <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '11px' }}>JOUR 1 — Preparation</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '2px' }}>{formatDate(data.jour1_date!)}</div>
+              <div style={{ color: '#94a3b8', fontSize: '12px' }}>{slotLabel(data.jour1_slot || 'matin')}</div>
             </div>
-            <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px' }}>
-              <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '12px' }}>JOUR 2 — Finition</div>
-              <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '4px' }}>{formatDate(data.jour2_date)}</div>
-              <div style={{ color: '#94a3b8', fontSize: '13px' }}>{slotLabel(data.jour2_slot || 'apres-midi')}</div>
+            <div style={{ background: '#0f172a', borderRadius: '8px', padding: '10px' }}>
+              <div style={{ color: '#f59e0b', fontWeight: 700, fontSize: '11px' }}>JOUR 2 — Finition</div>
+              <div style={{ fontSize: '14px', fontWeight: 600, marginTop: '2px' }}>{formatDate(data.jour2_date)}</div>
+              <div style={{ color: '#94a3b8', fontSize: '12px' }}>{slotLabel(data.jour2_slot || 'apres-midi')}</div>
             </div>
+            {!depositPaid && (
+              <a href={`/reservation/${data.id}?token=${encodeURIComponent(token)}`}
+                style={{ display: 'block', textAlign: 'center', color: '#94a3b8', fontSize: '12px', marginTop: '8px', textDecoration: 'underline' }}>
+                Changer mes dates
+              </a>
+            )}
           </div>
         )}
 
         {/* Quote summary */}
-        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #334155', marginBottom: '16px' }}>
-          <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 16px' }}>Resume</h3>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #334155' }}>
-            <span style={{ color: '#94a3b8', fontSize: '14px' }}>Client</span>
-            <span style={{ fontSize: '14px', fontWeight: 600 }}>{data.client_nom}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #334155' }}>
-            <span style={{ color: '#94a3b8', fontSize: '14px' }}>Service</span>
-            <span style={{ fontSize: '14px' }}>{SERVICE_LABELS[data.type_service] || data.type_service}</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #334155' }}>
-            <span style={{ color: '#94a3b8', fontSize: '14px' }}>Superficie</span>
-            <span style={{ fontSize: '14px' }}>{data.superficie} pi&sup2;</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '12px 0', fontWeight: 700, fontSize: '18px' }}>
+        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', border: '1px solid #334155', marginBottom: '16px' }}>
+          <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 12px' }}>Votre soumission</h3>
+          {[
+            { label: 'Service', value: SERVICE_LABELS[data.type_service] || data.type_service },
+            { label: 'Superficie', value: `${data.superficie} pi²` },
+          ].map(row => (
+            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
+              <span style={{ color: '#94a3b8', fontSize: '13px' }}>{row.label}</span>
+              <span style={{ fontSize: '13px', fontWeight: 600 }}>{row.value}</span>
+            </div>
+          ))}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', fontWeight: 700, fontSize: '17px' }}>
             <span>Total</span>
             <span>{formatMoney(total)}</span>
           </div>
         </div>
 
-        {/* Payment status & actions */}
-        {fullyPaid ? (
-          <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '12px', padding: '24px', textAlign: 'center' }}>
-            <div style={{ fontSize: '48px', marginBottom: '8px', color: '#22c55e' }}>&#10003;</div>
-            <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 8px', color: '#22c55e' }}>Tous les paiements completes</h2>
-            <p style={{ color: '#86efac', fontSize: '14px', margin: 0 }}>Merci! Depot et solde ont ete payes.</p>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {/* Deposit section */}
-            <div style={{
-              background: depositPaid ? '#052e16' : '#1e293b',
-              border: `1px solid ${depositPaid ? '#22c55e' : '#f59e0b'}`,
-              borderRadius: '12px',
-              padding: '20px',
+        {/* === CURRENT ACTION BUTTON === */}
+        {currentStep === 1 && (
+          <a href={`/reservation/${data.id}?token=${encodeURIComponent(token)}`}
+            style={{
+              display: 'block', width: '100%', padding: '18px', textAlign: 'center',
+              background: '#f59e0b', color: '#0f172a', borderRadius: '10px',
+              textDecoration: 'none', fontWeight: 700, fontSize: '17px',
+              marginBottom: '16px', boxSizing: 'border-box',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: depositPaid ? '0' : '16px' }}>
-                <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 4px', color: depositPaid ? '#22c55e' : '#f59e0b' }}>
-                    {depositPaid ? 'Depot paye' : 'Depot de 30%'}
-                    {depositPaid && ' \u2713'}
-                  </h3>
-                  <p style={{ color: depositPaid ? '#86efac' : '#94a3b8', fontSize: '14px', margin: 0 }}>
-                    {formatMoney(depot)}
-                  </p>
-                </div>
-              </div>
-              {!depositPaid && (
-                <a
-                  href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}`}
-                  style={{
-                    display: 'block', width: '100%', padding: '16px',
-                    background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px',
-                    fontSize: '16px', fontWeight: 700, textAlign: 'center', textDecoration: 'none',
-                    cursor: 'pointer', boxSizing: 'border-box',
-                  }}
-                >
-                  Payer maintenant — {formatMoney(depot)}
-                </a>
-              )}
-            </div>
+            Choisir mes dates de travaux
+          </a>
+        )}
 
-            {/* Balance section */}
-            <div style={{
-              background: balancePaid ? '#052e16' : '#1e293b',
-              border: `1px solid ${balancePaid ? '#22c55e' : depositPaid ? '#f59e0b' : '#334155'}`,
-              borderRadius: '12px',
-              padding: '20px',
-              opacity: depositPaid ? 1 : 0.5,
+        {currentStep === 2 && (
+          <a href={`/contrat/${data.id}?token=${encodeURIComponent(token)}`}
+            style={{
+              display: 'block', width: '100%', padding: '18px', textAlign: 'center',
+              background: '#0f172a', color: '#ffffff', borderRadius: '10px', border: '2px solid #f59e0b',
+              textDecoration: 'none', fontWeight: 700, fontSize: '17px',
+              marginBottom: '16px', boxSizing: 'border-box',
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: (balancePaid || !depositPaid) ? '0' : '16px' }}>
-                <div>
-                  <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 4px', color: balancePaid ? '#22c55e' : depositPaid ? '#f59e0b' : '#64748b' }}>
-                    {balancePaid ? 'Solde paye' : 'Solde de 70%'}
-                    {balancePaid && ' \u2713'}
-                  </h3>
-                  <p style={{ color: balancePaid ? '#86efac' : '#94a3b8', fontSize: '14px', margin: 0 }}>
-                    {formatMoney(balance)}
-                    {!depositPaid && ' — Disponible apres le depot'}
-                    {depositPaid && !balancePaid && ' — Payable a la fin des travaux'}
-                  </p>
-                </div>
+            Signer le contrat
+          </a>
+        )}
+
+        {currentStep === 3 && (
+          <div style={{ marginBottom: '16px' }}>
+            <a href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}`}
+              style={{
+                display: 'block', width: '100%', padding: '18px', textAlign: 'center',
+                background: '#16a34a', color: '#ffffff', borderRadius: '10px',
+                textDecoration: 'none', fontWeight: 700, fontSize: '17px',
+                marginBottom: '10px', boxSizing: 'border-box',
+              }}>
+              Payer en ligne — {formatMoney(depot)}
+            </a>
+            {!interacSent ? (
+              <button onClick={handleInterac}
+                style={{
+                  display: 'block', width: '100%', padding: '16px', textAlign: 'center',
+                  background: '#1e293b', color: '#f8fafc', borderRadius: '10px', border: '1px solid #475569',
+                  fontWeight: 700, fontSize: '15px', cursor: 'pointer',
+                }}>
+                Je paie par virement Interac
+              </button>
+            ) : (
+              <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
+                <p style={{ color: '#22c55e', fontWeight: 700, margin: '0 0 8px' }}>Notre equipe a ete notifiee!</p>
+                <p style={{ color: '#86efac', fontSize: '13px', margin: '0 0 8px' }}>Envoyez <strong>{formatMoney(depot)}</strong> par virement Interac a :</p>
+                <p style={{ color: '#f59e0b', fontWeight: 700, fontSize: '16px', margin: '0 0 4px' }}>gestionnovusepoxy@gmail.com</p>
+                <p style={{ color: '#64748b', fontSize: '12px', margin: '4px 0 0' }}>Message: Devis #{data.id} — {data.client_nom}</p>
               </div>
-              {depositPaid && !balancePaid && (
-                <a
-                  href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}`}
-                  style={{
-                    display: 'block', width: '100%', padding: '16px',
-                    background: '#f59e0b', color: '#0f172a', border: 'none', borderRadius: '8px',
-                    fontSize: '16px', fontWeight: 700, textAlign: 'center', textDecoration: 'none',
-                    cursor: 'pointer', boxSizing: 'border-box',
-                  }}
-                >
-                  Payer le solde — {formatMoney(balance)}
-                </a>
-              )}
-            </div>
+            )}
           </div>
         )}
 
-        {/* Calendar buttons — show when deposit is paid and booking dates exist */}
+        {/* Step 4: Solde 70% — dispo dès que dépôt payé */}
+        {currentStep === 4 && (
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '14px', marginBottom: '12px', textAlign: 'center' }}>
+              <p style={{ color: '#22c55e', fontWeight: 700, fontSize: '15px', margin: 0 }}>Depot de {formatMoney(depot)} recu &#10003;</p>
+            </div>
+            <a href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}&type=balance`}
+              style={{
+                display: 'block', width: '100%', padding: '18px', textAlign: 'center',
+                background: '#f59e0b', color: '#0f172a', borderRadius: '10px',
+                textDecoration: 'none', fontWeight: 700, fontSize: '17px',
+                marginBottom: '10px', boxSizing: 'border-box',
+              }}>
+              Payer le solde — {formatMoney(balance)}
+            </a>
+            <button onClick={handleInterac}
+              style={{
+                display: interacSent ? 'none' : 'block', width: '100%', padding: '14px', textAlign: 'center',
+                background: '#1e293b', color: '#f8fafc', borderRadius: '10px', border: '1px solid #475569',
+                fontWeight: 600, fontSize: '14px', cursor: 'pointer',
+              }}>
+              Je paie le solde par virement Interac
+            </button>
+            {interacSent && (
+              <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
+                <p style={{ color: '#22c55e', fontWeight: 700, margin: '0 0 6px' }}>Notre equipe a ete notifiee!</p>
+                <p style={{ color: '#86efac', fontSize: '13px', margin: 0 }}>Envoyez <strong>{formatMoney(balance)}</strong> a <strong style={{ color: '#f59e0b' }}>gestionnovusepoxy@gmail.com</strong></p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Step 5: Fully paid */}
+        {currentStep === 5 && (
+          <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '12px', padding: '24px', textAlign: 'center', marginBottom: '16px' }}>
+            <div style={{ fontSize: '48px', marginBottom: '8px', color: '#22c55e' }}>&#10003;</div>
+            <h2 style={{ fontSize: '20px', fontWeight: 700, margin: '0 0 8px', color: '#22c55e' }}>Tout est paye!</h2>
+            <p style={{ color: '#86efac', fontSize: '14px', margin: 0 }}>Merci pour votre confiance. Depot et solde completes.</p>
+          </div>
+        )}
+
+        {/* Calendar — show when deposit paid + dates exist */}
         {depositPaid && data.jour1_date && data.jour2_date && (
-          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #0ea5e9', marginTop: '16px', textAlign: 'center' }}>
-            <h3 style={{ fontSize: '16px', fontWeight: 700, margin: '0 0 12px', color: '#0ea5e9' }}>
-              Ajouter au calendrier
-            </h3>
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'center', flexWrap: 'wrap' }}>
-              <a
-                href={`/api/quotes/${data.id}/calendar?type=google&day=1`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  background: '#4285f4', color: '#ffffff', padding: '10px 16px',
-                  borderRadius: '8px', textDecoration: 'none', fontWeight: 600, fontSize: '13px',
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', border: '1px solid #0ea5e9', marginBottom: '16px', textAlign: 'center' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 700, margin: '0 0 10px', color: '#0ea5e9' }}>Ajouter au calendrier</h3>
+            <div style={{ display: 'flex', gap: '6px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <a href={`/api/quotes/${data.id}/calendar?type=google&day=1`} target="_blank" rel="noopener noreferrer"
+                style={{ background: '#4285f4', color: '#fff', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', fontWeight: 600, fontSize: '12px' }}>
                 Google - Jour 1
               </a>
-              <a
-                href={`/api/quotes/${data.id}/calendar?type=google&day=2`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  background: '#4285f4', color: '#ffffff', padding: '10px 16px',
-                  borderRadius: '8px', textDecoration: 'none', fontWeight: 600, fontSize: '13px',
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <a href={`/api/quotes/${data.id}/calendar?type=google&day=2`} target="_blank" rel="noopener noreferrer"
+                style={{ background: '#4285f4', color: '#fff', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', fontWeight: 600, fontSize: '12px' }}>
                 Google - Jour 2
               </a>
-              <a
-                href={`/api/quotes/${data.id}/calendar?type=ics`}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '6px',
-                  background: '#334155', color: '#f8fafc', padding: '10px 16px',
-                  borderRadius: '8px', textDecoration: 'none', fontWeight: 600, fontSize: '13px',
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Apple / Outlook (.ics)
+              <a href={`/api/quotes/${data.id}/calendar?type=ics`}
+                style={{ background: '#334155', color: '#f8fafc', padding: '8px 14px', borderRadius: '6px', textDecoration: 'none', fontWeight: 600, fontSize: '12px' }}>
+                Apple / Outlook
               </a>
             </div>
           </div>
         )}
 
-        {/* Alternative payment — hide only right after a successful Stripe payment */}
-        {!fullyPaid && !success && (
-          <div style={{ background: '#1e293b', borderRadius: '12px', padding: '20px', border: '1px solid #334155', marginTop: '16px', textAlign: 'center' }}>
-            <p style={{ color: '#94a3b8', fontSize: '14px', margin: '0 0 8px' }}>Ou payez par virement Interac a:</p>
-            <p style={{ color: '#f59e0b', fontWeight: 700, fontSize: '16px', margin: '0 0 4px' }}>gestionnovusepoxy@gmail.com</p>
-            <div style={{ background: '#0f172a', borderRadius: '8px', padding: '12px', margin: '12px 0 0', border: '1px solid #334155' }}>
-              <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 4px' }}>Montant exact a envoyer:</p>
-              <p style={{ color: '#f8fafc', fontWeight: 700, fontSize: '16px', margin: '0 0 8px' }}>
-                {depositPaid ? formatMoney(balance) : formatMoney(depot)}
-              </p>
-              <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 2px' }}>Message du virement:</p>
-              <p style={{ color: '#f59e0b', fontWeight: 600, fontSize: '14px', margin: 0 }}>Devis #{data.id} — {data.client_nom}</p>
-            </div>
-            <p style={{ color: '#64748b', fontSize: '11px', margin: '8px 0 0' }}>Ou par cheque a l&apos;ordre de Novus Epoxy</p>
-          </div>
-        )}
+        {/* Footer with names + roles */}
+        <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', border: '1px solid #334155', marginBottom: '16px' }}>
+          <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 8px', fontWeight: 700 }}>Questions? Contactez-nous :</p>
+          <p style={{ color: '#f8fafc', fontSize: '13px', margin: '0 0 4px' }}>
+            <strong>Luca</strong> (facturation / soumission) : <a href="tel:5813075983" style={{ color: '#f59e0b' }}>581-307-5983</a>
+          </p>
+          <p style={{ color: '#f8fafc', fontSize: '13px', margin: 0 }}>
+            <strong>Jason</strong> (chantier / soumission) : <a href="tel:5813072678" style={{ color: '#f59e0b' }}>581-307-2678</a>
+          </p>
+        </div>
 
-        {/* Footer */}
-        <p style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', marginTop: '24px' }}>
-          Novus Epoxy — Planchers epoxy haut de gamme — Quebec<br />
-          581-307-5983 | 581-307-2678
+        <p style={{ textAlign: 'center', color: '#475569', fontSize: '11px', margin: '0 0 24px' }}>
+          Novus Epoxy — Planchers epoxy haut de gamme — RBQ 5861-8471-01<br />
+          Garantie 10 ans | 15 ans d&apos;experience | novusepoxy.ca
         </p>
       </div>
     </div>

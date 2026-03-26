@@ -61,18 +61,21 @@ ${Number(quote.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><
 <p style="margin:0;color:#64748b;font-size:13px;border-top:1px dashed #d6d3d1;padding-top:6px;">Solde (70%) à la fin des travaux : <strong>${solde70}</strong></p>
 </div>
 <div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 12px;">
-<p style="margin:0 0 8px;color:#1e293b;font-weight:700;font-size:14px;">Prochaine etape :</p>
-<p style="margin:0;color:#475569;font-size:13px;">Choisissez vos dates de travaux pour reserver votre place. Ensuite, vous pourrez signer le contrat et confirmer avec le depot.</p>
+<p style="margin:0 0 8px;color:#1e293b;font-weight:700;font-size:14px;">Comment proceder :</p>
+<p style="margin:0 0 4px;color:#475569;font-size:13px;">1. Choisissez vos dates de travaux</p>
+<p style="margin:0 0 4px;color:#475569;font-size:13px;">2. Signez le contrat</p>
+<p style="margin:0;color:#475569;font-size:13px;">3. Confirmez avec le depot (30%)</p>
+<p style="margin:8px 0 0;color:#94a3b8;font-size:12px;">Tout se fait sur une seule page — suivez les etapes a votre rythme.</p>
 </div>
 <div style="text-align:center;margin:0 0 12px;">
-<a href="https://novus-epoxy.vercel.app/reservation/${quote.id}?token=${encodeURIComponent(secretToken)}"
+<a href="https://novus-epoxy.vercel.app/paiement/${quote.id}?token=${encodeURIComponent(secretToken)}"
    style="display:inline-block;background:#f59e0b;color:#0f172a;padding:16px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:17px;">
-  Choisir mes dates de travaux
+  Voir ma soumission
 </a>
 </div>
 <div style="background:#f1f5f9;border-radius:6px;padding:10px;margin:0 0 12px;font-size:12px;color:#475569;">
-<strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
-<strong>Travaux :</strong> Jason Lanthier — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>
+<strong>Facturation / Soumission :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
+<strong>Chantier / Soumission :</strong> Jason — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>
 </div>
 <p style="color:#94a3b8;font-size:11px;margin:0;">Valide 30 jours. Ref: ${ts}</p>
 </div>

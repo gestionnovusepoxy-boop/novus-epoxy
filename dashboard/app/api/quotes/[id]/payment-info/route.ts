@@ -23,8 +23,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const quote = rows[0];
 
-  // Only allow access for quotes that have been signed or later
-  const allowedStatuts = ['contrat_signe', 'depot_paye', 'planifie', 'complete'];
+  // Allow access for quotes that have been sent or later
+  const allowedStatuts = ['envoye', 'contrat_signe', 'depot_paye', 'planifie', 'complete'];
   if (!allowedStatuts.includes(quote.statut as string)) {
     return NextResponse.json({ error: 'Cette page n\'est pas encore disponible' }, { status: 400 });
   }
