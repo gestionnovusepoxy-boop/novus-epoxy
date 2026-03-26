@@ -423,6 +423,14 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             )}
           </>
         )}
+        {['envoye', 'contrat_signe', 'depot_paye', 'planifie'].includes(quote.statut) && quote.client_email && (
+          <button
+            onClick={handleSend} disabled={!!action}
+            className="bg-purple-500/20 hover:bg-purple-500/30 disabled:opacity-50 text-purple-400 font-semibold rounded-lg px-6 py-2.5 text-sm transition border border-purple-500/30"
+          >
+            {action === 'send' ? 'Envoi...' : '📧 Renvoyer par email'}
+          </button>
+        )}
         {['brouillon', 'en_attente', 'envoye', 'contrat_signe', 'depot_paye', 'planifie'].includes(quote.statut) && quote.client_tel && (
           <button
             onClick={handleSendSMS} disabled={!!action}

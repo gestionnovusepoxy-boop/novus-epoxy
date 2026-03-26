@@ -13,8 +13,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const quote = rows[0];
   if (!quote) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
-  if (quote.statut !== 'approuve') {
-    return NextResponse.json({ error: 'Le devis doit être approuvé avant envoi' }, { status: 400 });
+  const allowedStatuts = ['approuve', 'envoye', 'contrat_signe', 'depot_paye', 'planifie'];
+  if (!allowedStatuts.includes(quote.statut as string)) {
+    return NextResponse.json({ error: 'Statut invalide pour envoi email' }, { status: 400 });
+  }
+
+  // Anti-double-envoi: bloquer si envoyé dans les 60 dernières secondes
+  if (quote.sent_at) {
+    const secondsSince = (Date.now() - new Date(quote.sent_at as string).getTime()) / 1000;
+    if (secondsSince < 60) {
+      return NextResponse.json({ error: 'Email déjà envoyé il y a moins de 60 secondes' }, { status: 429 });
+    }
   }
 
   const apiKey = process.env.RESEND_API_KEY;
