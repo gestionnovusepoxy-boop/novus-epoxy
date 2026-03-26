@@ -203,23 +203,6 @@ const TOOLS = [
       required: ['liste'],
     },
   },
-  {
-    name: 'traiter_lead_externe',
-    description: 'Traite un lead/contact fourni par Jason ou Luca. Classifie le lead (chaud/tiede/froid), cree une fiche dans la base de donnees, genere un message de prospection personnalise et l\'envoie par SMS au client. A utiliser AUTOMATIQUEMENT des que Jason ou Luca fournit les coordonnees d\'un prospect (nom + telephone ou email). Jason dit par exemple "j\'ai un lead: Mario Tremblay 4186092084 garage flake" et le bot doit traiter ce lead sans qu\'on le lui demande explicitement.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        nom: { type: 'string', description: 'Nom complet du prospect' },
-        telephone: { type: 'string', description: 'Numero de telephone du prospect (10 chiffres)', default: '' },
-        email: { type: 'string', description: 'Email du prospect (optionnel)', default: '' },
-        service: { type: 'string', description: 'Service interesse: flake, metallique, commercial, quartz, couleur_unie (si connu)', default: '' },
-        superficie: { type: 'string', description: 'Surface approximative en pi2 si connue', default: '' },
-        ville: { type: 'string', description: 'Ville du prospect', default: '' },
-        notes: { type: 'string', description: 'Contexte, source du lead, urgence, notes de Jason', default: '' },
-      },
-      required: ['nom'],
-    },
-  },
 ];
 
 // Execute tool calls
@@ -531,103 +514,6 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       });
     }
 
-    case 'traiter_lead_externe': {
-      const nom = (input.nom as string).trim();
-      const telephone = ((input.telephone as string) || '').replace(/\D/g, '').slice(-10);
-      const email = (input.email as string) || '';
-      const service = (input.service as string) || '';
-      const superficie = (input.superficie as string) || '';
-      const ville = (input.ville as string) || '';
-      const notes = (input.notes as string) || '';
-
-      if (!nom) return JSON.stringify({ error: 'Nom du prospect requis' });
-      if (!telephone && !email) return JSON.stringify({ error: 'Telephone ou email requis' });
-
-      // 1. Save lead to submissions table
-      const subRows = await query(
-        `INSERT INTO submissions (nom, email, telephone, service, surface_estimee, ville, statut)
-         VALUES ($1,$2,$3,$4,$5,$6,'en_traitement') RETURNING id`,
-        [nom, email || '', telephone || '', service || null, superficie || null, ville || null]
-      );
-      const subId = (subRows[0] as { id: number }).id;
-
-      // 2. Generate personalized outreach message with Claude Haiku
-      const apiKeyLead = process.env.ANTHROPIC_API_KEY;
-      let smsMessage = '';
-      let tempLabel = '🟡 TIEDE';
-      let raison = '';
-
-      if (apiKeyLead) {
-        const context = [
-          nom, telephone ? `Tel: ${telephone}` : '', email ? `Email: ${email}` : '',
-          service ? `Service: ${service}` : '', superficie ? `Surface: ${superficie} pi2` : '',
-          ville ? `Ville: ${ville}` : '', notes ? `Notes: ${notes}` : '',
-        ].filter(Boolean).join('\n');
-
-        const msgRes = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'x-api-key': apiKeyLead, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 500,
-            messages: [{ role: 'user', content: `Tu es assistant de Novus Epoxy (planchers epoxy, Quebec). Jason t'a donne ce lead:\n\n${context}\n\nGenere:\n1. Classification du lead\n2. Un SMS de prospection personnalise en francais (max 160 chars, mentionne le service si connu, chaleureux, signe "Novus Epoxy 581-307-2678")\n\nJSON strict:\n{"temperature":"chaud|tiede|froid","raison":"1 phrase why","sms":"le message"}` }],
-          }),
-        });
-
-        if (msgRes.ok) {
-          const msgData = await msgRes.json();
-          try {
-            const parsed = JSON.parse((msgData.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
-            smsMessage = parsed.sms || '';
-            raison = parsed.raison || '';
-            const emojiMap: Record<string, string> = { chaud: '🔥', tiede: '🟡', froid: '🔵' };
-            tempLabel = `${emojiMap[parsed.temperature] ?? '📋'} ${(parsed.temperature ?? 'tiede').toUpperCase()}`;
-          } catch { /* fallback */ }
-        }
-      }
-
-      // Fallback message
-      if (!smsMessage) {
-        const prenom = nom.split(' ')[0];
-        smsMessage = `Bonjour ${prenom}! Novus Epoxy ici${service ? ` — planchers ${service}` : ' — planchers epoxy'}. On peut vous faire un estimé gratuit${ville ? ` a ${ville}` : ''}. Appelez-nous: 581-307-2678`;
-      }
-
-      // 3. Send SMS to lead
-      let smsSent = false;
-      if (telephone) {
-        smsSent = await sendSMS(telephone, smsMessage);
-      }
-
-      // 4. Update submission with lead classification note
-      if (raison) {
-        await query(`UPDATE submissions SET type_projet = $1 WHERE id = $2`, [`${tempLabel}: ${raison}`, subId]).catch(() => {});
-      }
-
-      // 5. Notify the other admin (relay between Jason and Luca)
-      const senderChatId = '';  // will notify all admins
-      for (const adminId of ADMIN_CHAT_IDS()) {
-        await sendTelegram(adminId, [
-          `📥 Lead traite: #${subId}`,
-          `👤 ${nom}${telephone ? ` — ${telephone}` : ''}${ville ? ` (${ville})` : ''}`,
-          service ? `🔧 ${service}${superficie ? ` — ${superficie} pi2` : ''}` : '',
-          ``,
-          `${tempLabel}${raison ? ` — ${raison}` : ''}`,
-          ``,
-          smsSent ? `✅ SMS envoye: "${smsMessage}"` : (telephone ? `❌ SMS echoue` : `📧 Pas de tel — SMS non envoye`),
-        ].filter(Boolean).join('\n'));
-      }
-
-      return JSON.stringify({
-        ok: true,
-        submission_id: subId,
-        temperature: tempLabel,
-        raison,
-        sms_envoye: smsSent,
-        message: smsMessage,
-        telephone: telephone || 'aucun',
-      });
-    }
-
     case 'analyser_leads': {
       const days = Math.min(Number(input.jours) || 14, 90);
       const statut = input.statut as string;
@@ -670,17 +556,8 @@ TU PEUX:
 - Ajouter des photos au portfolio (envoie une photo avec caption "portfolio")
 - Scanner des recus/factures (envoie une photo du recu)
 - Importer une liste de leads en bulk dans la banque CRM (outil importer_leads_liste)
-- Traiter les leads externes fournis par Jason/Luca: classifier + envoyer SMS personnalise automatiquement
 - Analyser et classer les leads/soumissions recents (chaud/tiede/froid, urgence, action suggeree)
 - Repondre aux questions sur les clients et leur suivi
-
-FLUX LEAD EXTERNE — TRES IMPORTANT:
-Quand Jason ou Luca envoie un message avec les coordonnees d'un prospect (nom + telephone ou email), meme sans demander explicitement, tu dois AUTOMATIQUEMENT utiliser l'outil traiter_lead_externe. Examples:
-- "j'ai un lead: Mario Tremblay 4186092084 garage flake" → traiter_lead_externe immediatement
-- "contact: Sophie Gagnon, 4185551234, veut un metallique" → traiter_lead_externe
-- "lead de Jason: Michel Roy 4189876543" → traiter_lead_externe
-- "voici un contact: ..." → traiter_lead_externe
-Ne demande pas de confirmation, agis directement. Apres avoir traite, resume ce qui a ete fait.
 
 PRIX:
 - Flake (Flocon): 8.50$/pi2
@@ -709,7 +586,6 @@ IMPORTANT:
 - Quand on te demande d'envoyer un devis, utilise creer_devis_sms
 - Quand on te demande les stats, utilise stats_business
 - Quand on te demande les emails/courriels, utilise resume_emails
-- Quand Jason/Luca fournit un contact prospect → traiter_lead_externe AUTOMATIQUEMENT sans confirmation
 - Quand on demande les leads/soumissions du site → analyser_leads puis classe 🔥/🟡/🔵 avec action
 - Pour le suivi client, utilise liste_clients ou detail_devis
 - Sois bref — c'est un chat Telegram
