@@ -6,11 +6,13 @@ import { google } from 'googleapis';
 import { generateText } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 
+export const maxDuration = 300; // 5 min max on Vercel Pro
+
 // ─── Config ─────────────────────────────────────────────────────────────────
 
 const DRIVE_FOLDER_ID = '1UFKHCQhlbfrSNfORap6D3u-X4vpNCmFe';
 const MIN_QUALITY = 7;
-const MAX_ADD_PER_SCAN = 15;
+const MAX_ADD_PER_SCAN = 50;
 const MAX_VIDEO_SIZE = 100 * 1024 * 1024; // 100MB max pour vidéos
 const MAX_PHOTO_SIZE = 20 * 1024 * 1024;  // 20MB max pour photos
 
