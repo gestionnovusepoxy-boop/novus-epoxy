@@ -179,6 +179,7 @@ export default function CrmClient() {
   const [page, setPage]       = useState(1);
   const [statut, setStatut]   = useState('');
   const [type, setType]       = useState('');
+  const [tempFilter, setTempFilter] = useState('');
   const [search, setSearch]   = useState('');
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
@@ -192,6 +193,7 @@ export default function CrmClient() {
     params.set('limit', '25');
     if (statut) params.set('statut', statut);
     if (type) params.set('type', type);
+    if (tempFilter) params.set('temperature', tempFilter);
     if (search) params.set('search', search);
 
     const res = await fetch(`/api/crm/leads?${params}`);
@@ -202,7 +204,7 @@ export default function CrmClient() {
       if (json.stats) setStats(json.stats);
     }
     setLoading(false);
-  }, [page, statut, type, search]);
+  }, [page, statut, type, tempFilter, search]);
 
   async function handleAddLead() {
     if (!newLead.nom.trim()) return;
@@ -256,15 +258,21 @@ export default function CrmClient() {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Total',     value: total,    color: 'text-white' },
-          { label: '🔥 Chaud',  value: stats.chaud, color: 'text-red-400' },
-          { label: '🟡 Tiède',  value: stats.tiede, color: 'text-yellow-400' },
-          { label: '🔵 Froid',  value: stats.froid, color: 'text-blue-400' },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
+          { label: 'Total',     value: total,       color: 'text-white',      filter: '' },
+          { label: '🔥 Chaud',  value: stats.chaud, color: 'text-red-400',    filter: 'chaud' },
+          { label: '🟡 Tiède',  value: stats.tiede, color: 'text-yellow-400', filter: 'tiede' },
+          { label: '🔵 Froid',  value: stats.froid, color: 'text-blue-400',   filter: 'froid' },
+        ].map(({ label, value, color, filter }) => (
+          <button
+            key={label}
+            onClick={() => { setTempFilter(tempFilter === filter ? '' : filter); setPage(1); }}
+            className={`bg-slate-800 border rounded-xl px-4 py-3 text-left transition cursor-pointer hover:bg-slate-700/50 ${
+              tempFilter === filter && filter ? 'border-amber-500 ring-1 ring-amber-500/50' : 'border-slate-700'
+            }`}
+          >
             <p className="text-slate-400 text-xs mb-1">{label}</p>
             <p className={`text-2xl font-bold ${color}`}>{value}</p>
-          </div>
+          </button>
         ))}
       </div>
 

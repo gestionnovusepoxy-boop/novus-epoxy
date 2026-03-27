@@ -12,9 +12,10 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const page   = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
   const limit  = Math.min(100, parseInt(searchParams.get('limit') ?? '25'));
-  const statut = searchParams.get('statut') ?? '';
-  const type   = searchParams.get('type') ?? '';
-  const search = searchParams.get('search') ?? '';
+  const statut      = searchParams.get('statut') ?? '';
+  const type        = searchParams.get('type') ?? '';
+  const temperature = searchParams.get('temperature') ?? '';
+  const search      = searchParams.get('search') ?? '';
   const offset = (page - 1) * limit;
 
   let where = 'WHERE 1=1';
@@ -28,6 +29,10 @@ export async function GET(req: NextRequest) {
   if (type) {
     where += ` AND type = $${i++}`;
     params.push(type);
+  }
+  if (temperature) {
+    where += ` AND temperature = $${i++}`;
+    params.push(temperature);
   }
   if (search) {
     where += ` AND (nom ILIKE $${i} OR telephone ILIKE $${i} OR email ILIKE $${i})`;
