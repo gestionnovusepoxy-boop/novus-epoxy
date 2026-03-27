@@ -175,6 +175,7 @@ function LeadRow({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
 export default function CrmClient() {
   const [leads, setLeads]     = useState<Lead[]>([]);
   const [total, setTotal]     = useState(0);
+  const [stats, setStats]     = useState({ chaud: 0, tiede: 0, froid: 0 });
   const [page, setPage]       = useState(1);
   const [statut, setStatut]   = useState('');
   const [type, setType]       = useState('');
@@ -198,6 +199,7 @@ export default function CrmClient() {
       const json = await res.json();
       setLeads(json.data);
       setTotal(json.total);
+      if (json.stats) setStats(json.stats);
     }
     setLoading(false);
   }, [page, statut, type, search]);
@@ -217,11 +219,6 @@ export default function CrmClient() {
   }
 
   useEffect(() => { load(); }, [load]);
-
-  const chaud    = leads.filter(l => l.temperature === 'chaud').length;
-  const tiede    = leads.filter(l => l.temperature === 'tiede').length;
-  const froid    = leads.filter(l => l.temperature === 'froid').length;
-  const contacte = leads.filter(l => l.statut === 'contacte').length;
 
   return (
     <div className="p-6 space-y-5">
@@ -260,10 +257,9 @@ export default function CrmClient() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Total',     value: total,    color: 'text-white' },
-          { label: '🔥 Chaud',  value: chaud,    color: 'text-red-400' },
-          { label: '🟡 Tiède',  value: tiede,    color: 'text-yellow-400' },
-          { label: '🔵 Froid',  value: froid,    color: 'text-blue-400' },
-          { label: 'Contactés', value: contacte, color: 'text-blue-300' },
+          { label: '🔥 Chaud',  value: stats.chaud, color: 'text-red-400' },
+          { label: '🟡 Tiède',  value: stats.tiede, color: 'text-yellow-400' },
+          { label: '🔵 Froid',  value: stats.froid, color: 'text-blue-400' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-slate-800 border border-slate-700 rounded-xl px-4 py-3">
             <p className="text-slate-400 text-xs mb-1">{label}</p>

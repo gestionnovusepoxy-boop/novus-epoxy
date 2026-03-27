@@ -35,15 +35,23 @@ export async function GET(req: NextRequest) {
     i++;
   }
 
-  const countRows = await query(`SELECT COUNT(*)::int AS count FROM crm_leads ${where}`, params);
+  const [countRows, statsRows, dataRows] = await Promise.all([
+    query(`SELECT COUNT(*)::int AS count FROM crm_leads ${where}`, params),
+    query(`SELECT temperature, COUNT(*)::int AS count FROM crm_leads ${where} GROUP BY temperature`, params),
+    query(
+      `SELECT * FROM crm_leads ${where} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i}`,
+      [...params, limit, offset],
+    ),
+  ]);
+
   const total = (countRows[0]?.count as number) ?? 0;
+  const stats = { chaud: 0, tiede: 0, froid: 0 };
+  for (const row of statsRows) {
+    const t = row.temperature as string;
+    if (t in stats) stats[t as keyof typeof stats] = row.count as number;
+  }
 
-  const dataRows = await query(
-    `SELECT * FROM crm_leads ${where} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i}`,
-    [...params, limit, offset],
-  );
-
-  return NextResponse.json({ data: dataRows, total, page, limit });
+  return NextResponse.json({ data: dataRows, total, page, limit, stats });
 }
 
 export async function POST(req: NextRequest) {
