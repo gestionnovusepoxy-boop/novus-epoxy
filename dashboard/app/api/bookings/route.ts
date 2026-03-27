@@ -5,6 +5,64 @@ import { sendSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
 
+// Admin — get booking by quote_id
+export async function GET(req: NextRequest) {
+  const { auth } = await import('@/lib/auth');
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Non autorise' }, { status: 401 });
+
+  const quoteId = req.nextUrl.searchParams.get('quote_id');
+  if (!quoteId) return NextResponse.json({ error: 'quote_id requis' }, { status: 400 });
+
+  const rows = await query(
+    `SELECT id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut FROM bookings WHERE quote_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [parseInt(quoteId)]
+  );
+
+  if (rows.length === 0) return NextResponse.json({ booking: null });
+
+  const b = rows[0];
+  return NextResponse.json({
+    booking: {
+      id: b.id,
+      jour1_date: (b.jour1_date as Date).toISOString().split('T')[0],
+      jour1_slot: b.jour1_slot,
+      jour2_date: (b.jour2_date as Date).toISOString().split('T')[0],
+      jour2_slot: b.jour2_slot,
+      statut: b.statut,
+    },
+  });
+}
+
+// Admin — update booking dates
+export async function PATCH(req: NextRequest) {
+  const { auth } = await import('@/lib/auth');
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Non autorise' }, { status: 401 });
+
+  const body = await req.json();
+  const { quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot } = body;
+  if (!quote_id || !jour1_date || !jour2_date) {
+    return NextResponse.json({ error: 'quote_id, jour1_date, jour2_date requis' }, { status: 400 });
+  }
+
+  const existing = await query(`SELECT id FROM bookings WHERE quote_id = $1`, [quote_id]);
+  if (existing.length === 0) {
+    // Create new booking
+    await query(
+      `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut) VALUES ($1, $2, $3, $4, $5, 'en_attente')`,
+      [quote_id, jour1_date, jour1_slot || 'matin', jour2_date, jour2_slot || 'apres-midi']
+    );
+  } else {
+    await query(
+      `UPDATE bookings SET jour1_date = $1, jour1_slot = $2, jour2_date = $3, jour2_slot = $4, updated_at = NOW() WHERE quote_id = $5`,
+      [jour1_date, jour1_slot || 'matin', jour2_date, jour2_slot || 'apres-midi', quote_id]
+    );
+  }
+
+  return NextResponse.json({ ok: true });
+}
+
 // Public endpoint — client books their work dates
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
