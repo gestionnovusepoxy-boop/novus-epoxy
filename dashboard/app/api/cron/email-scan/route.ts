@@ -615,6 +615,10 @@ export async function GET(req: NextRequest) {
 
     // === FACTURE: Auto-create expense ===
     if (analysis.type === 'facture' && analysis.montant_ttc && analysis.montant_ttc > 0) {
+      // Validate categorie against allowed values (DB CHECK constraint)
+      const VALID_CATEGORIES = ['materiaux', 'equipement', 'vehicule', 'essence', 'assurance', 'publicite', 'sous-traitance', 'bureau', 'telecommunication', 'formation', 'repas', 'entretien', 'loyer', 'autre'];
+      const safeCategorie = VALID_CATEGORIES.includes(analysis.categorie ?? '') ? analysis.categorie : 'autre';
+
       // Check duplicate
       const existing = await query(
         `SELECT id FROM expenses WHERE fournisseur = $1 AND montant_ttc = $2 AND date_depense = $3`,
@@ -622,6 +626,7 @@ export async function GET(req: NextRequest) {
       );
 
       if (existing.length === 0) {
+        try {
         await query(
           `INSERT INTO expenses (fournisseur, description, montant_ht, tps, tvq, montant_ttc, categorie, date_depense, methode, source)
            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
@@ -632,13 +637,17 @@ export async function GET(req: NextRequest) {
             analysis.tps ?? 0,
             analysis.tvq ?? 0,
             analysis.montant_ttc,
-            analysis.categorie ?? 'autre',
+            safeCategorie,
             analysis.date_depense ?? new Date().toISOString().slice(0, 10),
             'autre',
             'email-scan',
           ],
         );
         invoicesCreated++;
+        } catch (insertErr) {
+          console.error(`[Email Scan] Expense insert failed for ${fromEmail}:`, insertErr);
+          // Don't crash the whole scan — just skip this expense
+        }
 
         // Notify admin
         for (const chatId of ADMIN_CHAT_IDS()) {
@@ -690,8 +699,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === IMPORTANT / NEEDS ATTENTION: Alert admin ===
-    if (analysis.needs_attention && analysis.type !== 'spam') {
+    // === IMPORTANT / NEEDS ATTENTION: Alert admin (only for client/important/facture — skip 'autre') ===
+    if (analysis.needs_attention && analysis.type !== 'spam' && analysis.type !== 'autre') {
       for (const chatId of ADMIN_CHAT_IDS()) {
         await sendTelegram(chatId,
           `📬 <b>Email necessite ton attention</b>\n\n` +
@@ -727,12 +736,24 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Email Scan] Fatal error:', msg);
-    await alertAdmins(
-      `🚨 <b>Email Scan — ERREUR CRITIQUE</b>\n\n` +
-      `${msg}\n\n` +
-      `Le scan des emails est en panne. Verifiez les logs Vercel.\n` +
-      `https://vercel.com/gestionnovusepoxy-boops-projects/novus-epoxy/logs`,
-    ).catch(() => {});
+
+    // Only send Telegram alert if we haven't sent one in the last 30 minutes (prevent spam)
+    const lastAlertRows = await query(`SELECT value FROM kv_store WHERE key = 'last_email_scan_error'`).catch(() => []);
+    const lastAlert = lastAlertRows?.[0]?.value as string | undefined;
+    const shouldAlert = !lastAlert || (Date.now() - new Date(lastAlert).getTime() > 30 * 60 * 1000);
+
+    if (shouldAlert) {
+      await query(
+        `INSERT INTO kv_store (key, value) VALUES ('last_email_scan_error', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [new Date().toISOString()],
+      ).catch(() => {});
+      await alertAdmins(
+        `🚨 <b>Email Scan — ERREUR CRITIQUE</b>\n\n` +
+        `${msg}\n\n` +
+        `Le scan des emails est en panne. Verifiez les logs Vercel.\n` +
+        `https://vercel.com/gestionnovusepoxy-boops-projects/novus-epoxy/logs`,
+      ).catch(() => {});
+    }
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }

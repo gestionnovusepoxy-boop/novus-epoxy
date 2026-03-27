@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { query } from '@/lib/db';
 
 // Gmail Pub/Sub push notification handler
 // Google sends a POST with a Pub/Sub message when new emails arrive.
 // We decode it, verify it's legit, then trigger the existing email-scan endpoint.
+
+// Cooldown: minimum 2 minutes between scans to avoid Telegram spam
+const COOLDOWN_MS = 2 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
   try {
@@ -11,8 +15,6 @@ export async function POST(req: NextRequest) {
     // Pub/Sub wraps the payload in { message: { data, messageId, publishTime }, subscription }
     const message = body?.message;
     if (!message?.data) {
-      console.error('[Gmail Webhook] Missing message.data in body:', JSON.stringify(body).slice(0, 500));
-      // Return 200 so Pub/Sub doesn't retry garbage
       return NextResponse.json({ error: 'Invalid payload' }, { status: 200 });
     }
 
@@ -22,6 +24,17 @@ export async function POST(req: NextRequest) {
     const historyId = decoded.historyId;
 
     console.log(`[Gmail Webhook] Push notification for ${emailAddress}, historyId: ${historyId}`);
+
+    // Check cooldown — skip if last scan was less than 2 min ago
+    const lastScanRows = await query(`SELECT value FROM kv_store WHERE key = 'last_email_scan'`);
+    const lastScan = lastScanRows?.[0]?.value as string | undefined;
+    if (lastScan) {
+      const elapsed = Date.now() - new Date(lastScan).getTime();
+      if (elapsed < COOLDOWN_MS) {
+        console.log(`[Gmail Webhook] Cooldown active (${Math.round(elapsed / 1000)}s ago), skipping`);
+        return NextResponse.json({ ok: true, skipped: true, reason: 'cooldown', elapsed_ms: elapsed });
+      }
+    }
 
     // Trigger the existing email-scan endpoint internally
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';
@@ -38,11 +51,9 @@ export async function POST(req: NextRequest) {
     const result = await scanRes.json().catch(() => ({}));
     console.log('[Gmail Webhook] Email scan result:', JSON.stringify(result));
 
-    // Always return 200 to acknowledge — Pub/Sub retries on non-2xx
     return NextResponse.json({ ok: true, emailAddress, historyId, scan: result });
   } catch (err) {
     console.error('[Gmail Webhook] Error:', err);
-    // Return 200 even on error to prevent infinite Pub/Sub retries
     return NextResponse.json({ error: 'Processing failed', acknowledged: true }, { status: 200 });
   }
 }
