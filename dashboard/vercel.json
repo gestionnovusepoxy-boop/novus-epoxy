@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/relance-prospect",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/referral",
+      "schedule": "0 16 * * 1"
     }
   ],
   "headers": [

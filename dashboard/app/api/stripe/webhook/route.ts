@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { sendSMS } from '@/lib/sms';
+import { sendSMS, sendDepositConfirmationSMS } from '@/lib/sms';
 import { formatMoney } from '@/lib/pricing';
 import { calendarLinksHtml } from '@/lib/calendar-links';
 import { escapeHtml } from '@/lib/utils';
@@ -143,6 +143,19 @@ ${calendarHtml}
 </div></div></body></html>`;
 
       await sendConfirmationEmail(clientEmail, `Depot recu — Novus Epoxy #${quoteId}`, depositHtml);
+
+      // SMS confirmation au client
+      if (quote.client_tel) {
+        const booking = quote.booking_id
+          ? (await query('SELECT jour1_date, jour2_date FROM bookings WHERE id = $1', [quote.booking_id]))[0]
+          : null;
+        await sendDepositConfirmationSMS(
+          quote.client_tel as string,
+          clientName,
+          booking?.jour1_date ? new Date(booking.jour1_date as string).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }) : undefined,
+          booking?.jour2_date ? new Date(booking.jour2_date as string).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }) : undefined,
+        ).catch(() => {});
+      }
 
       // Notify admins via SMS
       const adminPhones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];

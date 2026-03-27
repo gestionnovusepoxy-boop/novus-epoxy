@@ -51,15 +51,36 @@ export async function notifyAdminSMS(quoteId: number, clientName: string) {
   await Promise.all(phones.map(phone => sendSMS(phone, msg)));
 }
 
-// Send follow-up SMS to client
-export async function sendFollowUpSMS(clientPhone: string, clientName: string, quoteId: number, attempt: number) {
+// Luca's number — always use this for client-facing SMS
+const LUCA_PHONE = '581-307-5983';
+
+// Send follow-up SMS to client (single relance after 5 days, no earlier SMS)
+export async function sendFollowUpSMS(clientPhone: string, clientName: string, quoteId: number) {
   if (!clientPhone) return false;
+  const prenom = clientName.split(' ')[0];
 
-  const messages: Record<number, string> = {
-    1: `Bonjour ${clientName}! C'est Novus Epoxy. On vous a envoye une soumission #${quoteId} par email. Avez-vous eu la chance d'y jeter un coup d'oeil? N'hesitez pas a nous ecrire si vous avez des questions!`,
-    2: `Bonjour ${clientName}, petit rappel de Novus Epoxy! Votre soumission #${quoteId} est toujours valide. On serait ravis de planifier vos travaux. Repondez a ce message ou appelez-nous au 581-307-2678.`,
-  };
+  const msg = `Salut ${prenom}! C'est Luca de Novus Epoxy. Je voulais m'assurer que t'avais bien recu notre soumission #${quoteId}. Si t'as des questions ou tu veux qu'on en discute, n'hesite pas a m'appeler au ${LUCA_PHONE}. Bonne journee!`;
+  return sendSMS(clientPhone, msg);
+}
 
-  const msg = messages[attempt] ?? messages[2];
+// SMS confirmation when deposit is received
+export async function sendDepositConfirmationSMS(clientPhone: string, clientName: string, jour1Date?: string, jour2Date?: string) {
+  if (!clientPhone) return false;
+  const prenom = clientName.split(' ')[0];
+
+  const datesInfo = jour1Date && jour2Date
+    ? ` Tes dates du ${jour1Date} et ${jour2Date} sont confirmees.`
+    : '';
+
+  const msg = `${prenom}, c'est Luca de Novus Epoxy! Depot bien recu, merci!${datesInfo} On a hate de transformer ton plancher! Questions? ${LUCA_PHONE}`;
+  return sendSMS(clientPhone, msg);
+}
+
+// SMS referral request 6 months after completed work
+export async function sendReferralSMS(clientPhone: string, clientName: string) {
+  if (!clientPhone) return false;
+  const prenom = clientName.split(' ')[0];
+
+  const msg = `Salut ${prenom}! C'est Luca de Novus Epoxy. Ca fait deja quelques mois qu'on a fait ton plancher — j'espere que t'en profites! Si tu connais quelqu'un qui voudrait la meme chose, on offre 100$ de rabais pour chaque reference. Passe le mot! ${LUCA_PHONE}`;
   return sendSMS(clientPhone, msg);
 }

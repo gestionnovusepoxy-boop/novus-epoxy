@@ -149,12 +149,13 @@ ${calendarHtml}
     } catch (err) { console.error('Deposit confirmation email failed:', err); }
   }
 
-  // Send SMS to client
+  // SMS confirmation au client — personnel avec numéro Luca
   const clientTel = quote.client_tel as string | null;
   if (clientTel) {
+    const prenom = (quote.client_nom as string).split(' ')[0];
     await sendSMS(
       clientTel,
-      `Novus Epoxy: Votre reservation est confirmee! Jour 1: ${j1Fmt} AM, Jour 2: ${j2Fmt} ${slotLabel}. Merci pour votre confiance! Questions? 581-307-2678`
+      `${prenom}, c'est Luca de Novus Epoxy! Depot bien recu, merci! Tes dates du ${j1Fmt} et ${j2Fmt} sont confirmees. On a hate de transformer ton plancher! Questions? 581-307-5983`
     ).catch(() => {});
   }
 

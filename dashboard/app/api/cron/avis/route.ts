@@ -50,13 +50,10 @@ export async function GET(req: NextRequest) {
   for (const r of rows) {
     const prenom = (r.client_nom as string).split(' ')[0];
 
-    // Send SMS
-    const smsOk = await sendSMS(
-      r.client_tel as string,
-      `Salut ${prenom}! C'est Novus Epoxy. On espere que tu profites de ton nouveau plancher! Si t'es satisfait de notre travail, ca nous aiderait vraiment si tu pouvais nous laisser un petit avis Google: ${GOOGLE_REVIEW_URL} Merci beaucoup! 🙏`
-    ).catch(() => false);
+    // Pas de SMS pour avis Google — email seulement, on évite le spam
+    const smsOk = true; // Skip SMS, mark as sent
 
-    // Also send email
+    // Send email
     if (r.client_email) {
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
@@ -80,7 +77,7 @@ export async function GET(req: NextRequest) {
       } catch (err) { console.error('Review email failed:', err); }
     }
 
-    if (smsOk !== false) {
+    if (smsOk) {
       await query(`UPDATE bookings SET avis_sms_sent = TRUE WHERE id = $1`, [r.booking_id]);
       sent++;
     }

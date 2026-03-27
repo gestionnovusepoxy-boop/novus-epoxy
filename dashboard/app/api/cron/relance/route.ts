@@ -83,9 +83,9 @@ export async function GET(req: NextRequest) {
       await query(`UPDATE quotes SET relance_2_at = NOW() WHERE id = $1`, [q.id]);
       sent2++;
 
-      // Also send SMS for relance 2
+      // SMS relance — 1 seul SMS avec numéro Luca
       if (q.client_tel) {
-        await sendFollowUpSMS(q.client_tel as string, q.client_nom as string, q.id as number, 2)
+        await sendFollowUpSMS(q.client_tel as string, q.client_nom as string, q.id as number)
           .catch(err => console.error('Relance 2 SMS failed:', err));
       }
     } catch (err) {

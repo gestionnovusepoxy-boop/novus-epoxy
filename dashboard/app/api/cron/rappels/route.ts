@@ -49,11 +49,12 @@ export async function GET(req: NextRequest) {
       } catch (err) { console.error('Reminder jour1 email failed:', err); }
     }
 
-    // SMS reminder
+    // SMS reminder jour 1 seulement
     if (r.client_tel) {
+      const prenom = (r.client_nom as string).split(' ')[0];
       await sendSMS(
         r.client_tel as string,
-        `Novus Epoxy: Rappel! Notre equipe sera chez vous demain matin a 8h. Veuillez preparer l'espace des travaux (vider la surface). A demain! Questions: 581-307-2678`
+        `Salut ${prenom}! C'est Luca de Novus Epoxy. L'equipe sera chez toi demain matin a 8h. Pense a vider la surface de travail avant notre arrivee. A demain! Questions: 581-307-5983`
       ).catch(err => console.error('Reminder jour1 SMS failed:', err));
     }
 
@@ -92,12 +93,7 @@ export async function GET(req: NextRequest) {
       } catch (err) { console.error('Reminder jour2 email failed:', err); }
     }
 
-    if (r.client_tel) {
-      await sendSMS(
-        r.client_tel as string,
-        `Novus Epoxy: Rappel! On revient ${periode} a ${heures} pour la finition de votre plancher. A demain! Questions: 581-307-2678`
-      ).catch(err => console.error('Reminder jour2 SMS failed:', err));
-    }
+    // Pas de SMS jour 2 — le client sait déjà, on évite le spam
 
     await query(`UPDATE bookings SET rappel_jour2_sent = TRUE WHERE id = $1`, [r.booking_id]);
     rappelsJour2++;
