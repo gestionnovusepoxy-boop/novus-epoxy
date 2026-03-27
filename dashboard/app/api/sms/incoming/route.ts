@@ -78,9 +78,9 @@ export async function POST(req: NextRequest) {
     ).catch(() => {});
   }
 
-  // Return empty TwiML (no auto-reply — Luca handles it personally)
+  // Auto-reply + notify Luca & Jason
   return new NextResponse(
-    '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+    `<?xml version="1.0" encoding="UTF-8"?><Response><Message>Merci pour ton message! Luca ou Jason te revient tres bientot. A+! — Novus Epoxy</Message></Response>`,
     { headers: { 'Content-Type': 'text/xml' } }
   );
 }
