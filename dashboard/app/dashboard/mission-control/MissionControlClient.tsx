@@ -57,6 +57,7 @@ const AGENTS = [
   },
   {
     id: 'hunter', name: 'Hunter', emoji: '🎯', role: 'Dark Hunter',
+    image: '/logo-email.jpg',
     desc: 'Prospecte, score leads, génère plans d\'attaque',
     color: 'red',
     ring: 'ring-red-500/40', bg: 'bg-red-600', text: 'text-red-400',
@@ -530,8 +531,12 @@ function AgentCard({
     <div className={`relative flex flex-col bg-slate-900 border ${agent.border} rounded-2xl p-4 shadow-lg ${agent.glow} hover:border-opacity-50 transition-all duration-200 group ${isStreaming ? 'ring-2 ring-green-500/30' : ''} ${!isEnabled ? 'opacity-50 grayscale' : ''}`}>
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
-        <div className={`w-11 h-11 rounded-xl ${agent.bg} flex items-center justify-center text-xl flex-shrink-0 shadow-lg`}>
-          {agent.emoji}
+        <div className={`w-11 h-11 rounded-xl ${agent.bg} flex items-center justify-center text-xl flex-shrink-0 shadow-lg overflow-hidden`}>
+          {agent.image ? (
+            <img src={agent.image} alt={agent.name} className="w-full h-full object-cover" />
+          ) : (
+            agent.emoji
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
