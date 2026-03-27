@@ -633,13 +633,16 @@ function AgentCard({
 
       {/* Metrics */}
       {metrics.length > 0 && (
-        <div className="flex flex-wrap gap-2 mb-3">
-          {metrics.map(m => (
-            <div key={m.label} className="flex flex-col items-center bg-slate-800/70 rounded-lg px-3 py-1.5 min-w-[60px]">
-              <span className={`text-lg font-bold ${agent.text}`}>{m.value}</span>
-              <span className="text-[10px] text-slate-500 mt-0.5">{m.label}</span>
-            </div>
-          ))}
+        <div className={`grid gap-2 mb-3 ${metrics.length >= 4 ? 'grid-cols-2' : metrics.length === 3 ? 'grid-cols-3' : metrics.length === 2 ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          {metrics.map(m => {
+            const isZero = m.value === '0' || m.value === '—';
+            return (
+              <div key={m.label} className="flex flex-col items-center bg-slate-800/70 rounded-lg px-2 py-1.5">
+                <span className={`text-lg font-bold ${isZero ? 'text-slate-600' : agent.text}`}>{m.value}</span>
+                <span className="text-[10px] text-slate-500 mt-0.5 text-center leading-tight">{m.label}</span>
+              </div>
+            );
+          })}
         </div>
       )}
 
