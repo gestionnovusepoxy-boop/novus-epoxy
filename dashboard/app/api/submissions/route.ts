@@ -69,6 +69,17 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
+export async function DELETE(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+
+  const id = parseInt(new URL(req.url).searchParams.get('id') ?? '0');
+  if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 });
+
+  await db(`DELETE FROM submissions WHERE id = $1`, [id]);
+  return NextResponse.json({ ok: true });
+}
+
 // Map form service names to pricing keys
 const SERVICE_MAP: Record<string, ServiceType> = {
   'finition flake': 'flake',

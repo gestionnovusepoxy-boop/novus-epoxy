@@ -142,6 +142,17 @@ function DetailPanel({ s, onClose, onUpdate }: { s: Submission; onClose: () => v
             >
               Créer un devis
             </a>
+            <button
+              onClick={async () => {
+                if (!confirm(`Supprimer la soumission de ${s.nom} ?`)) return;
+                await fetch(`/api/submissions?id=${s.id}`, { method: 'DELETE' });
+                onClose();
+                onUpdate();
+              }}
+              className="block w-full text-center bg-red-500/10 hover:bg-red-500/20 text-red-400 font-semibold py-3 rounded-lg transition border border-red-500/20"
+            >
+              Supprimer
+            </button>
           </div>
         </div>
       </div>
@@ -183,6 +194,18 @@ function SubmissionRow({ s, onUpdate, onClick }: { s: Submission; onUpdate: () =
         </select>
       </td>
       <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{formatDate(s.created_at)}</td>
+      <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+        <button
+          onClick={async () => {
+            if (!confirm(`Supprimer la soumission de ${s.nom} ?`)) return;
+            await fetch(`/api/submissions?id=${s.id}`, { method: 'DELETE' });
+            onUpdate();
+          }}
+          className="text-slate-600 hover:text-red-400 transition text-xs"
+        >
+          Suppr.
+        </button>
+      </td>
     </tr>
   );
 }
@@ -243,11 +266,12 @@ function PageContent() {
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Service</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Statut</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Date</th>
+                <th className="px-4 py-3"></th>
               </tr>
             </thead>
             <tbody>
               {data.length === 0 && (
-                <tr><td colSpan={5} className="text-center py-8 text-slate-500 text-sm">Aucune soumission</td></tr>
+                <tr><td colSpan={6} className="text-center py-8 text-slate-500 text-sm">Aucune soumission</td></tr>
               )}
               {data.map(s => (
                 <SubmissionRow key={s.id} s={s} onUpdate={load} onClick={() => setSelected(s)} />
