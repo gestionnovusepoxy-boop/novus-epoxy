@@ -4,6 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 
 type Statut = 'nouveau' | 'contacte' | 'devis_envoye' | 'rdv_pris' | 'ferme' | 'gagne';
 type Temperature = 'chaud' | 'tiede' | 'froid';
+type LeadType = 'residentiel' | 'commercial';
 
 interface Lead {
   id: number;
@@ -17,6 +18,7 @@ interface Lead {
   source: string;
   statut: Statut;
   temperature: Temperature;
+  type?: LeadType;
   created_at: string;
 }
 
@@ -175,8 +177,12 @@ export default function CrmClient() {
   const [total, setTotal]     = useState(0);
   const [page, setPage]       = useState(1);
   const [statut, setStatut]   = useState('');
+  const [type, setType]       = useState('');
   const [search, setSearch]   = useState('');
   const [loading, setLoading] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newLead, setNewLead] = useState({ nom: '', telephone: '', email: '', ville: '', notes: '', type: 'residentiel' as LeadType });
+  const [adding, setAdding]   = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -184,6 +190,7 @@ export default function CrmClient() {
     params.set('page', String(page));
     params.set('limit', '25');
     if (statut) params.set('statut', statut);
+    if (type) params.set('type', type);
     if (search) params.set('search', search);
 
     const res = await fetch(`/api/crm/leads?${params}`);
@@ -193,7 +200,21 @@ export default function CrmClient() {
       setTotal(json.total);
     }
     setLoading(false);
-  }, [page, statut, search]);
+  }, [page, statut, type, search]);
+
+  async function handleAddLead() {
+    if (!newLead.nom.trim()) return;
+    setAdding(true);
+    await fetch('/api/crm/leads', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...newLead, source: 'manuel' }),
+    });
+    setNewLead({ nom: '', telephone: '', email: '', ville: '', notes: '', type: 'residentiel' });
+    setShowAdd(false);
+    setAdding(false);
+    load();
+  }
 
   useEffect(() => { load(); }, [load]);
 
@@ -206,8 +227,35 @@ export default function CrmClient() {
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold text-white">CRM Leads</h2>
-        <span className="text-slate-400 text-sm">{total} au total</span>
+        <div className="flex items-center gap-3">
+          <span className="text-slate-400 text-sm">{total} au total</span>
+          <button onClick={() => setShowAdd(!showAdd)} className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-4 py-2 text-sm transition">
+            + Nouveau lead
+          </button>
+        </div>
       </div>
+
+      {showAdd && (
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <input placeholder="Nom *" value={newLead.nom} onChange={e => setNewLead(p => ({ ...p, nom: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500" />
+            <input placeholder="Téléphone" value={newLead.telephone} onChange={e => setNewLead(p => ({ ...p, telephone: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500" />
+            <input placeholder="Email" value={newLead.email} onChange={e => setNewLead(p => ({ ...p, email: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500" />
+            <input placeholder="Ville" value={newLead.ville} onChange={e => setNewLead(p => ({ ...p, ville: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500" />
+            <select value={newLead.type} onChange={e => setNewLead(p => ({ ...p, type: e.target.value as LeadType }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+              <option value="residentiel">Résidentiel</option>
+              <option value="commercial">Commercial</option>
+            </select>
+            <input placeholder="Notes" value={newLead.notes} onChange={e => setNewLead(p => ({ ...p, notes: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500" />
+          </div>
+          <div className="flex gap-2">
+            <button onClick={handleAddLead} disabled={adding || !newLead.nom.trim()} className="bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-40">
+              {adding ? 'Ajout...' : 'Ajouter'}
+            </button>
+            <button onClick={() => setShowAdd(false)} className="bg-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm transition hover:bg-slate-600">Annuler</button>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
@@ -224,6 +272,28 @@ export default function CrmClient() {
         ))}
       </div>
 
+      {/* Type filter */}
+      <div className="flex gap-2">
+        {[
+          { value: '', label: 'Tous' },
+          { value: 'residentiel', label: 'Résidentiel' },
+          { value: 'commercial', label: 'Commercial' },
+        ].map(tab => (
+          <button
+            key={tab.value}
+            onClick={() => { setType(tab.value); setPage(1); }}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
+              type === tab.value
+                ? 'bg-amber-500 text-slate-900'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Status filter */}
       <div className="flex gap-2 flex-wrap">
         {FILTER_TABS.map(tab => (
           <button
@@ -231,8 +301,8 @@ export default function CrmClient() {
             onClick={() => { setStatut(tab.value); setPage(1); }}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
               statut === tab.value
-                ? 'bg-amber-500 text-slate-900'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                ? 'bg-slate-600 text-white'
+                : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
             }`}
           >
             {tab.label}

@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
   const page   = Math.max(1, parseInt(searchParams.get('page') ?? '1'));
   const limit  = Math.min(100, parseInt(searchParams.get('limit') ?? '25'));
   const statut = searchParams.get('statut') ?? '';
+  const type   = searchParams.get('type') ?? '';
   const search = searchParams.get('search') ?? '';
   const offset = (page - 1) * limit;
 
@@ -23,6 +24,10 @@ export async function GET(req: NextRequest) {
   if (statut) {
     where += ` AND statut = $${i++}`;
     params.push(statut);
+  }
+  if (type) {
+    where += ` AND type = $${i++}`;
+    params.push(type);
   }
   if (search) {
     where += ` AND (nom ILIKE $${i} OR telephone ILIKE $${i} OR email ILIKE $${i})`;
@@ -43,16 +48,17 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
-  const { nom, telephone, email, service, superficie, ville, notes, source, statut, temperature } = body;
+  const { nom, telephone, email, service, superficie, ville, notes, source, statut, temperature, type } = body;
 
   if (!nom) return NextResponse.json({ error: 'nom requis' }, { status: 400 });
 
   const statutVal = VALID_STATUT.includes(statut) ? statut : 'nouveau';
   const tempVal   = VALID_TEMP.includes(temperature) ? temperature : 'tiede';
+  const typeVal   = ['residentiel', 'commercial'].includes(type) ? type : 'residentiel';
 
   const rows = await query(
-    `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
+    `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature, type)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
     [
       nom.slice(0, 120),
       telephone ?? null,
@@ -61,9 +67,10 @@ export async function POST(req: NextRequest) {
       superficie ?? null,
       ville ?? null,
       notes ?? null,
-      source ?? 'jason',
+      source ?? 'manuel',
       statutVal,
       tempVal,
+      typeVal,
     ],
   );
 
