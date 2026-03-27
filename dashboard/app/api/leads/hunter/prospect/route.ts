@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
+import { sendSMS } from '@/lib/sms';
 
 // Dynamic photo picking from portfolio DB
 interface PortfolioPhoto { id: number; titre: string; type_service: string; description: string | null; photos: string[] }
@@ -159,7 +160,7 @@ function buildHtml(lead: {
   <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;">
     <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Une question? On est la pour vous.</p>
     <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca</strong> — Facturation / Soumission — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a></p>
-    <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Soumission — <a href="tel:5813072678" style="color:#2563eb;">581-709-5940</a></p>
+    <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Soumission — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a></p>
   </div>
 </div>
 
@@ -226,7 +227,7 @@ function buildCommercialHtml(prenom: string, project: string, row1: string, row2
   <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;">
     <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca Hayes</strong> — Coproprietaire</p>
     <p style="color:#475569;font-size:13px;margin:0 0 2px;">581-307-5983 | gestionnovusepoxy@gmail.com</p>
-    <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Operations — 581-709-5940</p>
+    <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Operations — 581-307-2678</p>
   </div>
 </div>
 
@@ -300,6 +301,15 @@ export async function POST(req: NextRequest) {
         `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'sent')`,
         [emailResult.id, lead.email, subject],
       );
+
+      // SMS en même temps que l'email
+      if (lead.telephone) {
+        const prenom = getPrenom(lead.nom);
+        await sendSMS(
+          lead.telephone,
+          `Salut ${prenom}! C'est Jason de Novus Epoxy. Je viens de t'envoyer un email avec des photos de nos realisations. Jette un coup d'oeil quand t'as 2 minutes! Questions? Appelle-moi au 581-307-2678`
+        ).catch(() => {});
+      }
 
       // Update lead: mark as contacted + record prospect send time
       await query(

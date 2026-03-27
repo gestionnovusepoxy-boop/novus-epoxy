@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   <div style="text-align:center;margin:20px 0;">
     <a href="https://novusepoxy.ca/#contact" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Demander ma soumission</a>
   </div>
-  <p style="color:#475569;font-size:13px;margin-top:20px;">Bonne journee!<br/><strong>Jason</strong> — 581-709-5940</p>
+  <p style="color:#475569;font-size:13px;margin-top:20px;">Bonne journee!<br/><strong>Jason</strong> — 581-307-2678</p>
 </div>
 </div></body></html>`;
 
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
   <p style="color:#475569;font-size:14px;line-height:1.6;">Dernier petit suivi de ma part! Notre calendrier se remplit vite pour les prochaines semaines.</p>
   <p style="color:#475569;font-size:14px;line-height:1.6;">Si ton projet de plancher est encore d'actualite, on pourrait en jaser rapidement. Soumission gratuite, sans obligation.</p>
   <div style="text-align:center;margin:20px 0;">
-    <a href="tel:5817095940" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Appeler Jason — 581-709-5940</a>
+    <a href="tel:5817095940" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Appeler Jason — 581-307-2678</a>
   </div>
   <p style="color:#475569;font-size:13px;margin-top:20px;">A bientot!<br/><strong>Jason</strong> — Novus Epoxy</p>
 </div>
