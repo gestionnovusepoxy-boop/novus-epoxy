@@ -210,9 +210,10 @@ function buildCommercialHtml(prenom: string, project: string, row1: string, row2
 
   <div style="text-align:center;margin:0 0 20px;">
     <p style="color:#475569;font-size:14px;margin:0 0 12px;">On aimerait vous presenter nos services. Un appel de 10 minutes?</p>
-    <a href="tel:5813075983" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
-      Parlons-en — 581-307-5983
+    <a href="https://novusepoxy.ca/#contact" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">
+      Nous contacter
     </a>
+    <p style="color:#1e293b;font-size:15px;font-weight:700;margin:12px 0 0;">ou appelez-nous : 581-307-5983</p>
   </div>
 
   <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;">
