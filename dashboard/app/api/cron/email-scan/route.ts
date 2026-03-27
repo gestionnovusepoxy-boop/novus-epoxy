@@ -570,11 +570,15 @@ export async function GET(req: NextRequest) {
     // Skip our own emails
     if (fromEmail.includes('novusepoxy') || fromEmail.includes('gestionnovusepoxy')) continue;
 
-    // Skip auto-replies, newsletters, notifications, bulk senders
+    // Detect system/monitoring emails that should NOT be skipped (Sentry, Vercel, Stripe, etc.)
+    const isSystemAlert = /sentry|vercel|stripe|twilio|neon\.tech|cloudflare|github/i.test(fromEmail + ' ' + fromHeader)
+      && /error|alert|issue|incident|fail|warn|limit|spike|degrad/i.test(subject);
+
+    // Skip auto-replies, newsletters, notifications, bulk senders — BUT NOT system alerts
     const autoSubmitted = headers.find(h => h.name?.toLowerCase() === 'auto-submitted')?.value ?? '';
     const precedence = headers.find(h => h.name?.toLowerCase() === 'precedence')?.value ?? '';
     const listUnsubscribe = headers.find(h => h.name?.toLowerCase() === 'list-unsubscribe')?.value ?? '';
-    const isAutoReply =
+    const isAutoReply = !isSystemAlert && (
       autoSubmitted.includes('auto-replied') ||
       autoSubmitted.includes('auto-generated') ||
       precedence === 'bulk' ||
@@ -582,7 +586,41 @@ export async function GET(req: NextRequest) {
       precedence === 'auto_reply' ||
       listUnsubscribe.length > 0 ||
       /noreply|no-reply|no_reply|mailer-daemon|postmaster|notifications?@|newsletter|updates?@|support@|billing@|info@.*\.(com|ca|net|org)|marketing@|promo|digest/i.test(fromEmail) ||
-      /\b(auto.?r[eé]ponse|auto.?reply|out of office|absence|r[eé]ception de votre message|unsubscribe|d[eé]sabonne|newsletter)\b/i.test(subject);
+      /\b(auto.?r[eé]ponse|auto.?reply|out of office|absence|r[eé]ception de votre message|unsubscribe|d[eé]sabonne|newsletter)\b/i.test(subject)
+    );
+
+    // System alert: send straight to Telegram without Claude analysis
+    if (isSystemAlert) {
+      // Get body text for summary
+      let alertBody = '';
+      const parts = fullMsg.data.payload?.parts ?? [];
+      const textPart = parts.find(p => p.mimeType === 'text/plain');
+      if (textPart?.body?.data) {
+        alertBody = Buffer.from(textPart.body.data, 'base64url').toString('utf-8');
+      } else if (fullMsg.data.payload?.body?.data) {
+        alertBody = Buffer.from(fullMsg.data.payload.body.data, 'base64url').toString('utf-8');
+      }
+      // Extract key info (first 500 chars, strip HTML)
+      const cleanBody = alertBody.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim().slice(0, 500);
+      const source = fromEmail.includes('sentry') ? 'Sentry' : fromEmail.includes('vercel') ? 'Vercel' : fromEmail.includes('stripe') ? 'Stripe' : 'Systeme';
+
+      for (const chatId of ADMIN_CHAT_IDS()) {
+        await sendTelegram(chatId, [
+          `⚠️ <b>${source} — Alerte</b>`,
+          ``,
+          `📧 ${subject}`,
+          ``,
+          `${cleanBody}`,
+          ``,
+          `De: ${fromHeader}`,
+        ].join('\n'));
+      }
+      alertsSent++;
+      // Mark as read
+      try { await gmail.users.messages.modify({ userId: 'me', id: msg.id, requestBody: { removeLabelIds: ['UNREAD'] } }); } catch { /* ignore */ }
+      continue;
+    }
+
     if (isAutoReply) {
       console.log(`[Email Scan] Skipping auto-reply from ${fromEmail}: ${subject}`);
       try {
@@ -734,8 +772,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === IMPORTANT / NEEDS ATTENTION: Alert admin (only for client/important/facture — skip 'autre') ===
-    if (analysis.needs_attention && analysis.type !== 'spam' && analysis.type !== 'autre') {
+    // === IMPORTANT / NEEDS ATTENTION: Alert admin ===
+    if (analysis.needs_attention && analysis.type !== 'spam') {
       for (const chatId of ADMIN_CHAT_IDS()) {
         await sendTelegram(chatId,
           `📬 <b>Email necessite ton attention</b>\n\n` +
