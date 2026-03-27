@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { sendProspectEmail } from '@/lib/send-prospect-email';
-import { sendSMS } from '@/lib/sms';
+import { sendEmail } from '@/lib/send-email';
 
 // Dynamic photo picking from portfolio DB
 interface PortfolioPhoto { id: number; titre: string; type_service: string; description: string | null; photos: string[] }
@@ -290,7 +289,7 @@ export async function POST(req: NextRequest) {
         ? `${prenom} — Partenariat planchers epoxy — Novus Epoxy`
         : `${prenom} — Votre projet en epoxy avec Novus Epoxy`;
 
-      const emailResult = await sendProspectEmail({
+      const emailResult = await sendEmail({
         to: lead.email,
         subject,
         html,
@@ -301,15 +300,6 @@ export async function POST(req: NextRequest) {
         `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'sent')`,
         [emailResult.id, lead.email, subject],
       );
-
-      // SMS en même temps que l'email
-      if (lead.telephone) {
-        const prenom = getPrenom(lead.nom);
-        await sendSMS(
-          lead.telephone,
-          `Salut ${prenom}! C'est Jason de Novus Epoxy. Je viens de t'envoyer un email avec des photos de nos realisations. Jette un coup d'oeil quand t'as 2 minutes! Questions? Appelle-moi au 581-307-2678`
-        ).catch(() => {});
-      }
 
       // Update lead: mark as contacted + record prospect send time
       await query(
