@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { PollingProvider } from '@/components/polling-provider';
-import { fetchQuotes, updateQuote, type Quote, type QuoteStatut } from '@/lib/api';
+import { fetchQuotes, updateQuote, deleteQuote, type Quote, type QuoteStatut } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { formatMoney } from '@/lib/pricing';
 
@@ -39,8 +39,11 @@ const SERVICE_LABEL: Record<string, string> = {
   commercial: 'Commercial',
 };
 
+const PROTECTED_STATUTS: QuoteStatut[] = ['depot_paye', 'planifie', 'complete'];
+
 function QuoteRow({ q, onUpdate }: { q: Quote; onUpdate: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   async function handleStatut(statut: QuoteStatut) {
     setLoading(true);
@@ -49,8 +52,22 @@ function QuoteRow({ q, onUpdate }: { q: Quote; onUpdate: () => void }) {
     setLoading(false);
   }
 
+  async function handleDelete() {
+    if (!confirm(`Supprimer le devis #${q.id} de ${q.client_nom}?\n\nCette action est irréversible.`)) return;
+    setDeleting(true);
+    try {
+      await deleteQuote(q.id);
+      onUpdate();
+    } catch {
+      alert('Impossible de supprimer ce devis.');
+      setDeleting(false);
+    }
+  }
+
+  const canDelete = !PROTECTED_STATUTS.includes(q.statut);
+
   return (
-    <tr className="border-b border-slate-700 hover:bg-slate-700/50 transition">
+    <tr className={`border-b border-slate-700 hover:bg-slate-700/50 transition ${deleting ? 'opacity-40' : ''}`}>
       <td className="px-4 py-3">
         <Link href={`/dashboard/devis/${q.id}`} className="hover:underline">
           <p className="text-white text-sm font-medium">{q.client_nom}</p>
@@ -75,6 +92,20 @@ function QuoteRow({ q, onUpdate }: { q: Quote; onUpdate: () => void }) {
         </select>
       </td>
       <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{formatDate(q.created_at)}</td>
+      <td className="px-2 py-3">
+        {canDelete && (
+          <button
+            onClick={handleDelete}
+            disabled={deleting}
+            title="Supprimer ce devis"
+            className="text-slate-500 hover:text-red-400 transition p-1 rounded hover:bg-red-500/10"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /><path d="M10 11v6" /><path d="M14 11v6" /><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+            </svg>
+          </button>
+        )}
+      </td>
     </tr>
   );
 }
@@ -136,11 +167,12 @@ function PageContent() {
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Total</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Statut</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Date</th>
+                <th className="w-10"></th>
               </tr>
             </thead>
             <tbody>
               {data.length === 0 && (
-                <tr><td colSpan={6} className="text-center py-8 text-slate-500 text-sm">Aucun devis</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-slate-500 text-sm">Aucun devis</td></tr>
               )}
               {data.map(q => <QuoteRow key={q.id} q={q} onUpdate={load} />)}
             </tbody>

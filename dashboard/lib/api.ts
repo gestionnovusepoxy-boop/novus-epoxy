@@ -186,6 +186,10 @@ export async function updateQuote(id: number, data: Partial<Quote>): Promise<Quo
   return apiFetch(`/api/quotes/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
+export async function deleteQuote(id: number): Promise<{ success: boolean }> {
+  return apiFetch(`/api/quotes/${id}`, { method: 'DELETE' });
+}
+
 export async function sendQuote(id: number): Promise<{ success: boolean; email_id: string }> {
   return apiFetch(`/api/quotes/${id}/send`, { method: 'POST' });
 }
