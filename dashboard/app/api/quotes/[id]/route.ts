@@ -71,7 +71,8 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     return NextResponse.json({ error: 'Impossible de supprimer un devis avec depot paye ou complete' }, { status: 400 });
   }
 
-  // Delete related bookings first
+  // Nullify booking FK on quote, then delete booking, then delete quote
+  await query('UPDATE quotes SET booking_id = NULL WHERE id = $1', [quoteId]);
   await query('DELETE FROM bookings WHERE quote_id = $1', [quoteId]);
   await query('DELETE FROM quotes WHERE id = $1', [quoteId]);
 
