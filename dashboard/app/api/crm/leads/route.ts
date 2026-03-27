@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
   const type        = searchParams.get('type') ?? '';
   const temperature = searchParams.get('temperature') ?? '';
   const search      = searchParams.get('search') ?? '';
+  const source      = searchParams.get('source') ?? '';
   const offset = (page - 1) * limit;
 
   let where = 'WHERE 1=1';
@@ -46,19 +47,25 @@ export async function GET(req: NextRequest) {
     where += ` AND temperature = $${i++}`;
     params.push(temperature);
   }
+  if (source) {
+    where += ` AND source = $${i++}`;
+    params.push(source);
+  }
   if (search) {
     where += ` AND (nom ILIKE $${i} OR telephone ILIKE $${i} OR email ILIKE $${i})`;
     params.push(`%${search}%`);
     i++;
   }
 
-  const [countRows, statsRows, dataRows] = await Promise.all([
+  const [countRows, statsRows, dataRows, sourceRows] = await Promise.all([
     query(`SELECT COUNT(*)::int AS count FROM crm_leads ${where}`, params),
     query(`SELECT temperature, COUNT(*)::int AS count FROM crm_leads ${where} GROUP BY temperature`, params),
     query(
       `SELECT * FROM crm_leads ${where} ORDER BY created_at DESC LIMIT $${i++} OFFSET $${i}`,
       [...params, limit, offset],
     ),
+    // Always count all sources (unfiltered) for the source tabs
+    query(`SELECT COALESCE(source, 'autre') as source, COUNT(*)::int AS count FROM crm_leads GROUP BY source ORDER BY count DESC`),
   ]);
 
   const total = (countRows[0]?.count as number) ?? 0;
@@ -68,7 +75,14 @@ export async function GET(req: NextRequest) {
     if (t in stats) stats[t as keyof typeof stats] = row.count as number;
   }
 
-  return NextResponse.json({ data: dataRows, total, page, limit, stats });
+  const sources: Record<string, number> = {};
+  let sourcesTotal = 0;
+  for (const row of sourceRows) {
+    sources[row.source as string] = row.count as number;
+    sourcesTotal += row.count as number;
+  }
+
+  return NextResponse.json({ data: dataRows, total, page, limit, stats, sources: { ...sources, _total: sourcesTotal } });
 }
 
 export async function POST(req: NextRequest) {

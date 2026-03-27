@@ -200,6 +200,8 @@ export default function CrmClient() {
   const [type, setType]       = useState('');
   const [tempFilter, setTempFilter] = useState('');
   const [search, setSearch]   = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [sources, setSources] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [newLead, setNewLead] = useState({ nom: '', telephone: '', email: '', ville: '', notes: '', type: 'residentiel' as LeadType });
@@ -289,6 +291,7 @@ export default function CrmClient() {
     if (statut) params.set('statut', statut);
     if (type) params.set('type', type);
     if (tempFilter) params.set('temperature', tempFilter);
+    if (sourceFilter) params.set('source', sourceFilter);
     if (search) params.set('search', search);
 
     const res = await fetch(`/api/crm/leads?${params}`);
@@ -297,9 +300,10 @@ export default function CrmClient() {
       setLeads(json.data);
       setTotal(json.total);
       if (json.stats) setStats(json.stats);
+      if (json.sources) setSources(json.sources);
     }
     setLoading(false);
-  }, [page, statut, type, tempFilter, search]);
+  }, [page, statut, type, tempFilter, sourceFilter, search]);
 
   async function handleAddLead() {
     if (!newLead.nom.trim()) return;
@@ -508,6 +512,32 @@ export default function CrmClient() {
           >
             <p className="text-slate-400 text-xs mb-1">{label}</p>
             <p className={`text-2xl font-bold ${color}`}>{value}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Source filter */}
+      <div className="flex gap-2 flex-wrap">
+        {[
+          { value: '', label: 'Tous', count: sources._total ?? 0 },
+          { value: 'jason', label: '🏗️ Jason', count: sources.jason ?? 0 },
+          { value: 'manuel', label: 'Manuel', count: sources.manuel ?? 0 },
+          ...(sources.champfield ? [{ value: 'champfield', label: 'Champfield', count: sources.champfield }] : []),
+          ...(sources.google_ads ? [{ value: 'google_ads', label: 'Google Ads', count: sources.google_ads }] : []),
+          ...(sources.facebook ? [{ value: 'facebook', label: 'Facebook', count: sources.facebook }] : []),
+          ...(sources.chatbot ? [{ value: 'chatbot', label: 'Chatbot', count: sources.chatbot }] : []),
+        ].map(tab => (
+          <button
+            key={tab.value}
+            onClick={() => { setSourceFilter(tab.value); setPage(1); }}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${
+              sourceFilter === tab.value
+                ? 'bg-blue-600 text-white'
+                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+            }`}
+          >
+            {tab.label}
+            {tab.count > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${sourceFilter === tab.value ? 'bg-blue-500' : 'bg-slate-600'}`}>{tab.count}</span>}
           </button>
         ))}
       </div>
