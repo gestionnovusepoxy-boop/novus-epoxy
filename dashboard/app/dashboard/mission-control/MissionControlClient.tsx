@@ -516,6 +516,10 @@ function AgentCard({
     statusDot = 'bg-emerald-400';
     statusText = 'EN LIGNE';
     statusTextColor = 'text-emerald-400';
+  } else if (isEnabled) {
+    statusDot = 'bg-emerald-400';
+    statusText = 'ACTIF';
+    statusTextColor = 'text-emerald-400';
   } else {
     statusDot = 'bg-slate-500';
     statusText = 'EN VEILLE';
