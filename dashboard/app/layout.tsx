@@ -5,24 +5,41 @@ import './globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title:       'Novus Epoxy Admin',
-  description: 'Dashboard administrateur Novus Epoxy',
+  title:       'Novus Epoxy',
+  description: 'Dashboard Novus Epoxy — Gestion, CRM, Mission Control',
   manifest:    '/manifest.json',
   appleWebApp: {
     capable:           true,
     statusBarStyle:    'black-translucent',
-    title:             'NE Admin',
+    title:             'Novus',
+  },
+  icons: {
+    icon: '/icon-192.png',
+    apple: '/apple-touch-icon.png',
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0f172a',
+  themeColor:        '#0f172a',
+  width:             'device-width',
+  initialScale:      1,
+  maximumScale:      1,
+  userScalable:      false,
+  viewportFit:       'cover',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="fr">
-      <body className={inter.className}>{children}</body>
+      <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+      </head>
+      <body className={inter.className}>
+        {children}
+        <script dangerouslySetInnerHTML={{ __html: `if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catch(()=>{});}` }} />
+      </body>
     </html>
   );
 }

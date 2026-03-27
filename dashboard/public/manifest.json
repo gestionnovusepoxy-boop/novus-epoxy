@@ -1,24 +1,51 @@
 {
-  "name": "Novus Epoxy Admin",
-  "short_name": "NE Admin",
-  "description": "Dashboard administrateur Novus Epoxy",
+  "name": "Novus Epoxy",
+  "short_name": "Novus",
+  "description": "Dashboard Novus Epoxy — Gestion, CRM, Mission Control",
   "start_url": "/dashboard",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#0f172a",
   "theme_color": "#0f172a",
   "orientation": "portrait-primary",
+  "categories": ["business", "productivity"],
   "icons": [
     {
-      "src": "/logo-small.jpg",
-      "sizes": "any",
-      "type": "image/jpeg",
-      "purpose": "any"
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
-      "src": "/logo.jpg",
-      "sizes": "any",
-      "type": "image/jpeg",
-      "purpose": "any"
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Mission Control",
+      "short_name": "MC",
+      "url": "/dashboard/mission-control",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "CRM Leads",
+      "short_name": "CRM",
+      "url": "/dashboard/crm",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Devis",
+      "short_name": "Devis",
+      "url": "/dashboard/devis",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
