@@ -3,69 +3,78 @@ import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { sendEmail } from '@/lib/send-email';
 
-// Map keywords in notes → portfolio photo IDs
-const PHOTO_TAGS: Record<number, string[]> = {
-  12: ['garage', 'plancher de garage', 'garage double'],
-  11: ['garage', 'plancher de garage', 'amg'],
-  10: ['sous-sol', 'basement', 'sous sol'],
-  9:  ['commercial', 'rampe', 'entrepot', 'entrepôt'],
-  8:  ['metallique', 'métallique', 'haut de gamme', 'commercial'],
-  7:  ['escalier', 'marche', 'perron', 'entree', 'entrée'],
-  6:  ['balcon', 'facade', 'façade', 'exterieur', 'extérieur'],
-  5:  ['balcon', 'escalier', 'exterieur', 'extérieur', 'perron'],
-  4:  ['balcon', 'exterieur', 'extérieur', 'patio', 'terrasse'],
-  3:  ['commercial', 'industriel', 'entrepot', 'entrepôt', 'plancher commercial'],
-  2:  ['metallique', 'métallique'],
-  1:  ['metallique', 'métallique', 'haut de gamme'],
-};
+// Dynamic photo picking from portfolio DB
+interface PortfolioPhoto { id: number; titre: string; type_service: string; description: string | null; photos: string[] }
 
-const PHOTO_INFO: Record<number, { url: string; caption: string }> = {
-  12: { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/12-flake-garage-double.jpg', caption: 'Garage double — Flake bleu-gris' },
-  11: { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/11-flake-garage-amg.jpg', caption: 'Garage — Flake noir style AMG' },
-  10: { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/10-flake-sous-sol.jpg', caption: 'Sous-sol — Flake gris' },
-  9:  { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/09-rampe-commercial.jpg', caption: 'Rampe commerciale — Flake' },
-  8:  { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/08-metallique-grand.jpg', caption: 'Grand espace — Metallique noir et or' },
-  7:  { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/07-escalier-entree.jpg', caption: "Escalier d'entree — Flake" },
-  6:  { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/06-balcon-vue-large.jpg', caption: 'Balcon facade — Flake' },
-  5:  { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/05-balcon-escalier.jpg', caption: 'Balcon et escalier — Flake' },
-  4:  { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/04-balcon-flake.jpg', caption: 'Balcon exterieur — Flake' },
-  3:  { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/03-commercial-gris.jpg', caption: 'Plancher commercial gris' },
-  2:  { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/02-metallique-travail.jpg', caption: 'Metallique noir, blanc et rouge' },
-  1:  { url: 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/01-metallique-noir-argent.jpg', caption: 'Metallique noir et argent' },
-};
+async function loadPortfolio(): Promise<PortfolioPhoto[]> {
+  const rows = await query(
+    `SELECT id, titre, type_service, description, photos FROM portfolio WHERE array_length(photos, 1) > 0 ORDER BY featured DESC, created_at DESC`,
+    [],
+  );
+  return rows as PortfolioPhoto[];
+}
 
-// Default photos for residential / commercial
-const DEFAULT_RESIDENTIAL = [12, 10, 7, 5];
-const DEFAULT_COMMERCIAL = [3, 8, 9, 1];
-
-function pickPhotos(notes: string, service: string, type: string): number[] {
+function pickPhotos(portfolio: PortfolioPhoto[], notes: string, service: string, type: string): { url: string; caption: string }[] {
   const text = `${notes} ${service}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const scores: Record<number, number> = {};
 
-  for (const [idStr, tags] of Object.entries(PHOTO_TAGS)) {
-    const id = Number(idStr);
-    for (const tag of tags) {
-      const tagNorm = tag.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      if (text.includes(tagNorm)) {
-        scores[id] = (scores[id] ?? 0) + 1;
+  // Score each portfolio item by keyword match against titre + description
+  const scored = portfolio.map(p => {
+    const searchable = `${p.titre} ${p.description ?? ''} ${p.type_service}`.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    let score = 0;
+
+    // Keywords from lead notes matched against portfolio content
+    const keywords = text.split(/[\s,—\-\/]+/).filter(w => w.length > 3);
+    for (const kw of keywords) {
+      if (searchable.includes(kw)) score += 2;
+    }
+
+    // Boost if type matches
+    if (type === 'commercial' && (p.type_service === 'commercial' || p.type_service === 'metallique')) score += 3;
+    if (type === 'residentiel' && p.type_service === 'flake') score += 1;
+
+    // Common keyword matching
+    const pairs: [string, string[]][] = [
+      ['garage', ['garage', 'atelier']],
+      ['sous-sol', ['sous-sol', 'basement', 'sous sol']],
+      ['escalier', ['escalier', 'marche', 'perron']],
+      ['balcon', ['balcon', 'galerie', 'exterieur', 'patio', 'terrasse']],
+      ['metallique', ['metallique', 'haut de gamme', 'miroir', 'or', 'bronze']],
+      ['commercial', ['commercial', 'industriel', 'entrepot', 'bureau']],
+      ['cuisine', ['cuisine', 'interieur', 'plancher']],
+      ['rampe', ['rampe', 'acces']],
+    ];
+
+    for (const [leadKw, portfolioKws] of pairs) {
+      const leadNorm = leadKw.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (text.includes(leadNorm)) {
+        for (const pk of portfolioKws) {
+          if (searchable.includes(pk.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) {
+            score += 3;
+          }
+        }
       }
     }
+
+    return { ...p, score };
+  });
+
+  // Sort by score desc, take top 4
+  scored.sort((a, b) => b.score - a.score);
+
+  // If no good matches, fallback to type-based selection
+  let picks = scored.filter(p => p.score > 0).slice(0, 4);
+  if (picks.length < 4) {
+    const typeMatch = type === 'commercial' ? ['commercial', 'metallique'] : ['flake'];
+    const fallbacks = scored.filter(p => typeMatch.includes(p.type_service) && !picks.find(x => x.id === p.id));
+    picks = [...picks, ...fallbacks].slice(0, 4);
+  }
+  // Still not enough? just take top rated
+  if (picks.length < 4) {
+    const remaining = scored.filter(p => !picks.find(x => x.id === p.id));
+    picks = [...picks, ...remaining].slice(0, 4);
   }
 
-  const sorted = Object.entries(scores)
-    .sort((a, b) => b[1] - a[1])
-    .map(([id]) => Number(id));
-
-  if (sorted.length >= 4) return sorted.slice(0, 4);
-
-  // Fill with defaults
-  const defaults = type === 'commercial' ? DEFAULT_COMMERCIAL : DEFAULT_RESIDENTIAL;
-  const result = [...sorted];
-  for (const id of defaults) {
-    if (result.length >= 4) break;
-    if (!result.includes(id)) result.push(id);
-  }
-  return result.slice(0, 4);
+  return picks.map(p => ({ url: p.photos[0], caption: p.titre }));
 }
 
 function getPrenom(nom: string): string {
@@ -85,13 +94,11 @@ function buildHtml(lead: {
   service: string;
   type: string;
   ville: string;
-}, photos: number[]): string {
+}, photos: { url: string; caption: string }[]): string {
   const prenom = getPrenom(lead.nom);
   const project = buildProjectDescription(lead.notes, lead.service);
 
-  const photoGrid = photos.map((id, i) => {
-    const p = PHOTO_INFO[id];
-    if (!p) return '';
+  const photoGrid = photos.map((p, i) => {
     const paddingLeft = i % 2 === 0 ? '0' : '4px';
     const paddingRight = i % 2 === 0 ? '4px' : '0';
     const paddingBottom = i < 2 ? '8px' : '0';
@@ -253,6 +260,7 @@ export async function POST(req: NextRequest) {
     leadIds,
   );
 
+  const portfolio = await loadPortfolio();
   const results: { id: number; nom: string; status: 'sent' | 'skipped' | 'error'; error?: string }[] = [];
 
   for (const lead of leads) {
@@ -263,7 +271,7 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      const photos = pickPhotos(lead.notes ?? '', lead.service ?? '', lead.type ?? 'residentiel');
+      const photos = pickPhotos(portfolio, lead.notes ?? '', lead.service ?? '', lead.type ?? 'residentiel');
       const html = buildHtml({
         nom: lead.nom,
         notes: lead.notes ?? '',
