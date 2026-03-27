@@ -218,7 +218,17 @@ export default function ContratPage() {
               >
                 Etape suivante: Payer le depot — {quote ? formatMoney(Number(quote.depot_requis)) : ''}
               </a>
-              <p style={{ color: '#94a3b8', fontSize: '12px', textAlign: 'center', margin: '0' }}>Ou par virement Interac a <strong>gestionnovusepoxy@gmail.com</strong></p>
+              <a
+                href={`/api/quotes/${id}/interac?token=${encodeURIComponent(token)}`}
+                style={{
+                  display: 'block', width: '100%', padding: '14px',
+                  background: '#1e293b', color: '#f8fafc', border: '2px solid #f59e0b', borderRadius: '8px',
+                  fontSize: '15px', fontWeight: 700, textAlign: 'center', textDecoration: 'none',
+                  cursor: 'pointer', boxSizing: 'border-box',
+                }}
+              >
+                💸 Payer par virement Interac — 0$ de frais
+              </a>
             </>
           )}
           {isPaid && (
@@ -269,7 +279,17 @@ export default function ContratPage() {
           >
             Etape suivante: Payer le depot — {quote ? formatMoney(Number(quote.depot_requis)) : ''}
           </a>
-          <p style={{ color: '#94a3b8', fontSize: '12px', textAlign: 'center', margin: '0 0 8px' }}>Ou par virement Interac a <strong>gestionnovusepoxy@gmail.com</strong></p>
+          <a
+            href={`/api/quotes/${id}/interac?token=${encodeURIComponent(token)}`}
+            style={{
+              display: 'block', width: '100%', padding: '14px',
+              background: '#1e293b', color: '#f8fafc', border: '2px solid #f59e0b', borderRadius: '8px',
+              fontSize: '15px', fontWeight: 700, textAlign: 'center', textDecoration: 'none',
+              cursor: 'pointer', boxSizing: 'border-box', marginBottom: '12px',
+            }}
+          >
+            💸 Payer par virement Interac — 0$ de frais
+          </a>
           <p style={{ color: '#ef4444', fontSize: '12px', margin: '0' }}>Si le depot n&apos;est pas recu dans les 48 heures, vos dates pourraient etre attribuees a un autre client.</p>
         </div>
       </div>
