@@ -45,7 +45,6 @@ const SECTIONS: NavSection[] = [
     title: 'IA',
     links: [
       { href: '/dashboard/marcel',     label: 'Marcel IA',       icon: '🤖' },
-      { href: '/dashboard/conversations', label: 'Nova',        icon: '\u{1F916}' },
     ],
   },
   {
