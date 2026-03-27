@@ -7,15 +7,16 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 
 interface ActivityData {
   marcel?:  { messages: number; label: string };
-  hunter?:  { chauds: number; tièdes: number; nouveaux: number };
-  aria?:    { emails_today: number };
-  rex?:     { devis_today: number; en_attente: number };
+  hunter?:  { chauds: number; tiedes: number; froids: number; nouveaux: number; total_leads: number; prospects_envoyes: number; prospects_semaine: number; last_action: string | null };
+  aria?:    { emails_today: number; total_envoyes: number; ouverts: number; cliques: number; semaine: number; last_action: string | null };
+  rex?:     { devis_today: number; en_attente: number; envoyes: number; total: number };
   iris?:    { confirmes: string; pipeline: string; actifs: number };
-  sage?:    { posts: number; portfolio: number; videos: number; drive_new: number };
-  zara?:    { a_venir: number; confirmees_today: number };
+  sage?:    { total_photos: number; total_videos: number; featured: number; total_items: number; last_scan: string | null };
+  zara?:    { a_venir: number; confirmees_today: number; total_confirmes: number; prochain: string | null };
   bolt?:    { notifications: number };
-  echo?:    { env_ok: number; env_total: number };
-  nova?:    { today: number; en_attente: number; devis_today: number };
+  echo?:    { env_ok: number; env_total: number; env_missing: string[] };
+  nova?:    { today: number; en_attente: number; devis_today: number; total_devis: number; total_convos: number };
+  health?:  Record<string, 'green' | 'yellow' | 'red'>;
 }
 
 interface Props {
@@ -179,6 +180,20 @@ type AgentId = (typeof AGENTS)[number]['id'];
 // ─── Activity conseil helper ───────────────────────────────────────────────
 
 function getConseil(id: AgentId, activity: ActivityData): string {
+  const healthStatus = activity.health?.[id] ?? 'green';
+  // Show health warning first if agent has a problem
+  if (healthStatus === 'red') {
+    const reasons: Record<string, string> = {
+      hunter: 'API Claude non configurée',
+      aria: 'Google API non configurée',
+      rex: 'Twilio non configuré',
+      sage: 'Google Drive API non configurée',
+      bolt: 'Telegram Bot non configuré',
+      nova: 'API Claude non configurée',
+    };
+    return `⛔ ${reasons[id] ?? 'Service non disponible'}`;
+  }
+
   switch (id) {
     case 'marcel':
       return activity.marcel?.messages
@@ -187,21 +202,24 @@ function getConseil(id: AgentId, activity: ActivityData): string {
     case 'hunter': {
       const h = activity.hunter;
       if (!h) return 'Score tes leads maintenant';
-      if (h.chauds > 0) return `🔥 ${h.chauds} lead${h.chauds > 1 ? 's' : ''} chaud${h.chauds > 1 ? 's' : ''} à contacter!`;
-      if (h.nouveaux > 0) return `⚡ ${h.nouveaux} nouveau${h.nouveaux > 1 ? 'x' : ''} lead${h.nouveaux > 1 ? 's' : ''} aujourd'hui`;
-      if (h.tièdes > 0) return `${h.tièdes} leads tièdes — score-les!`;
-      return 'Lance un scoring de leads';
+      if (h.chauds > 0) return `🔥 ${h.chauds} lead${h.chauds > 1 ? 's' : ''} chaud${h.chauds > 1 ? 's' : ''} à closer! · ${h.prospects_envoyes} prospects envoyés`;
+      if (h.nouveaux > 0) return `⚡ ${h.nouveaux} nouveau${h.nouveaux > 1 ? 'x' : ''} lead${h.nouveaux > 1 ? 's' : ''} · ${h.total_leads} leads au total`;
+      if (h.tiedes > 0) return `${h.tiedes} leads tièdes à scorer · ${h.prospects_semaine} prospects cette semaine`;
+      return h.last_action ? `Dernière action ${h.last_action}` : 'Lance un scoring de leads';
     }
     case 'aria': {
-      const cnt = activity.aria?.emails_today ?? 0;
-      return cnt > 0 ? `${cnt} email${cnt > 1 ? 's' : ''} traité${cnt > 1 ? 's' : ''} aujourd'hui` : 'Vérifie ta boîte Gmail';
+      const a = activity.aria;
+      if (!a) return 'Vérifie ta boîte Gmail';
+      if (a.emails_today > 0) return `${a.emails_today} email${a.emails_today > 1 ? 's' : ''} aujourd'hui · ${a.total_envoyes} total envoyés`;
+      if (a.semaine > 0) return `${a.semaine} emails cette semaine · ${a.ouverts} ouverts`;
+      return a.last_action ? `Dernière activité ${a.last_action}` : 'Aucun email récent';
     }
     case 'rex': {
       const r = activity.rex;
       if (!r) return 'Génère des relances SMS';
       if (r.en_attente > 0) return `${r.en_attente} devis en attente — relance par SMS!`;
-      if (r.devis_today > 0) return `${r.devis_today} devis créé${r.devis_today > 1 ? 's' : ''} aujourd'hui`;
-      return 'Aucune relance urgente';
+      if (r.devis_today > 0) return `${r.devis_today} devis créé${r.devis_today > 1 ? 's' : ''} aujourd'hui · ${r.envoyes} envoyés`;
+      return `${r.total} devis au total · ${r.envoyes} envoyés`;
     }
     case 'iris': {
       const i = activity.iris;
@@ -211,14 +229,18 @@ function getConseil(id: AgentId, activity: ActivityData): string {
     }
     case 'sage': {
       const s = activity.sage;
-      if (!s) return 'Scanne le Drive pour des photos!';
-      if (s.drive_new > 0) return `📸 ${s.drive_new} nouvelle${s.drive_new > 1 ? 's' : ''} photo${s.drive_new > 1 ? 's' : ''} sur Drive!`;
-      return `${s.portfolio} photos au portfolio`;
+      if (!s) return 'Scanne le Drive pour du contenu!';
+      if (healthStatus === 'yellow') return `⚠️ Aucun scan récent · ${s.total_photos} photos, ${s.total_videos} vidéos au portfolio`;
+      return `${s.total_photos} photos + ${s.total_videos} vidéos · ${s.featured} featured${s.last_scan ? ` · Scan ${s.last_scan}` : ''}`;
     }
     case 'zara': {
       const z = activity.zara;
       if (!z) return 'Vérifie le calendrier';
-      return z.a_venir > 0 ? `${z.a_venir} réservation${z.a_venir > 1 ? 's' : ''} à venir` : 'Aucune réservation';
+      if (z.a_venir > 0 && z.prochain) {
+        const prochainDate = new Date(z.prochain).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' });
+        return `${z.a_venir} réservation${z.a_venir > 1 ? 's' : ''} à venir · Prochain: ${prochainDate}`;
+      }
+      return z.a_venir > 0 ? `${z.a_venir} réservation${z.a_venir > 1 ? 's' : ''} à venir` : 'Aucune réservation planifiée';
     }
     case 'bolt':
       return 'Envoie un update à l\'équipe';
@@ -226,14 +248,15 @@ function getConseil(id: AgentId, activity: ActivityData): string {
       const e = activity.echo;
       if (!e) return 'Vérifie le système';
       const missing = e.env_total - e.env_ok;
-      return missing > 0 ? `⚠️ ${missing} var${missing > 1 ? 's' : ''} manquante${missing > 1 ? 's' : ''}` : `✅ ${e.env_ok}/${e.env_total} vars OK`;
+      if (missing > 0) return `⚠️ ${missing} var${missing > 1 ? 's' : ''} manquante${missing > 1 ? 's' : ''}: ${e.env_missing?.join(', ')}`;
+      return `✅ ${e.env_ok}/${e.env_total} vars configurées — système opérationnel`;
     }
     case 'nova': {
       const n = activity.nova;
       if (!n) return 'Vérifie le chatbot';
-      if (n.en_attente > 0) return `⏳ ${n.en_attente} devis en attente d'approbation`;
-      if (n.today > 0) return `${n.today} conversation${n.today > 1 ? 's' : ''} aujourd'hui`;
-      return 'Chatbot actif sur novusepoxy.ca';
+      if (n.en_attente > 0) return `⏳ ${n.en_attente} devis en attente d'approbation!`;
+      if (n.today > 0) return `${n.today} conversation${n.today > 1 ? 's' : ''} aujourd'hui · ${n.total_convos} total`;
+      return `${n.total_convos} conversations au total · ${n.total_devis} devis générés`;
     }
     default: return '';
   }
@@ -242,67 +265,108 @@ function getConseil(id: AgentId, activity: ActivityData): string {
 function getMetrics(id: AgentId, activity: ActivityData): { label: string; value: string }[] {
   switch (id) {
     case 'marcel': return [
-      { label: 'Historique', value: `${activity.marcel?.messages ?? 0} msgs` },
+      { label: 'Mémoire', value: `${activity.marcel?.messages ?? 0} msgs` },
     ];
-    case 'hunter': return [
-      { label: 'Chauds', value: String(activity.hunter?.chauds ?? 0) },
-      { label: 'Tièdes', value: String(activity.hunter?.tièdes ?? 0) },
-      { label: 'Nouveaux', value: String(activity.hunter?.nouveaux ?? 0) },
-    ];
-    case 'aria': return [
-      { label: 'Emails traités', value: String(activity.aria?.emails_today ?? 0) },
-    ];
+    case 'hunter': {
+      const h = activity.hunter;
+      return [
+        { label: 'Leads chauds', value: String(h?.chauds ?? 0) },
+        { label: 'Leads tièdes', value: String(h?.tiedes ?? 0) },
+        { label: 'Prospects envoyés', value: String(h?.prospects_envoyes ?? 0) },
+        { label: 'Cette semaine', value: String(h?.prospects_semaine ?? 0) },
+      ];
+    }
+    case 'aria': {
+      const a = activity.aria;
+      const tauxOuverture = (a?.total_envoyes ?? 0) > 0
+        ? `${Math.round(((a?.ouverts ?? 0) / a!.total_envoyes) * 100)}%`
+        : '—';
+      return [
+        { label: 'Emails envoyés', value: String(a?.total_envoyes ?? 0) },
+        { label: "Aujourd'hui", value: String(a?.emails_today ?? 0) },
+        { label: 'Taux ouverture', value: tauxOuverture },
+        { label: 'Cliqués', value: String(a?.cliques ?? 0) },
+      ];
+    }
     case 'rex': return [
-      { label: 'Devis du jour', value: String(activity.rex?.devis_today ?? 0) },
+      { label: 'Devis envoyés', value: String(activity.rex?.envoyes ?? 0) },
       { label: 'En attente', value: String(activity.rex?.en_attente ?? 0) },
+      { label: "Aujourd'hui", value: String(activity.rex?.devis_today ?? 0) },
+      { label: 'Total devis', value: String(activity.rex?.total ?? 0) },
     ];
     case 'iris': return [
       { label: 'Confirmés', value: activity.iris?.confirmes ?? '0$' },
       { label: 'Pipeline', value: activity.iris?.pipeline ?? '0$' },
-      { label: 'Actifs', value: String(activity.iris?.actifs ?? 0) },
+      { label: 'Devis actifs', value: String(activity.iris?.actifs ?? 0) },
     ];
-    case 'sage': return [
-      { label: 'Photos', value: String(activity.sage?.portfolio ?? 0) },
-      { label: 'Vid\u00e9os', value: String(activity.sage?.videos ?? 0) },
-      { label: 'Drive new', value: String(activity.sage?.drive_new ?? 0) },
-    ];
-    case 'zara': return [
-      { label: 'À venir', value: String(activity.zara?.a_venir ?? 0) },
-      { label: 'Confirmées', value: String(activity.zara?.confirmees_today ?? 0) },
-    ];
+    case 'sage': {
+      const s = activity.sage;
+      return [
+        { label: 'Photos', value: String(s?.total_photos ?? 0) },
+        { label: 'Vidéos', value: String(s?.total_videos ?? 0) },
+        { label: 'Featured', value: String(s?.featured ?? 0) },
+        { label: 'Total items', value: String(s?.total_items ?? 0) },
+      ];
+    }
+    case 'zara': {
+      const z = activity.zara;
+      const prochainLabel = z?.prochain
+        ? new Date(z.prochain).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' })
+        : '—';
+      return [
+        { label: 'À venir', value: String(z?.a_venir ?? 0) },
+        { label: 'Confirmées', value: String(z?.total_confirmes ?? 0) },
+        { label: 'Prochain job', value: prochainLabel },
+      ];
+    }
     case 'bolt': return [
       { label: 'Notifications', value: String(activity.bolt?.notifications ?? 0) },
     ];
-    case 'echo': return [
-      { label: 'Env OK', value: `${activity.echo?.env_ok ?? 0}/${activity.echo?.env_total ?? 0}` },
-    ];
-    case 'nova': return [
-      { label: 'Convos aujourd\'hui', value: String(activity.nova?.today ?? 0) },
-      { label: 'En attente appro', value: String(activity.nova?.en_attente ?? 0) },
-      { label: 'Devis générés', value: String(activity.nova?.devis_today ?? 0) },
-    ];
+    case 'echo': {
+      const e = activity.echo;
+      const missing = (e?.env_missing?.length ?? 0);
+      return [
+        { label: 'Env OK', value: `${e?.env_ok ?? 0}/${e?.env_total ?? 0}` },
+        { label: 'Manquantes', value: missing > 0 ? String(missing) : '0' },
+      ];
+    }
+    case 'nova': {
+      const n = activity.nova;
+      return [
+        { label: "Aujourd'hui", value: String(n?.today ?? 0) },
+        { label: 'Attente appro', value: String(n?.en_attente ?? 0) },
+        { label: 'Devis générés', value: String(n?.total_devis ?? 0) },
+        { label: 'Total convos', value: String(n?.total_convos ?? 0) },
+      ];
+    }
     default: return [];
   }
 }
 
 function getTimelineEvents(activity: ActivityData): { emoji: string; text: string; agent: string }[] {
   const events: { emoji: string; text: string; agent: string }[] = [];
+  // Health alerts first
+  if (activity.health) {
+    const redAgents = Object.entries(activity.health).filter(([, v]) => v === 'red').map(([k]) => k);
+    if (redAgents.length > 0)
+      events.push({ emoji: '🔴', text: `${redAgents.length} agent${redAgents.length > 1 ? 's' : ''} en erreur: ${redAgents.join(', ')}`, agent: 'Système' });
+  }
   if ((activity.hunter?.chauds ?? 0) > 0)
-    events.push({ emoji: '🎯', text: `${activity.hunter!.chauds} leads chauds dans le CRM`, agent: 'Hunter' });
-  if ((activity.nova?.today ?? 0) > 0)
-    events.push({ emoji: '💬', text: `${activity.nova!.today} conversations chatbot`, agent: 'Nova' });
+    events.push({ emoji: '🎯', text: `${activity.hunter!.chauds} leads chauds · ${activity.hunter!.prospects_envoyes} prospects envoyés`, agent: 'Hunter' });
   if ((activity.nova?.en_attente ?? 0) > 0)
-    events.push({ emoji: '⏳', text: `${activity.nova!.en_attente} devis en attente d'appro`, agent: 'Nova' });
+    events.push({ emoji: '⏳', text: `${activity.nova!.en_attente} devis en attente d'approbation`, agent: 'Nova' });
+  if ((activity.nova?.today ?? 0) > 0)
+    events.push({ emoji: '💬', text: `${activity.nova!.today} conversations chatbot aujourd'hui`, agent: 'Nova' });
   if ((activity.aria?.emails_today ?? 0) > 0)
-    events.push({ emoji: '📧', text: `${activity.aria!.emails_today} emails traités`, agent: 'Aria' });
+    events.push({ emoji: '📧', text: `${activity.aria!.emails_today} emails aujourd'hui · ${activity.aria!.total_envoyes} total`, agent: 'Aria' });
   if ((activity.rex?.en_attente ?? 0) > 0)
-    events.push({ emoji: '📋', text: `${activity.rex!.en_attente} devis en attente`, agent: 'Rex' });
+    events.push({ emoji: '📱', text: `${activity.rex!.en_attente} devis en attente de réponse`, agent: 'Rex' });
   if ((activity.iris?.actifs ?? 0) > 0)
-    events.push({ emoji: '💰', text: `Pipeline ${activity.iris!.pipeline} · ${activity.iris!.actifs} actifs`, agent: 'Iris' });
+    events.push({ emoji: '💰', text: `Pipeline ${activity.iris!.pipeline} · ${activity.iris!.actifs} devis actifs`, agent: 'Iris' });
   if ((activity.zara?.a_venir ?? 0) > 0)
     events.push({ emoji: '📅', text: `${activity.zara!.a_venir} réservations à venir`, agent: 'Zara' });
-  if ((activity.echo?.env_ok ?? 0) > 0)
-    events.push({ emoji: '✅', text: `Système: ${activity.echo!.env_ok}/${activity.echo!.env_total} vars OK`, agent: 'Echo' });
+  if ((activity.sage?.total_items ?? 0) > 0)
+    events.push({ emoji: '📸', text: `Portfolio: ${activity.sage!.total_photos} photos + ${activity.sage!.total_videos} vidéos`, agent: 'Sage' });
   if (events.length === 0)
     events.push({ emoji: '🚀', text: 'Mission Control actif — Demandez à vos agents!', agent: 'Système' });
   return events;
@@ -506,7 +570,8 @@ function AgentCard({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Status indicator
+  // Status indicator — uses real health checks from API
+  const agentHealth = activity.health?.[agent.id as string] ?? 'green';
   let statusDot: string;
   let statusText: string;
   let statusTextColor: string;
@@ -518,18 +583,18 @@ function AgentCard({
     statusDot = 'bg-green-400 animate-ping';
     statusText = 'ACTIF';
     statusTextColor = 'text-green-400';
-  } else if (isActive) {
-    statusDot = 'bg-emerald-400';
-    statusText = 'EN LIGNE';
-    statusTextColor = 'text-emerald-400';
-  } else if (isEnabled) {
-    statusDot = 'bg-emerald-400';
-    statusText = 'ACTIF';
-    statusTextColor = 'text-emerald-400';
+  } else if (agentHealth === 'red') {
+    statusDot = 'bg-red-500 animate-pulse';
+    statusText = 'ERREUR';
+    statusTextColor = 'text-red-400';
+  } else if (agentHealth === 'yellow') {
+    statusDot = 'bg-yellow-400 animate-pulse';
+    statusText = 'ATTENTION';
+    statusTextColor = 'text-yellow-400';
   } else {
-    statusDot = 'bg-slate-500';
-    statusText = 'EN VEILLE';
-    statusTextColor = 'text-slate-500';
+    statusDot = 'bg-emerald-400';
+    statusText = 'OPÉRATIONNEL';
+    statusTextColor = 'text-emerald-400';
   }
 
   return (
@@ -583,6 +648,21 @@ function AgentCard({
         <span className="text-base flex-shrink-0">💡</span>
         <p className="text-slate-300 text-xs leading-relaxed">{conseil}</p>
       </div>
+
+      {/* Last activity */}
+      {(() => {
+        const lastAction = (() => {
+          switch (agent.id) {
+            case 'hunter': return activity.hunter?.last_action;
+            case 'aria': return activity.aria?.last_action;
+            case 'sage': return activity.sage?.last_scan ? `Scan ${activity.sage.last_scan}` : null;
+            default: return null;
+          }
+        })();
+        return lastAction ? (
+          <p className="text-[10px] text-slate-600 mb-2 text-center">Dernière activité: {lastAction}</p>
+        ) : null;
+      })()}
 
       {/* Buttons */}
       <div className="flex gap-2 mt-auto">
