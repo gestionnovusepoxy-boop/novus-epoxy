@@ -341,13 +341,131 @@ function buildTools(agentId: AgentId) {
     }),
 
     liste_reservations: tool({
-      description: 'Liste les reservations a venir.',
+      description: 'Liste les reservations a venir avec les infos client du devis.',
       parameters: z.object({}),
       execute: async () => {
         const rows = await query(
-          `SELECT * FROM bookings WHERE jour1_date >= CURRENT_DATE ORDER BY jour1_date LIMIT 10`
+          `SELECT b.*, q.client_nom, q.client_tel, q.client_email, q.type_service, q.superficie, q.total
+           FROM bookings b JOIN quotes q ON b.quote_id = q.id
+           WHERE b.jour1_date >= CURRENT_DATE ORDER BY b.jour1_date LIMIT 15`
         );
         return { reservations: rows, total: rows.length };
+      },
+    }),
+
+    creer_reservation: tool({
+      description: 'Cree ou met a jour une reservation pour un devis existant. Jour1 = premiere journee de travaux, jour2 = deuxieme journee (si applicable). Slot = matin ou apres-midi.',
+      parameters: z.object({
+        quote_id: z.number().describe('ID du devis'),
+        jour1_date: z.string().describe('Date jour 1 (YYYY-MM-DD)'),
+        jour1_slot: z.enum(['matin', 'apres-midi']).default('matin'),
+        jour2_date: z.string().describe('Date jour 2 (YYYY-MM-DD)'),
+        jour2_slot: z.enum(['matin', 'apres-midi']).default('matin'),
+        statut: z.enum(['en_attente', 'confirme']).default('en_attente'),
+      }),
+      execute: async ({ quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut }) => {
+        // Verify quote exists
+        const quoteRows = await query(`SELECT id, client_nom, statut FROM quotes WHERE id = $1`, [quote_id]);
+        if (!quoteRows[0]) return { error: 'Devis introuvable' };
+        // Check for existing booking
+        const existing = await query(`SELECT id FROM bookings WHERE quote_id = $1`, [quote_id]);
+        if (existing.length > 0) {
+          await query(
+            `UPDATE bookings SET jour1_date = $1, jour1_slot = $2, jour2_date = $3, jour2_slot = $4, statut = $5, updated_at = NOW() WHERE quote_id = $6`,
+            [jour1_date, jour1_slot, jour2_date, jour2_slot, statut, quote_id]
+          );
+          return { ok: true, action: 'mise_a_jour', quote_id, client: quoteRows[0].client_nom, jour1: `${jour1_date} ${jour1_slot}`, jour2: `${jour2_date} ${jour2_slot}`, statut };
+        }
+        await query(
+          `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut) VALUES ($1, $2, $3, $4, $5, $6)`,
+          [quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut]
+        );
+        // Update quote statut to planifie if depot_paye
+        if (quoteRows[0].statut === 'depot_paye') {
+          await query(`UPDATE quotes SET statut = 'planifie' WHERE id = $1`, [quote_id]);
+        }
+        return { ok: true, action: 'creee', quote_id, client: quoteRows[0].client_nom, jour1: `${jour1_date} ${jour1_slot}`, jour2: `${jour2_date} ${jour2_slot}`, statut };
+      },
+    }),
+
+    confirmer_reservation: tool({
+      description: 'Confirme une reservation existante (change statut en_attente → confirme).',
+      parameters: z.object({ quote_id: z.number() }),
+      execute: async ({ quote_id }) => {
+        const rows = await query(`SELECT b.id, b.statut, q.client_nom FROM bookings b JOIN quotes q ON b.quote_id = q.id WHERE b.quote_id = $1`, [quote_id]);
+        if (!rows[0]) return { error: 'Reservation introuvable' };
+        if (rows[0].statut === 'confirme') return { deja_confirme: true, client: rows[0].client_nom };
+        await query(`UPDATE bookings SET statut = 'confirme', updated_at = NOW() WHERE quote_id = $1`, [quote_id]);
+        return { ok: true, client: rows[0].client_nom, nouveau_statut: 'confirme' };
+      },
+    }),
+
+    deplacer_reservation: tool({
+      description: 'Deplace une reservation a de nouvelles dates.',
+      parameters: z.object({
+        quote_id: z.number(),
+        jour1_date: z.string().describe('Nouvelle date jour 1 (YYYY-MM-DD)'),
+        jour1_slot: z.enum(['matin', 'apres-midi']).default('matin'),
+        jour2_date: z.string().describe('Nouvelle date jour 2 (YYYY-MM-DD)'),
+        jour2_slot: z.enum(['matin', 'apres-midi']).default('matin'),
+      }),
+      execute: async ({ quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot }) => {
+        const rows = await query(`SELECT b.id, q.client_nom FROM bookings b JOIN quotes q ON b.quote_id = q.id WHERE b.quote_id = $1`, [quote_id]);
+        if (!rows[0]) return { error: 'Reservation introuvable' };
+        await query(
+          `UPDATE bookings SET jour1_date = $1, jour1_slot = $2, jour2_date = $3, jour2_slot = $4, updated_at = NOW() WHERE quote_id = $5`,
+          [jour1_date, jour1_slot, jour2_date, jour2_slot, quote_id]
+        );
+        return { ok: true, client: rows[0].client_nom, nouveau_jour1: `${jour1_date} ${jour1_slot}`, nouveau_jour2: `${jour2_date} ${jour2_slot}` };
+      },
+    }),
+
+    voir_agenda_semaine: tool({
+      description: 'Voir l\'agenda de la semaine: tous les jours avec les reservations planifiees.',
+      parameters: z.object({
+        date_debut: z.string().optional().describe('Date debut semaine (YYYY-MM-DD), defaut = lundi prochain'),
+      }),
+      execute: async ({ date_debut }) => {
+        const start = date_debut ?? new Date().toISOString().slice(0, 10);
+        const rows = await query(
+          `SELECT b.*, q.client_nom, q.client_tel, q.type_service, q.superficie, q.total
+           FROM bookings b JOIN quotes q ON b.quote_id = q.id
+           WHERE (b.jour1_date >= $1::date AND b.jour1_date < $1::date + INTERVAL '7 days')
+              OR (b.jour2_date >= $1::date AND b.jour2_date < $1::date + INTERVAL '7 days')
+           ORDER BY b.jour1_date`,
+          [start]
+        );
+        return { semaine_du: start, reservations: rows, total: rows.length };
+      },
+    }),
+
+    jours_disponibles: tool({
+      description: 'Verifie quels jours sont disponibles (pas de reservation) dans les prochaines semaines.',
+      parameters: z.object({
+        semaines: z.number().optional().default(2).describe('Nombre de semaines a verifier'),
+      }),
+      execute: async ({ semaines = 2 }) => {
+        const rows = await query(
+          `SELECT jour1_date, jour2_date FROM bookings WHERE jour1_date >= CURRENT_DATE AND jour1_date < CURRENT_DATE + ($1 || ' weeks')::INTERVAL AND statut = 'confirme'`,
+          [semaines]
+        );
+        const busy = new Set<string>();
+        for (const r of rows) {
+          if (r.jour1_date) busy.add(new Date(r.jour1_date as string).toISOString().slice(0, 10));
+          if (r.jour2_date) busy.add(new Date(r.jour2_date as string).toISOString().slice(0, 10));
+        }
+        // Generate all weekdays in range
+        const available: string[] = [];
+        const start = new Date();
+        for (let i = 0; i < semaines * 7; i++) {
+          const d = new Date(start);
+          d.setDate(d.getDate() + i);
+          const day = d.getDay();
+          if (day === 0 || day === 6) continue; // skip weekends
+          const iso = d.toISOString().slice(0, 10);
+          if (!busy.has(iso)) available.push(iso);
+        }
+        return { disponibles: available, occupes: Array.from(busy), semaines };
       },
     }),
 
@@ -559,7 +677,7 @@ function buildTools(agentId: AgentId) {
     rex: ['envoyer_sms', 'generer_relance_ia', 'liste_devis', 'crm_leads_chauds'],
     iris: ['stats_business', 'liste_devis', 'revenus_analyse'],
     sage: ['generer_post', 'scan_drive_portfolio', 'preview_drive', 'stats_portfolio'],
-    zara: ['liste_reservations', 'stats_business'],
+    zara: ['liste_reservations', 'creer_reservation', 'confirmer_reservation', 'deplacer_reservation', 'voir_agenda_semaine', 'jours_disponibles', 'stats_business', 'liste_devis'],
     bolt: ['envoyer_telegram'],
     echo: ['system_health'],
     nova: ['voir_conversations', 'stats_nova'],
@@ -587,7 +705,7 @@ function getSystemPrompt(agentId: AgentId): string {
     rex: `Tu es Rex, le Closer SMS de Novus Epoxy. Tu es le roi des relances par texto. Court, punchy, efficace.\n${base}\nTu generes des relances SMS percutantes et tu les envoies directement.`,
     iris: `Tu es Iris, l'analyste financiere de Novus Epoxy. Tu vois les chiffres, les tendances, les opportunites de revenus.\n${base}\nTu analyses les revenus, le pipeline de devis, et tu identifies les opportunites financieres.`,
     sage: `Tu es Sage, la creatrice de contenu et gestionnaire de portfolio de Novus Epoxy. Tu geres le portfolio photo automatiquement: scan du Google Drive de Jason, classification par IA (type, couleur, qualite), upload sur Vercel Blob, et integration dans le portfolio DB. Tu generes aussi du contenu marketing pour Instagram et Facebook.\n${base}\nTu scannes le Drive pour de nouvelles photos, tu les classifies avec Vision, et tu les ajoutes au portfolio. Les photos du portfolio sont automatiquement utilisees par Hunter dans les emails de prospection.`,
-    zara: `Tu es Zara, la gestionnaire de reservations de Novus Epoxy. Tu geres le calendrier, les rendez-vous, les confirmations.\n${base}\nTu listes les reservations a venir et tu aides a organiser le planning.`,
+    zara: `Tu es Zara, la gestionnaire de reservations de Novus Epoxy. Tu geres le calendrier complet: creer, deplacer, confirmer des reservations.\n${base}\nLes travaux epoxy prennent generalement 2 jours consecutifs (jour1 = application, jour2 = finition). Slot = matin ou apres-midi.\nQuand on te demande de placer une reservation, verifie les jours disponibles d'abord, puis cree la reservation.\nQuand un depot est paye et que le client veut reserver, cree la reservation et confirme-la.\nTu peux aussi voir l'agenda de la semaine et deplacer des reservations si besoin.\nPas de travaux la fin de semaine (samedi/dimanche).`,
     bolt: `Tu es Bolt, le commandant Telegram de Novus Epoxy. Tu envoies des notifications et updates a l'equipe via Telegram.\n${base}\nTu envoies des messages dans le groupe admin Telegram.`,
     echo: `Tu es Echo, le moniteur systeme de Novus Epoxy. Tu surveilles la sante du systeme: env vars, crons, integrations.\n${base}\nTu verifies que tout fonctionne correctement et tu rapportes les anomalies.`,
     nova: `Tu es Nova, l'agente chatbot de Novus Epoxy. Tu geres les conversations automatiques avec les clients potentiels.\n${base}\nTu vois les conversations en cours, les devis generes automatiquement, et les leads en attente d'approbation.`,
