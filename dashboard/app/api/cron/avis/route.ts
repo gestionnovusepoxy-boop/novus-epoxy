@@ -50,8 +50,11 @@ export async function GET(req: NextRequest) {
   for (const r of rows) {
     const prenom = (r.client_nom as string).split(' ')[0];
 
-    // Pas de SMS pour avis Google — email seulement, on évite le spam
-    const smsOk = true; // Skip SMS, mark as sent
+    // SMS avis Google — personnel avec numéro Luca
+    const smsOk = await sendSMS(
+      r.client_tel as string,
+      `Salut ${prenom}! C'est Luca de Novus Epoxy. J'espere que ton plancher est encore aussi beau! Si t'as 30 secondes, un petit avis Google nous aiderait vraiment: ${GOOGLE_REVIEW_URL} Merci! 581-307-5983`
+    ).catch(() => false);
 
     // Send email
     if (r.client_email) {
