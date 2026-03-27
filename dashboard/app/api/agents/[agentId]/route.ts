@@ -538,6 +538,72 @@ function buildTools(agentId: AgentId) {
       },
     }),
 
+    resume_journee: tool({
+      description: 'Genere un resume complet de la journee: devis, leads, reservations, emails, revenus. Ideal pour envoyer sur Telegram.',
+      parameters: z.object({}),
+      execute: async () => {
+        const [devis, leads, bookings, emails, revenus] = await Promise.all([
+          query(`SELECT COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as today, COUNT(*) FILTER (WHERE statut = 'envoye') as envoyes, COUNT(*) FILTER (WHERE statut = 'depot_paye') as depot_payes, COUNT(*) as total FROM quotes`),
+          query(`SELECT COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as today, COUNT(*) FILTER (WHERE temperature = 'chaud') as chauds, COUNT(*) as total FROM crm_leads WHERE statut NOT IN ('ferme','perdu')`),
+          query(`SELECT COUNT(*) FILTER (WHERE jour1_date >= CURRENT_DATE AND jour1_date < CURRENT_DATE + INTERVAL '7 days') as semaine, COUNT(*) FILTER (WHERE jour1_date = CURRENT_DATE) as today FROM bookings WHERE statut = 'confirme'`),
+          query(`SELECT COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as today FROM email_logs WHERE statut = 'sent'`),
+          query(`SELECT COALESCE(SUM(total),0) as confirmes FROM quotes WHERE statut IN ('depot_paye','planifie','complete')`),
+        ]);
+        return {
+          devis: devis[0],
+          leads: leads[0],
+          reservations: bookings[0],
+          emails_envoyes_today: Number(emails[0]?.today ?? 0),
+          revenus_confirmes: formatMoney(Number(revenus[0]?.confirmes ?? 0)),
+          date: new Date().toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+        };
+      },
+    }),
+
+    planning_semaine: tool({
+      description: 'Genere le planning de la semaine: toutes les reservations avec nom client, service, dates.',
+      parameters: z.object({}),
+      execute: async () => {
+        const rows = await query(
+          `SELECT b.jour1_date, b.jour1_slot, b.jour2_date, b.jour2_slot, b.statut, q.client_nom, q.client_tel, q.type_service, q.superficie, q.client_adresse
+           FROM bookings b JOIN quotes q ON b.quote_id = q.id
+           WHERE b.jour1_date >= CURRENT_DATE AND b.jour1_date < CURRENT_DATE + INTERVAL '7 days'
+           ORDER BY b.jour1_date`
+        );
+        return { semaine: rows, total: rows.length };
+      },
+    }),
+
+    alerte_leads_chauds: tool({
+      description: 'Trouve les leads chauds qui necessitent une action immediate et genere un message d\'alerte.',
+      parameters: z.object({}),
+      execute: async () => {
+        const rows = await query(
+          `SELECT id, nom, telephone, email, service, ville, temperature, created_at,
+                  EXTRACT(EPOCH FROM (NOW() - created_at))/3600 as heures_depuis
+           FROM crm_leads
+           WHERE temperature = 'chaud' AND statut NOT IN ('ferme','perdu','gagne')
+           ORDER BY created_at DESC LIMIT 10`
+        );
+        return { leads_chauds: rows, total: rows.length };
+      },
+    }),
+
+    devis_en_attente: tool({
+      description: 'Liste les devis qui attendent une action: approbation, signature, depot, etc.',
+      parameters: z.object({}),
+      execute: async () => {
+        const rows = await query(
+          `SELECT id, client_nom, client_tel, type_service, total, statut, created_at,
+                  EXTRACT(EPOCH FROM (NOW() - created_at))/86400 as jours_depuis
+           FROM quotes
+           WHERE statut IN ('brouillon','en_attente','approuve','envoye','contrat_signe')
+           ORDER BY created_at ASC`
+        );
+        return { devis: rows, total: rows.length };
+      },
+    }),
+
     scan_drive_portfolio: tool({
       description: 'Scanne le Google Drive de Jason, classifie les photos avec Claude Vision, et les ajoute au portfolio automatiquement.',
       parameters: z.object({}),
@@ -600,6 +666,160 @@ function buildTools(agentId: AgentId) {
         const status = envVars.map(v => ({ variable: v, present: !!process.env[v] }));
         const ok = status.filter(s => s.present).length;
         return { env_vars: status, ok_count: ok, total: envVars.length, timestamp: new Date().toISOString() };
+      },
+    }),
+
+    // ---------- ECHO TOOLS ----------
+
+    verifier_crons: tool({
+      description: 'Verifie que tous les cron jobs ont roule recemment. Compare les timestamps dans kv_store avec les frequences attendues.',
+      parameters: z.object({}),
+      execute: async () => {
+        const crons = [
+          { key: 'last_email_scan', name: 'Email Scan', expected_hours: 3 },
+          { key: 'last_gmail_watch', name: 'Gmail Watch', expected_hours: 168 },
+        ];
+        const results = [];
+        for (const cron of crons) {
+          const rows = await query(`SELECT value FROM kv_store WHERE key = $1`, [cron.key]);
+          const lastRun = rows[0]?.value as string | undefined;
+          let status = 'inconnu';
+          let hoursAgo = null;
+          if (lastRun) {
+            hoursAgo = Math.round((Date.now() - new Date(lastRun).getTime()) / 3600000);
+            status = hoursAgo <= cron.expected_hours ? 'ok' : 'en_retard';
+          }
+          results.push({ cron: cron.name, last_run: lastRun ?? 'jamais', heures_depuis: hoursAgo, statut: status, attendu_max: `${cron.expected_hours}h` });
+        }
+        // Check bookings crons via recent data
+        const [relanceCount, rappelCount, avisCount] = await Promise.all([
+          query(`SELECT COUNT(*) as c FROM quotes WHERE statut = 'envoye' AND created_at < NOW() - INTERVAL '5 days'`),
+          query(`SELECT COUNT(*) as c FROM bookings WHERE jour1_date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '2 days' AND rappel_jour1_sent = false`),
+          query(`SELECT COUNT(*) as c FROM bookings WHERE completed_at IS NOT NULL AND avis_sms_sent = false`),
+        ]);
+        return {
+          crons: results,
+          pending_actions: {
+            relances_a_envoyer: Number(relanceCount[0]?.c ?? 0),
+            rappels_a_envoyer: Number(rappelCount[0]?.c ?? 0),
+            avis_a_envoyer: Number(avisCount[0]?.c ?? 0),
+          },
+        };
+      },
+    }),
+
+    rapport_db: tool({
+      description: 'Rapport de la base de donnees: nombre de rows par table, taille, activite recente.',
+      parameters: z.object({}),
+      execute: async () => {
+        const tables = ['quotes', 'submissions', 'crm_leads', 'bookings', 'conversations', 'messages', 'email_logs', 'expenses', 'portfolio', 'kv_store', 'audit_logs'];
+        const counts: Record<string, number> = {};
+        for (const t of tables) {
+          const rows = await query(`SELECT COUNT(*)::int as c FROM ${t}`);
+          counts[t] = rows[0]?.c as number ?? 0;
+        }
+        // Recent activity
+        const [recentQuotes, recentLeads, recentEmails, recentBookings] = await Promise.all([
+          query(`SELECT COUNT(*)::int as c FROM quotes WHERE created_at >= NOW() - INTERVAL '7 days'`),
+          query(`SELECT COUNT(*)::int as c FROM crm_leads WHERE created_at >= NOW() - INTERVAL '7 days'`),
+          query(`SELECT COUNT(*)::int as c FROM email_logs WHERE created_at >= NOW() - INTERVAL '7 days'`),
+          query(`SELECT COUNT(*)::int as c FROM bookings WHERE created_at >= NOW() - INTERVAL '7 days'`),
+        ]);
+        return {
+          tables: counts,
+          activite_7_jours: {
+            devis: Number(recentQuotes[0]?.c ?? 0),
+            leads_crm: Number(recentLeads[0]?.c ?? 0),
+            emails: Number(recentEmails[0]?.c ?? 0),
+            reservations: Number(recentBookings[0]?.c ?? 0),
+          },
+        };
+      },
+    }),
+
+    verifier_integrations: tool({
+      description: 'Teste les integrations externes en temps reel: Twilio, Gmail, Telegram, Stripe, Anthropic.',
+      parameters: z.object({}),
+      execute: async () => {
+        const results: Record<string, { ok: boolean; detail: string }> = {};
+
+        // Anthropic
+        try {
+          const res = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY ?? '', 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+            body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 5, messages: [{ role: 'user', content: 'ping' }] }),
+          });
+          results.anthropic = { ok: res.ok, detail: res.ok ? 'API fonctionnelle' : `Erreur ${res.status}` };
+        } catch { results.anthropic = { ok: false, detail: 'Connection echouee' }; }
+
+        // Telegram
+        try {
+          const res = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getMe`);
+          const data = await res.json();
+          results.telegram = { ok: data.ok, detail: data.ok ? `Bot: @${data.result?.username}` : 'Token invalide' };
+        } catch { results.telegram = { ok: false, detail: 'Connection echouee' }; }
+
+        // Twilio
+        const sid = process.env.TWILIO_ACCOUNT_SID;
+        const token = process.env.TWILIO_AUTH_TOKEN;
+        if (sid && token) {
+          try {
+            const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}.json`, {
+              headers: { 'Authorization': 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64') },
+            });
+            results.twilio = { ok: res.ok, detail: res.ok ? 'Compte actif' : `Erreur ${res.status}` };
+          } catch { results.twilio = { ok: false, detail: 'Connection echouee' }; }
+        } else { results.twilio = { ok: false, detail: 'Non configure' }; }
+
+        // Gmail
+        results.gmail = { ok: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN), detail: process.env.GOOGLE_CLIENT_ID ? 'Credentials presentes' : 'Non configure' };
+
+        // Stripe
+        if (process.env.STRIPE_SECRET_KEY) {
+          try {
+            const res = await fetch('https://api.stripe.com/v1/balance', {
+              headers: { 'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}` },
+            });
+            const data = await res.json();
+            results.stripe = { ok: res.ok, detail: res.ok ? `Balance: ${data.available?.[0]?.amount / 100}$ CAD` : `Erreur ${res.status}` };
+          } catch { results.stripe = { ok: false, detail: 'Connection echouee' }; }
+        } else { results.stripe = { ok: false, detail: 'Non configure' }; }
+
+        // DB
+        try {
+          const rows = await query(`SELECT 1 as ping`);
+          results.database = { ok: rows.length > 0, detail: 'Neon PostgreSQL connecte' };
+        } catch { results.database = { ok: false, detail: 'Connection echouee' }; }
+
+        const total = Object.keys(results).length;
+        const ok = Object.values(results).filter(r => r.ok).length;
+        return { integrations: results, ok: ok, total, score: `${ok}/${total}` };
+      },
+    }),
+
+    erreurs_recentes: tool({
+      description: 'Verifie les erreurs recentes: scans email echoues, emails en erreur, alertes systeme.',
+      parameters: z.object({}),
+      execute: async () => {
+        const [emailErrors, scanErrors, auditFails] = await Promise.all([
+          query(`SELECT destinataire, sujet, created_at FROM email_logs WHERE statut = 'error' ORDER BY created_at DESC LIMIT 5`),
+          query(`SELECT value FROM kv_store WHERE key = 'last_email_scan_error'`),
+          query(`SELECT action, email, ip_address, created_at FROM audit_logs WHERE success = false ORDER BY created_at DESC LIMIT 5`),
+        ]);
+        return {
+          emails_en_erreur: emailErrors,
+          derniere_erreur_scan: scanErrors[0]?.value ?? 'aucune',
+          tentatives_login_echouees: auditFails,
+        };
+      },
+    }),
+
+    rapport_complet: tool({
+      description: 'Rapport de sante complet du systeme: env vars, integrations, crons, DB, erreurs. Le rapport ultime.',
+      parameters: z.object({}),
+      execute: async () => {
+        return { note: 'Utilise les outils system_health + verifier_integrations + verifier_crons + rapport_db + erreurs_recentes pour generer un rapport complet. Appelle-les un par un.' };
       },
     }),
 
@@ -687,8 +907,8 @@ function buildTools(agentId: AgentId) {
     iris: ['stats_business', 'liste_devis', 'revenus_analyse'],
     sage: ['generer_post', 'scan_drive_portfolio', 'preview_drive', 'stats_portfolio'],
     zara: ['liste_reservations', 'creer_reservation', 'confirmer_reservation', 'deplacer_reservation', 'voir_agenda', 'jours_disponibles', 'stats_business', 'liste_devis'],
-    bolt: ['envoyer_telegram'],
-    echo: ['system_health'],
+    bolt: ['envoyer_telegram', 'resume_journee', 'planning_semaine', 'alerte_leads_chauds', 'devis_en_attente', 'stats_business'],
+    echo: ['system_health', 'verifier_crons', 'rapport_db', 'verifier_integrations', 'erreurs_recentes', 'rapport_complet'],
     nova: ['voir_conversations', 'stats_nova'],
     jason: ['jason_mes_leads', 'jason_envoyer_email', 'jason_envoyer_sms', 'jason_stats', 'scorer_leads', 'generer_relance_ia', 'plan_attaque', 'crm_leads_chauds'],
   };
@@ -715,8 +935,8 @@ function getSystemPrompt(agentId: AgentId): string {
     iris: `Tu es Iris, l'analyste financiere de Novus Epoxy. Tu vois les chiffres, les tendances, les opportunites de revenus.\n${base}\nTu analyses les revenus, le pipeline de devis, et tu identifies les opportunites financieres.`,
     sage: `Tu es Sage, la creatrice de contenu et gestionnaire de portfolio de Novus Epoxy. Tu geres le portfolio photo automatiquement: scan du Google Drive de Jason, classification par IA (type, couleur, qualite), upload sur Vercel Blob, et integration dans le portfolio DB. Tu generes aussi du contenu marketing pour Instagram et Facebook.\n${base}\nTu scannes le Drive pour de nouvelles photos, tu les classifies avec Vision, et tu les ajoutes au portfolio. Les photos du portfolio sont automatiquement utilisees par Hunter dans les emails de prospection.`,
     zara: `Tu es Zara, la gestionnaire de reservations de Novus Epoxy. Tu geres le calendrier complet: creer, deplacer, confirmer des reservations.\n${base}\nLes travaux epoxy prennent generalement 2 jours consecutifs (jour1 = application, jour2 = finition). Slot = matin ou apres-midi.\nQuand on te demande de placer une reservation, verifie les jours disponibles d'abord, puis cree la reservation.\nQuand un depot est paye et que le client veut reserver, cree la reservation et confirme-la.\nTu peux aussi voir l'agenda de la semaine et deplacer des reservations si besoin.\nPas de travaux la fin de semaine (samedi/dimanche).`,
-    bolt: `Tu es Bolt, le commandant Telegram de Novus Epoxy. Tu envoies des notifications et updates a l'equipe via Telegram.\n${base}\nTu envoies des messages dans le groupe admin Telegram.`,
-    echo: `Tu es Echo, le moniteur systeme de Novus Epoxy. Tu surveilles la sante du systeme: env vars, crons, integrations.\n${base}\nTu verifies que tout fonctionne correctement et tu rapportes les anomalies.`,
+    bolt: `Tu es Bolt, le commandant des communications de Novus Epoxy. Tu es le lien entre le dashboard et l'equipe sur Telegram.\n${base}\nTon role:\n- Resume quotidien: compile les stats du jour et envoie un beau message sur Telegram\n- Planning semaine: genere le planning avec tous les chantiers de la semaine\n- Alerte leads chauds: identifie les leads a contacter d'urgence\n- Devis en attente: rappelle les devis qui trainent\nQuand tu envoies sur Telegram, formate en HTML (<b>, <i>, emojis) pour que ce soit clair et beau.\nTu es le motivateur de l'equipe — chaque message doit etre energique et actionnable.`,
+    echo: `Tu es Echo, le gardien du systeme Novus Epoxy. Tu surveilles TOUT: integrations (Twilio, Gmail, Stripe, Telegram, Anthropic), crons, base de donnees, erreurs recentes, tentatives de login.\n${base}\nQuand on te demande un rapport, utilise TOUS tes outils pour donner un portrait complet. Si quelque chose est en panne ou en retard, signale-le clairement avec des solutions.\nTu peux tester les integrations en temps reel (ping Anthropic, Telegram, Twilio, Stripe).\nTu es le systeme d'alerte — si tu vois un probleme, sois direct et clair.`,
     nova: `Tu es Nova, l'agente chatbot de Novus Epoxy. Tu geres les conversations automatiques avec les clients potentiels.\n${base}\nTu vois les conversations en cours, les devis generes automatiquement, et les leads en attente d'approbation.`,
     jason: `Tu es Denis, le Prospecteur Avance de Novus Epoxy. Tu es l'agent autonome de Jason — tu geres toute sa prospection.\n${base}\nTu envoies les emails depuis jason@novusepoxy.shop (SMTP Hostinger) et les SMS depuis le 581-709-5940 (numero Twilio de Jason).\nTon role: voir les leads de Jason, envoyer des emails/SMS de prospection personnalises, scorer les leads, generer des plans d'attaque.\nJason est le vendeur terrain — il va sur le terrain faire les soumissions. Toi tu prepares le terrain en amont.\nQuand tu envoies un email de prospection, inclus toujours des photos du portfolio et un CTA vers novusepoxy.ca/#contact.\nQuand tu envoies un SMS, signe toujours "Jason — Novus Epoxy 581-307-2678".\nTon ton est direct, motivant, axe resultats. Tu es un predateur commercial silencieux.`,
   };
