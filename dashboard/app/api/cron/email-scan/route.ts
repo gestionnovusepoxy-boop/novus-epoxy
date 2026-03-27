@@ -22,11 +22,13 @@ async function sendTelegram(chatId: string, text: string) {
   if (!token) return;
   const chunks = text.match(/[\s\S]{1,4000}/g) ?? [text];
   for (const chunk of chunks) {
-    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'HTML' }),
-    });
+    try {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'HTML' }),
+      });
+    } catch { /* Telegram down — don't crash the scan */ }
   }
 }
 
@@ -305,26 +307,31 @@ Reponds en JSON strict (sans markdown):
   }
 
   // 6. Send reply email via Gmail with branding + notify admins
-  if (parsed.reponse) {
-    const replyHtml = brandedEmailHtml(`<p>${parsed.reponse.replace(/\n/g, '<br/>')}</p>`);
+  const reponseText = parsed.reponse ?? '';
+  if (reponseText) {
+    const replyHtml = brandedEmailHtml(`<p>${reponseText.replace(/\n/g, '<br/>')}</p>`);
 
-    await sendEmail({
-      to: fromEmail,
-      subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
-      html: replyHtml,
-    }).catch(() => {});
+    let emailSent = false;
+    try {
+      await sendEmail({
+        to: fromEmail,
+        subject: subject.startsWith('Re:') ? subject : `Re: ${subject}`,
+        html: replyHtml,
+      });
+      emailSent = true;
+    } catch { /* email send failed */ }
 
     // Notify admins on Telegram
     for (const chatId of ADMIN_CHAT_IDS()) {
       await sendTelegram(chatId, [
-        `🤖 <b>Closer — reponse envoyee</b>`,
+        `🤖 <b>Closer — ${emailSent ? 'reponse envoyee' : 'reponse ECHOUEE'}</b>`,
         ``,
         `👤 ${leadNom} (${fromEmail})`,
-        `🏷 ${parsed.type} — ${parsed.intent}`,
+        `🏷 ${parsed.type ?? 'inconnu'} — ${parsed.intent ?? ''}`,
         parsed.service_detecte && parsed.service_detecte !== 'null' ? `🔧 ${parsed.service_detecte}` : '',
         parsed.superficie_detectee && parsed.superficie_detectee !== 'null' ? `📐 ${parsed.superficie_detectee} pi²` : '',
         ``,
-        `💬 <i>${parsed.reponse.slice(0, 400)}</i>`,
+        `💬 <i>${reponseText.slice(0, 400)}</i>`,
         ``,
         `https://novus-epoxy.vercel.app/dashboard/crm`,
       ].filter(Boolean).join('\n'));
@@ -375,8 +382,8 @@ Reponds en JSON strict (sans markdown):
     }
   }
 
-  // 9. Mark email_logs as sent
-  await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`lead-${msgId}`]);
+  // 9. Mark email_logs as sent (only if reply was actually sent)
+  await query(`UPDATE email_logs SET statut = $1 WHERE resend_id = $2`, [reponseText ? 'sent' : 'skipped', `lead-${msgId}`]).catch(() => {});
 
   // 10. If info_complete + service + superficie: create draft quote, notify admins with details
   if (
@@ -405,7 +412,8 @@ Reponds en JSON strict (sans markdown):
             `Lead CRM #${leadId} — agent closer`,
           ]
         );
-        const quoteId = (quoteRows[0] as { id: number }).id;
+        const quoteId = (quoteRows[0] as { id: number })?.id;
+        if (!quoteId) throw new Error('Quote insert returned no ID');
         await query(
           `UPDATE crm_leads SET statut = 'devis_envoye', updated_at = NOW() WHERE id = $1`,
           [leadId]
@@ -690,7 +698,8 @@ export async function GET(req: NextRequest) {
     }
 
     // === CLIENT: Auto-reply + notify admins ===
-    if (analysis.type === 'client' && analysis.reply_suggestion) {
+    const replySuggestion = analysis.reply_suggestion ?? '';
+    if (analysis.type === 'client' && replySuggestion) {
       const alreadyReplied = await query(
         `SELECT id FROM email_logs WHERE resend_id = $1`,
         [`gmail-${msg.id}`],
@@ -699,13 +708,13 @@ export async function GET(req: NextRequest) {
         await query(
           `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
           [`gmail-${msg.id}`, fromEmail, subject ? `Re: ${subject}` : 'Auto-reply', 'processing'],
-        );
+        ).catch(() => {});
         try {
           // Send branded reply with CTA to quote form
           await sendEmail({
             to: fromEmail,
             subject: subject ? `Re: ${subject}` : 'Novus Epoxy — Reponse',
-            html: brandedEmailHtml(`<p>${analysis.reply_suggestion.replace(/\n/g, '<br/>')}</p>`),
+            html: brandedEmailHtml(`<p>${replySuggestion.replace(/\n/g, '<br/>')}</p>`),
           });
           await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`gmail-${msg.id}`]);
           repliesSent++;

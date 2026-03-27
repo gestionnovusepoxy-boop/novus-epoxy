@@ -178,10 +178,17 @@ export async function POST(req: NextRequest) {
     // Skip already contacted
     if (lead.prospect_sent_at) { skipped++; continue; }
 
+    // Skip leads with no contact method
+    if (!lead.email && !lead.telephone?.trim()) { skipped++; continue; }
+
     const prenom = getPrenom(lead.nom);
     const project = lead.service || lead.notes?.split('—')[0] || '';
     const isCommercial = lead.type === 'commercial';
-    const photos = pickPhotos(portfolio, lead.notes ?? '', lead.service ?? '', lead.type ?? 'residentiel');
+    const photos = portfolio.length > 0
+      ? pickPhotos(portfolio, lead.notes ?? '', lead.service ?? '', lead.type ?? 'residentiel')
+      : [];
+
+    let contacted = false;
 
     // 1. Send email from jason@novusepoxy.shop (if lead has email)
     if (lead.email) {
@@ -199,32 +206,35 @@ export async function POST(req: NextRequest) {
         await query(
           `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'sent')`,
           [result.id, lead.email, subject],
-        );
+        ).catch(() => {});
         emailsSent++;
+        contacted = true;
       } catch (err) {
         console.error(`[Jason Prospect] Email failed for ${lead.nom}:`, err);
       }
     }
 
     // 2. Send SMS from Jason's Twilio number (if lead has phone)
-    if (lead.telephone) {
+    if (lead.telephone?.trim()) {
       try {
         const smsMsg = lead.email
           ? `Bonjour ${prenom}! C'est Jason de Novus Epoxy. Je viens de t'envoyer un email avec des photos de nos realisations. Si t'as un projet de plancher epoxy, on fait des soumissions gratuites! Reponds-moi ou appelle au 581-307-2678. Bonne journee!`
           : `Bonjour ${prenom}! C'est Jason de Novus Epoxy. On se specialise en planchers epoxy haut de gamme dans la region de Quebec. Si t'as un projet, on offre une soumission gratuite! Appelle-moi au 581-307-2678 ou visite novusepoxy.ca. A bientot!`;
 
         const sent = await sendSMS(lead.telephone, smsMsg, JASON_TWILIO);
-        if (sent) smsSent++;
+        if (sent) { smsSent++; contacted = true; }
       } catch (err) {
         console.error(`[Jason Prospect] SMS failed for ${lead.nom}:`, err);
       }
     }
 
-    // 3. Update lead status
-    await query(
-      `UPDATE crm_leads SET prospect_sent_at = NOW(), statut = CASE WHEN statut = 'nouveau' THEN 'contacte' ELSE statut END, updated_at = NOW() WHERE id = $1`,
-      [lead.id],
-    );
+    // 3. Update lead status ONLY if at least one contact method succeeded
+    if (contacted) {
+      await query(
+        `UPDATE crm_leads SET prospect_sent_at = NOW(), statut = CASE WHEN statut = 'nouveau' THEN 'contacte' ELSE statut END, updated_at = NOW() WHERE id = $1`,
+        [lead.id],
+      ).catch(err => console.error(`[Jason Prospect] Status update failed for ${lead.id}:`, err));
+    }
   }
 
   return NextResponse.json({ ok: true, emails: emailsSent, sms: smsSent, skipped, total: leads.length });
