@@ -5,6 +5,18 @@ import { query } from '@/lib/db';
 const VALID_STATUT = ['nouveau', 'contacte', 'devis_envoye', 'rdv_pris', 'ferme', 'gagne'] as const;
 const VALID_TEMP   = ['chaud', 'tiede', 'froid'] as const;
 
+// Auto-score lead temperature based on notes keywords
+const HOT_KW = ['asap','maintenant','rapidement','le plus tot','le plus tôt','cette semaine','urgent','tout de suite','immediat','immédiat','des que possible','dès que possible','au plus vite','presse','pressé','vite','demain','aujourd','ready','pret','prêt','commencer','le plus vite','rapide'];
+const COLD_KW = ['pas de date','a voir','à voir','???','juste savoir','pas presse','pas pressé','aucune idee','aucune idée','sais pas','pas sur','pas sûr','pas certain','no date','annee prochaine','année prochaine','pas pour tout de suite','dans longtemps','pas decide','pas décidé'];
+
+function autoScoreTemp(notes: string | null, service: string | null): 'chaud' | 'tiede' | 'froid' {
+  const text = ((notes ?? '') + ' ' + (service ?? '')).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  for (const kw of HOT_KW) { if (text.includes(kw.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) return 'chaud'; }
+  for (const kw of COLD_KW) { if (text.includes(kw.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))) return 'froid'; }
+  if (!notes || notes.trim().length < 5) return 'froid';
+  return 'tiede';
+}
+
 export async function GET(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
@@ -66,7 +78,7 @@ export async function POST(req: NextRequest) {
   if (!nom) return NextResponse.json({ error: 'nom requis' }, { status: 400 });
 
   const statutVal = VALID_STATUT.includes(statut) ? statut : 'nouveau';
-  const tempVal   = VALID_TEMP.includes(temperature) ? temperature : 'tiede';
+  const tempVal   = VALID_TEMP.includes(temperature) ? temperature : autoScoreTemp(notes, service);
   const typeVal   = ['residentiel', 'commercial'].includes(type) ? type : 'residentiel';
 
   const rows = await query(

@@ -249,13 +249,19 @@ export async function POST(req: NextRequest) {
 
   const placeholders = leadIds.map((_, i) => `$${i + 1}`).join(',');
   const leads = await query(
-    `SELECT id, nom, telephone, email, service, ville, notes, type, temperature, statut FROM crm_leads WHERE id IN (${placeholders}) AND email IS NOT NULL AND email != ''`,
+    `SELECT id, nom, telephone, email, service, ville, notes, type, temperature, statut, prospect_sent_at FROM crm_leads WHERE id IN (${placeholders}) AND email IS NOT NULL AND email != ''`,
     leadIds,
   );
 
-  const results: { id: number; nom: string; status: 'sent' | 'error'; error?: string }[] = [];
+  const results: { id: number; nom: string; status: 'sent' | 'skipped' | 'error'; error?: string }[] = [];
 
   for (const lead of leads) {
+    // Anti-spam: skip if already sent
+    if (lead.prospect_sent_at) {
+      results.push({ id: lead.id, nom: lead.nom, status: 'skipped', error: 'Offre deja envoyee' });
+      continue;
+    }
+
     try {
       const photos = pickPhotos(lead.notes ?? '', lead.service ?? '', lead.type ?? 'residentiel');
       const html = buildHtml({
@@ -267,7 +273,10 @@ export async function POST(req: NextRequest) {
       }, photos);
 
       const prenom = getPrenom(lead.nom);
-      const subject = `${prenom} — Votre projet en epoxy avec Novus Epoxy`;
+      const isCommercial = lead.type === 'commercial';
+      const subject = isCommercial
+        ? `${prenom} — Partenariat planchers epoxy — Novus Epoxy`
+        : `${prenom} — Votre projet en epoxy avec Novus Epoxy`;
 
       const emailResult = await sendEmail({
         to: lead.email,
@@ -275,19 +284,17 @@ export async function POST(req: NextRequest) {
         html,
       });
 
-      // Log the email
+      // Log the email (using correct column names)
       await query(
-        `INSERT INTO email_logs (recipient, subject, type, reference_id, message_id) VALUES ($1, $2, $3, $4, $5)`,
-        [lead.email, subject, 'prospect', String(lead.id), emailResult.id],
+        `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'sent')`,
+        [emailResult.id, lead.email, subject],
       );
 
-      // Update lead status to contacte if nouveau
-      if (lead.statut === 'nouveau') {
-        await query(
-          `UPDATE crm_leads SET statut = 'contacte', updated_at = NOW() WHERE id = $1`,
-          [lead.id],
-        );
-      }
+      // Update lead: mark as contacted + record prospect send time
+      await query(
+        `UPDATE crm_leads SET statut = CASE WHEN statut = 'nouveau' THEN 'contacte' ELSE statut END, prospect_sent_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [lead.id],
+      );
 
       results.push({ id: lead.id, nom: lead.nom, status: 'sent' });
     } catch (err: unknown) {
@@ -297,5 +304,6 @@ export async function POST(req: NextRequest) {
   }
 
   const sent = results.filter(r => r.status === 'sent').length;
-  return NextResponse.json({ sent, total: results.length, results });
+  const skipped = results.filter(r => r.status === 'skipped').length;
+  return NextResponse.json({ sent, skipped, total: results.length, results });
 }

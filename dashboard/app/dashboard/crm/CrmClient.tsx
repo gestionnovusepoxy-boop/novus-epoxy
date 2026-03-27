@@ -19,6 +19,7 @@ interface Lead {
   statut: Statut;
   temperature: Temperature;
   type?: LeadType;
+  prospect_sent_at: string | null;
   created_at: string;
 }
 
@@ -68,7 +69,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function LeadRow({ lead, onUpdate, onProspect, prospecting }: { lead: Lead; onUpdate: () => void; onProspect: (id: number) => void; prospecting: boolean }) {
+function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle }: { lead: Lead; onUpdate: () => void; onProspect: (id: number) => void; prospecting: boolean; isSelected: boolean; onToggle: (id: number) => void }) {
   const [loadingStatut, setLoadingStatut] = useState(false);
   const [loadingTemp, setLoadingTemp]     = useState(false);
   const [copied, setCopied]               = useState(false);
@@ -110,8 +111,14 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting }: { lead: Lead; onUp
   return (
     <tr className="border-b border-slate-700 hover:bg-slate-700/30 transition">
       <td className="px-4 py-3">
+        <input type="checkbox" checked={isSelected} onChange={() => onToggle(lead.id)} disabled={!lead.email || !!lead.prospect_sent_at} className="accent-amber-500" />
+      </td>
+      <td className="px-4 py-3">
         <p className="text-white text-sm font-medium">{lead.nom}</p>
-        {lead.source && <p className="text-slate-500 text-xs">via {lead.source}</p>}
+        <div className="flex gap-1 items-center">
+          {lead.source && <span className="text-slate-500 text-xs">via {lead.source}</span>}
+          {lead.prospect_sent_at && <span className="text-emerald-400 text-[10px] font-medium bg-emerald-500/20 px-1.5 py-0.5 rounded">Offre envoyee</span>}
+        </div>
       </td>
       <td className="px-4 py-3">
         {lead.telephone ? (
@@ -199,6 +206,25 @@ export default function CrmClient() {
   const [adding, setAdding]   = useState(false);
   const [prospectingId, setProspectingId] = useState<number | null>(null);
   const [prospectMsg, setProspectMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [selected, setSelected] = useState<Set<number>>(new Set());
+  const [bulkSending, setBulkSending] = useState(false);
+
+  function toggleSelect(id: number) {
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAll() {
+    const eligible = leads.filter(l => l.email && !l.prospect_sent_at);
+    if (selected.size === eligible.length) {
+      setSelected(new Set());
+    } else {
+      setSelected(new Set(eligible.map(l => l.id)));
+    }
+  }
 
   async function sendProspect(leadId: number) {
     if (!confirm('Envoyer l\'offre de service par email a ce lead ?')) return;
@@ -222,6 +248,28 @@ export default function CrmClient() {
     }
     setProspectingId(null);
     setTimeout(() => setProspectMsg(null), 4000);
+  }
+
+  async function sendBulk() {
+    if (selected.size === 0) return;
+    if (!confirm(`Envoyer l'offre a ${selected.size} lead(s) ?`)) return;
+    setBulkSending(true);
+    setProspectMsg(null);
+    try {
+      const res = await fetch('/api/leads/hunter/prospect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadIds: Array.from(selected) }),
+      });
+      const json = await res.json();
+      setProspectMsg({ text: `${json.sent} offre(s) envoyee(s), ${json.skipped ?? 0} deja envoyee(s)`, ok: json.sent > 0 });
+      setSelected(new Set());
+      load();
+    } catch {
+      setProspectMsg({ text: 'Erreur reseau', ok: false });
+    }
+    setBulkSending(false);
+    setTimeout(() => setProspectMsg(null), 5000);
   }
 
   const load = useCallback(async () => {
@@ -360,6 +408,16 @@ export default function CrmClient() {
         className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-full max-w-sm"
       />
 
+      {selected.size > 0 && (
+        <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
+          <span className="text-amber-400 text-sm font-medium">{selected.size} lead(s) selectionne(s)</span>
+          <button onClick={sendBulk} disabled={bulkSending} className="bg-amber-500 text-slate-900 font-bold px-4 py-2 rounded-lg text-sm hover:bg-amber-400 transition disabled:opacity-50">
+            {bulkSending ? 'Envoi...' : `Envoyer ${selected.size} offre(s)`}
+          </button>
+          <button onClick={() => setSelected(new Set())} className="text-slate-400 text-sm hover:text-white transition">Annuler</button>
+        </div>
+      )}
+
       {prospectMsg && (
         <div className={`px-4 py-3 rounded-lg text-sm font-medium ${prospectMsg.ok ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
           {prospectMsg.text}
@@ -370,21 +428,21 @@ export default function CrmClient() {
         <table className="w-full">
           <thead>
             <tr className="border-b border-slate-700 bg-slate-900/50">
-              {['Nom', 'Téléphone', 'Email', 'Service', 'Ville', 'Température', 'Statut', 'Date', ''].map(h => (
-                <th key={h} className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider whitespace-nowrap">
-                  {h}
+              {['', 'Nom', 'Téléphone', 'Email', 'Service', 'Ville', 'Température', 'Statut', 'Date', ''].map((h, i) => (
+                <th key={h || `col-${i}`} className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider whitespace-nowrap">
+                  {i === 0 ? <input type="checkbox" onChange={toggleSelectAll} className="accent-amber-500" /> : h}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={9} className="text-center py-8 text-slate-500 text-sm">Chargement…</td></tr>
+              <tr><td colSpan={10} className="text-center py-8 text-slate-500 text-sm">Chargement…</td></tr>
             )}
             {!loading && leads.length === 0 && (
-              <tr><td colSpan={9} className="text-center py-8 text-slate-500 text-sm">Aucun lead</td></tr>
+              <tr><td colSpan={10} className="text-center py-8 text-slate-500 text-sm">Aucun lead</td></tr>
             )}
-            {!loading && leads.map(l => <LeadRow key={l.id} lead={l} onUpdate={load} onProspect={sendProspect} prospecting={prospectingId === l.id} />)}
+            {!loading && leads.map(l => <LeadRow key={l.id} lead={l} onUpdate={load} onProspect={sendProspect} prospecting={prospectingId === l.id} isSelected={selected.has(l.id)} onToggle={toggleSelect} />)}
           </tbody>
         </table>
       </div>
