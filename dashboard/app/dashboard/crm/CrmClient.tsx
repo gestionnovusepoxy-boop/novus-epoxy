@@ -68,7 +68,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function LeadRow({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
+function LeadRow({ lead, onUpdate, onProspect, prospecting }: { lead: Lead; onUpdate: () => void; onProspect: (id: number) => void; prospecting: boolean }) {
   const [loadingStatut, setLoadingStatut] = useState(false);
   const [loadingTemp, setLoadingTemp]     = useState(false);
   const [copied, setCopied]               = useState(false);
@@ -160,13 +160,25 @@ function LeadRow({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
         </select>
       </td>
       <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{formatDate(lead.created_at)}</td>
-      <td className="px-4 py-3">
-        <button
-          onClick={handleDelete}
-          className="text-slate-600 hover:text-red-400 transition text-xs"
-        >
-          Suppr.
-        </button>
+      <td className="px-4 py-3 whitespace-nowrap">
+        <div className="flex gap-2">
+          {lead.email && (
+            <button
+              onClick={() => onProspect(lead.id)}
+              disabled={prospecting}
+              className="text-amber-400 hover:text-amber-300 transition text-xs font-medium disabled:opacity-40"
+              title="Envoyer offre par email"
+            >
+              {prospecting ? '...' : 'Offre'}
+            </button>
+          )}
+          <button
+            onClick={handleDelete}
+            className="text-slate-600 hover:text-red-400 transition text-xs"
+          >
+            Suppr.
+          </button>
+        </div>
       </td>
     </tr>
   );
@@ -185,6 +197,32 @@ export default function CrmClient() {
   const [showAdd, setShowAdd] = useState(false);
   const [newLead, setNewLead] = useState({ nom: '', telephone: '', email: '', ville: '', notes: '', type: 'residentiel' as LeadType });
   const [adding, setAdding]   = useState(false);
+  const [prospectingId, setProspectingId] = useState<number | null>(null);
+  const [prospectMsg, setProspectMsg] = useState<{ text: string; ok: boolean } | null>(null);
+
+  async function sendProspect(leadId: number) {
+    if (!confirm('Envoyer l\'offre de service par email a ce lead ?')) return;
+    setProspectingId(leadId);
+    setProspectMsg(null);
+    try {
+      const res = await fetch('/api/leads/hunter/prospect', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ leadIds: [leadId] }),
+      });
+      const json = await res.json();
+      if (json.sent > 0) {
+        setProspectMsg({ text: `Offre envoyee a ${json.results?.[0]?.nom ?? 'lead'}`, ok: true });
+        load();
+      } else {
+        setProspectMsg({ text: json.results?.[0]?.error ?? json.error ?? 'Erreur', ok: false });
+      }
+    } catch {
+      setProspectMsg({ text: 'Erreur reseau', ok: false });
+    }
+    setProspectingId(null);
+    setTimeout(() => setProspectMsg(null), 4000);
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -322,6 +360,12 @@ export default function CrmClient() {
         className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-full max-w-sm"
       />
 
+      {prospectMsg && (
+        <div className={`px-4 py-3 rounded-lg text-sm font-medium ${prospectMsg.ok ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'}`}>
+          {prospectMsg.text}
+        </div>
+      )}
+
       <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
         <table className="w-full">
           <thead>
@@ -340,7 +384,7 @@ export default function CrmClient() {
             {!loading && leads.length === 0 && (
               <tr><td colSpan={9} className="text-center py-8 text-slate-500 text-sm">Aucun lead</td></tr>
             )}
-            {!loading && leads.map(l => <LeadRow key={l.id} lead={l} onUpdate={load} />)}
+            {!loading && leads.map(l => <LeadRow key={l.id} lead={l} onUpdate={load} onProspect={sendProspect} prospecting={prospectingId === l.id} />)}
           </tbody>
         </table>
       </div>
