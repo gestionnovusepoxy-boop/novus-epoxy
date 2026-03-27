@@ -20,6 +20,7 @@ export async function GET() {
     marcelHistory,
     sageStats,
     sageLastScan,
+    jasonStats,
   ] = await Promise.all([
     // Hunter: leads par température + prospects envoyés
     query(`SELECT
@@ -87,6 +88,15 @@ export async function GET() {
       FROM portfolio`),
     // Sage: dernier scan
     query(`SELECT created_at FROM portfolio ORDER BY created_at DESC LIMIT 1`),
+    // Jason: leads de prospection
+    query(`SELECT
+      COUNT(*) as total_leads,
+      COUNT(*) FILTER (WHERE temperature = 'chaud') as chauds,
+      COUNT(*) FILTER (WHERE prospect_sent_at IS NOT NULL) as emails_envoyes,
+      COUNT(*) FILTER (WHERE prospect_relance_1_at IS NOT NULL OR prospect_relance_2_at IS NOT NULL) as relances,
+      COUNT(*) FILTER (WHERE statut IN ('interesse','qualification','negocie','gagne')) as convertis,
+      COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as leads_semaine
+      FROM crm_leads WHERE source = 'jason'`),
   ]);
 
   const h = hunterStats[0] as Record<string, string | number>;
@@ -97,6 +107,7 @@ export async function GET() {
   const z = zaraStats[0] as Record<string, string | number>;
   const n = novaStats[0] as Record<string, string | number>;
   const sg = sageStats[0] as Record<string, string | number>;
+  const js = jasonStats[0] as Record<string, string | number>;
 
   let marcelMsgCount = 0;
   try {
@@ -138,6 +149,7 @@ export async function GET() {
     bolt: process.env.TELEGRAM_BOT_TOKEN ? 'green' : 'red',
     echo: 'green',
     nova: process.env.ANTHROPIC_API_KEY ? 'green' : 'red',
+    jason: process.env.ANTHROPIC_API_KEY ? 'green' : 'red',
   };
 
   // Check staleness — if no activity in 7+ days, mark yellow
@@ -213,6 +225,14 @@ export async function GET() {
       devis_today: Number(n.devis_today ?? 0),
       total_devis: Number(n.total_devis ?? 0),
       total_convos: Number(n.total_convos ?? 0),
+    },
+    jason: {
+      total_leads: Number(js.total_leads ?? 0),
+      chauds: Number(js.chauds ?? 0),
+      emails_envoyes: Number(js.emails_envoyes ?? 0),
+      relances: Number(js.relances ?? 0),
+      convertis: Number(js.convertis ?? 0),
+      leads_semaine: Number(js.leads_semaine ?? 0),
     },
     health,
   });

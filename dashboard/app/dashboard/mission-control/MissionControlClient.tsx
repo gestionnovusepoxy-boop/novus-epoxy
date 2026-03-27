@@ -16,6 +16,7 @@ interface ActivityData {
   bolt?:    { notifications: number };
   echo?:    { env_ok: number; env_total: number; env_missing: string[] };
   nova?:    { today: number; en_attente: number; devis_today: number; total_devis: number; total_convos: number };
+  jason?:   { total_leads: number; chauds: number; emails_envoyes: number; relances: number; convertis: number; leads_semaine: number };
   health?:  Record<string, 'green' | 'yellow' | 'red'>;
 }
 
@@ -173,6 +174,19 @@ const AGENTS = [
       { label: 'Leads from chatbot', msg: 'Quels leads sont arrivés via le chatbot aujourd\'hui?' },
     ],
   },
+  {
+    id: 'jason', name: 'Jason', emoji: '🏗️', role: 'Vendeur Terrain',
+    desc: 'Prospection, emails, SMS, leads de Jason',
+    color: 'yellow',
+    ring: 'ring-yellow-500/40', bg: 'bg-yellow-600', text: 'text-yellow-400',
+    border: 'border-yellow-500/20', glow: 'shadow-yellow-500/10',
+    quickActions: [
+      { label: 'Mes leads', msg: 'Montre-moi tous mes leads de prospection' },
+      { label: 'Leads chauds', msg: 'Quels sont mes leads chauds à contacter en priorité?' },
+      { label: 'Envoyer prospection', msg: 'Génère et envoie un email + SMS de prospection pour mon lead le plus chaud' },
+      { label: 'Stats prospection', msg: 'Donne-moi mes statistiques de prospection: emails envoyés, relances, conversions' },
+    ],
+  },
 ] as const;
 
 type AgentId = (typeof AGENTS)[number]['id'];
@@ -190,6 +204,7 @@ function getConseil(id: AgentId, activity: ActivityData): string {
       sage: 'Google Drive API non configurée',
       bolt: 'Telegram Bot non configuré',
       nova: 'API Claude non configurée',
+      jason: 'API Claude non configurée',
     };
     return `⛔ ${reasons[id] ?? 'Service non disponible'}`;
   }
@@ -257,6 +272,13 @@ function getConseil(id: AgentId, activity: ActivityData): string {
       if (n.en_attente > 0) return `⏳ ${n.en_attente} devis en attente d'approbation!`;
       if (n.today > 0) return `${n.today} conversation${n.today > 1 ? 's' : ''} aujourd'hui · ${n.total_convos} total`;
       return `${n.total_convos} conversations au total · ${n.total_devis} devis générés`;
+    }
+    case 'jason': {
+      const j = activity.jason;
+      if (!j) return 'Importe tes leads et lance la prospection!';
+      if (j.chauds > 0) return `🔥 ${j.chauds} lead${j.chauds > 1 ? 's' : ''} chaud${j.chauds > 1 ? 's' : ''} · ${j.emails_envoyes} emails envoyés`;
+      if (j.leads_semaine > 0) return `${j.leads_semaine} leads cette semaine · ${j.convertis} convertis`;
+      return `${j.total_leads} leads au total · ${j.emails_envoyes} emails envoyés`;
     }
     default: return '';
   }
@@ -337,6 +359,15 @@ function getMetrics(id: AgentId, activity: ActivityData): { label: string; value
         { label: 'Attente appro', value: String(n?.en_attente ?? 0) },
         { label: 'Devis générés', value: String(n?.total_devis ?? 0) },
         { label: 'Total convos', value: String(n?.total_convos ?? 0) },
+      ];
+    }
+    case 'jason': {
+      const j = activity.jason;
+      return [
+        { label: 'Leads', value: String(j?.total_leads ?? 0) },
+        { label: 'Chauds', value: String(j?.chauds ?? 0) },
+        { label: 'Emails envoyés', value: String(j?.emails_envoyes ?? 0) },
+        { label: 'Convertis', value: String(j?.convertis ?? 0) },
       ];
     }
     default: return [];

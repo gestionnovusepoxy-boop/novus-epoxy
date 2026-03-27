@@ -6,6 +6,7 @@ import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { sendSMS } from '@/lib/sms';
+import { sendProspectEmail } from '@/lib/send-prospect-email';
 import { google } from 'googleapis';
 
 export const maxDuration = 60;
@@ -30,7 +31,7 @@ async function setKv(key: string, value: unknown): Promise<void> {
 
 // --------------- Valid agent IDs ---------------
 
-const VALID_AGENTS = ['marcel', 'hunter', 'aria', 'rex', 'iris', 'sage', 'zara', 'bolt', 'echo', 'nova'] as const;
+const VALID_AGENTS = ['marcel', 'hunter', 'aria', 'rex', 'iris', 'sage', 'zara', 'bolt', 'echo', 'nova', 'jason'] as const;
 type AgentId = (typeof VALID_AGENTS)[number];
 
 function isValidAgent(id: string): id is AgentId {
@@ -474,6 +475,80 @@ function buildTools(agentId: AgentId) {
         return { env_vars: status, ok_count: ok, total: envVars.length, timestamp: new Date().toISOString() };
       },
     }),
+
+    // ---------- JASON TOOLS ----------
+
+    jason_mes_leads: tool({
+      description: 'Liste les leads CRM importes par Jason (source = jason).',
+      parameters: z.object({
+        statut: z.string().optional(),
+        limit: z.number().optional().default(15),
+      }),
+      execute: async ({ statut, limit = 15 }) => {
+        const lim = Math.min(limit, 50);
+        const validStatuts = ['nouveau', 'contacte', 'interesse', 'qualification', 'negocie', 'gagne', 'perdu', 'froid', 'ferme'];
+        const safeStatut = statut && validStatuts.includes(statut) ? statut : '';
+        const rows = safeStatut
+          ? await query(`SELECT id, nom, telephone, email, service, superficie, ville, statut, temperature, prospect_sent_at, prospect_relance_1_at, prospect_relance_2_at, created_at FROM crm_leads WHERE source = 'jason' AND statut = $1 ORDER BY created_at DESC LIMIT $2`, [safeStatut, lim])
+          : await query(`SELECT id, nom, telephone, email, service, superficie, ville, statut, temperature, prospect_sent_at, prospect_relance_1_at, prospect_relance_2_at, created_at FROM crm_leads WHERE source = 'jason' ORDER BY created_at DESC LIMIT $1`, [lim]);
+        return { leads: rows, total: rows.length };
+      },
+    }),
+
+    jason_envoyer_email: tool({
+      description: 'Envoie un email de prospection depuis jason@novusepoxy.shop via SMTP Hostinger.',
+      parameters: z.object({
+        lead_id: z.number().describe('ID du lead CRM'),
+        sujet: z.string().describe('Sujet de l\'email'),
+        contenu_html: z.string().describe('Contenu HTML de l\'email'),
+      }),
+      execute: async ({ lead_id, sujet, contenu_html }) => {
+        const rows = await query(`SELECT id, nom, email, telephone FROM crm_leads WHERE id = $1`, [lead_id]);
+        if (!rows[0]) return { error: 'Lead introuvable' };
+        const lead = rows[0] as Record<string, unknown>;
+        if (!lead.email) return { error: 'Ce lead n\'a pas d\'email' };
+        const result = await sendProspectEmail({
+          to: String(lead.email),
+          subject: sujet,
+          html: contenu_html,
+        });
+        await query(`UPDATE crm_leads SET prospect_sent_at = NOW(), statut = CASE WHEN statut = 'nouveau' THEN 'contacte' ELSE statut END WHERE id = $1`, [lead_id]);
+        return { envoye: true, email_id: result.id, lead: { id: lead.id, nom: lead.nom, email: lead.email } };
+      },
+    }),
+
+    jason_envoyer_sms: tool({
+      description: 'Envoie un SMS de prospection depuis le numero Twilio de Jason (581-709-5940).',
+      parameters: z.object({
+        telephone: z.string(),
+        message: z.string(),
+      }),
+      execute: async ({ telephone, message }) => {
+        const sent = await sendSMS(telephone, message, process.env.TWILIO_JASON_PHONE ?? '+15817095940');
+        return { envoye: sent, telephone };
+      },
+    }),
+
+    jason_stats: tool({
+      description: 'Statistiques de prospection de Jason: leads importes, emails envoyes, relances.',
+      parameters: z.object({}),
+      execute: async () => {
+        const stats = await query(`
+          SELECT
+            COUNT(*) as total_leads,
+            COUNT(*) FILTER (WHERE statut = 'nouveau') as nouveaux,
+            COUNT(*) FILTER (WHERE temperature = 'chaud') as chauds,
+            COUNT(*) FILTER (WHERE temperature = 'tiede') as tiedes,
+            COUNT(*) FILTER (WHERE prospect_sent_at IS NOT NULL) as emails_envoyes,
+            COUNT(*) FILTER (WHERE prospect_relance_1_at IS NOT NULL) as relance1_envoyes,
+            COUNT(*) FILTER (WHERE prospect_relance_2_at IS NOT NULL) as relance2_envoyes,
+            COUNT(*) FILTER (WHERE statut IN ('interesse','qualification','negocie','gagne')) as convertis,
+            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as leads_semaine
+          FROM crm_leads WHERE source = 'jason'
+        `);
+        return stats[0];
+      },
+    }),
   };
 
   // Map agent -> tools
@@ -488,6 +563,7 @@ function buildTools(agentId: AgentId) {
     bolt: ['envoyer_telegram'],
     echo: ['system_health'],
     nova: ['voir_conversations', 'stats_nova'],
+    jason: ['jason_mes_leads', 'jason_envoyer_email', 'jason_envoyer_sms', 'jason_stats', 'scorer_leads', 'generer_relance_ia', 'plan_attaque', 'crm_leads_chauds'],
   };
 
   const toolKeys = agentToolMap[agentId];
@@ -515,6 +591,7 @@ function getSystemPrompt(agentId: AgentId): string {
     bolt: `Tu es Bolt, le commandant Telegram de Novus Epoxy. Tu envoies des notifications et updates a l'equipe via Telegram.\n${base}\nTu envoies des messages dans le groupe admin Telegram.`,
     echo: `Tu es Echo, le moniteur systeme de Novus Epoxy. Tu surveilles la sante du systeme: env vars, crons, integrations.\n${base}\nTu verifies que tout fonctionne correctement et tu rapportes les anomalies.`,
     nova: `Tu es Nova, l'agente chatbot de Novus Epoxy. Tu geres les conversations automatiques avec les clients potentiels.\n${base}\nTu vois les conversations en cours, les devis generes automatiquement, et les leads en attente d'approbation.`,
+    jason: `Tu es l'agent personnel de Jason, vendeur terrain chez Novus Epoxy. Tu l'aides a gerer SES leads de prospection.\n${base}\nTu envoies les emails depuis jason@novusepoxy.shop (SMTP Hostinger) et les SMS depuis le 581-709-5940 (numero Twilio de Jason).\nTon role: voir les leads de Jason, envoyer des emails/SMS de prospection personnalises, scorer les leads, generer des plans d'attaque.\nJason est le vendeur terrain — il va sur le terrain faire les soumissions. Ton ton est direct, motivant, axe resultats.\nQuand tu envoies un email de prospection, inclus toujours des photos du portfolio et un CTA vers novusepoxy.ca/#contact.\nQuand tu envoies un SMS, signe toujours "Jason — Novus Epoxy 581-307-2678".`,
   };
 
   return prompts[agentId];

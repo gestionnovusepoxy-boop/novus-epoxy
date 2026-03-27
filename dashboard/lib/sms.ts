@@ -5,10 +5,10 @@ const TWILIO_SID = () => process.env.TWILIO_ACCOUNT_SID ?? '';
 const TWILIO_TOKEN = () => process.env.TWILIO_AUTH_TOKEN ?? '';
 const TWILIO_FROM = () => process.env.TWILIO_PHONE_NUMBER ?? '';
 
-export async function sendSMS(to: string, body: string): Promise<boolean> {
+export async function sendSMS(to: string, body: string, fromOverride?: string): Promise<boolean> {
   const sid = TWILIO_SID();
   const token = TWILIO_TOKEN();
-  const from = TWILIO_FROM();
+  const from = fromOverride ?? TWILIO_FROM();
 
   if (!sid || !token || !from) {
     console.error('Twilio not configured — missing TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, or TWILIO_PHONE_NUMBER');
