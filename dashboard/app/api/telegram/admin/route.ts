@@ -528,6 +528,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       // Batch INSERT — 50 at a time (much faster than 1 by 1)
       let imported = 0;
       let skipped = 0;
+      const insertedIds: number[] = [];
       const batchSize = 50;
 
       for (let i = 0; i < allLeads.length; i += batchSize) {
@@ -555,12 +556,27 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         }
 
         if (values.length > 0) {
-          await query(
-            `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature) VALUES ${values.join(',')}`,
+          const insertedRows = await query(
+            `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature) VALUES ${values.join(',')} RETURNING id`,
             params,
           );
           imported += values.length;
+          insertedIds.push(...insertedRows.map(r => (r as { id: number }).id));
         }
+      }
+
+      // Auto-prospect: send emails + SMS to all imported leads
+      let prospectResult = null;
+      if (insertedIds.length > 0) {
+        try {
+          const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+          const res = await fetch(`${base}/api/leads/jason/prospect`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ADMIN_API_KEY ?? '' },
+            body: JSON.stringify({ leadIds: insertedIds }),
+          });
+          if (res.ok) prospectResult = await res.json();
+        } catch (err) { console.error('[Telegram Import] Auto-prospect failed:', err); }
       }
 
       return JSON.stringify({
@@ -569,6 +585,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         ignores: skipped,
         total_detectes: allLeads.length,
         source,
+        prospect: prospectResult,
         dashboard: 'https://novus-epoxy.vercel.app/dashboard/crm',
       });
     }
@@ -1023,11 +1040,15 @@ export async function POST(req: NextRequest) {
       await sendTelegram(chatId, `Erreur import: ${result.error}`);
     } else {
       await sendTelegram(chatId, [
-        `Importation terminee!`,
+        `✅ Importation terminee!`,
         ``,
-        `Importes: ${result.importes} leads`,
-        result.ignores > 0 ? `Ignores: ${result.ignores}` : '',
-        `Source: ${result.source}`,
+        `📥 ${result.importes} leads importes`,
+        result.ignores > 0 ? `⏭️ ${result.ignores} ignores (nom manquant)` : '',
+        `📌 Source: ${result.source}`,
+        result.prospect ? `` : '',
+        result.prospect ? `📧 ${result.prospect.emails} emails envoyes` : '',
+        result.prospect ? `📱 ${result.prospect.sms} SMS envoyes` : '',
+        result.prospect ? `🚀 Prospection auto lancee!` : '',
         ``,
         `Voir dans le dashboard: ${result.dashboard}`,
       ].filter(Boolean).join('\n'));

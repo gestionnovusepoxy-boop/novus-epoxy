@@ -345,9 +345,35 @@ Reponds en JSON strict (sans markdown):
   // 8. Update crm_leads statut + temperature + last_agent_reply_at
   const temperature = parsed.priority === 'haute' ? 'chaud' : parsed.priority === 'basse' ? 'froid' : 'tiede';
   await query(
-    `UPDATE crm_leads SET statut = 'contacte', temperature = $1, last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $2`,
+    `UPDATE crm_leads SET statut = 'interesse', temperature = $1, last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $2`,
     [temperature, leadId]
   );
+
+  // 8b. Get lead phone for Telegram alert
+  const leadPhoneRows = await query(`SELECT telephone, source FROM crm_leads WHERE id = $1`, [leadId]);
+  const leadPhone = (leadPhoneRows[0]?.telephone as string) ?? null;
+  const leadSource = (leadPhoneRows[0]?.source as string) ?? '';
+
+  // HOT LEAD ALERT — if priority haute, send special Telegram with phone to call
+  if (parsed.priority === 'haute' && leadPhone) {
+    for (const chatId of ADMIN_CHAT_IDS()) {
+      await sendTelegram(chatId, [
+        `🔥🔥🔥 <b>LEAD CHAUD — APPELLE MAINTENANT</b>`,
+        ``,
+        `👤 <b>${leadNom}</b>`,
+        `📞 <a href="tel:${leadPhone.replace(/\D/g, '')}">${leadPhone}</a>`,
+        `📧 ${fromEmail}`,
+        leadSource ? `📌 Source: ${leadSource}` : '',
+        ``,
+        `💬 "${parsed.intent}"`,
+        parsed.service_detecte && parsed.service_detecte !== 'null' ? `🔧 ${parsed.service_detecte}` : '',
+        parsed.superficie_detectee && parsed.superficie_detectee !== 'null' ? `📐 ${parsed.superficie_detectee} pi²` : '',
+        ``,
+        `Aria a deja repondu automatiquement.`,
+        `Appelle pour closer!`,
+      ].filter(Boolean).join('\n'));
+    }
+  }
 
   // 9. Mark email_logs as sent
   await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`lead-${msgId}`]);

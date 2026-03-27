@@ -216,8 +216,9 @@ export default function CrmClient() {
   const [importSource, setImportSource] = useState('jason');
   const [importParsing, setImportParsing] = useState(false);
   const [importPreview, setImportPreview] = useState<Array<{ nom: string; telephone: string; email: string; service: string; ville: string; temperature: string }> | null>(null);
-  const [importResult, setImportResult] = useState<{ importes: number; ignores: number } | null>(null);
+  const [importResult, setImportResult] = useState<{ importes: number; ignores: number; prospect?: { emails: number; sms: number } } | null>(null);
   const [importing, setImporting] = useState(false);
+  const [autoProspect, setAutoProspect] = useState(true);
   const [bulkSending, setBulkSending] = useState(false);
 
   function toggleSelect(id: number) {
@@ -342,7 +343,7 @@ export default function CrmClient() {
     const res = await fetch('/api/crm/leads/import', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'import', leads: importPreview, source: importSource }),
+      body: JSON.stringify({ action: 'import', leads: importPreview, source: importSource, autoProspect }),
     });
     if (res.ok) {
       const json = await res.json();
@@ -416,6 +417,11 @@ export default function CrmClient() {
             <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center space-y-2">
               <p className="text-green-400 font-semibold text-lg">{importResult.importes} leads importes!</p>
               {importResult.ignores > 0 && <p className="text-slate-400 text-sm">{importResult.ignores} ignores (nom manquant)</p>}
+              {importResult.prospect && (
+                <p className="text-blue-400 text-sm font-medium">
+                  Prospection auto: {importResult.prospect.emails} emails + {importResult.prospect.sms} SMS envoyes
+                </p>
+              )}
               <button onClick={() => { setImportResult(null); setShowImport(false); }} className="bg-green-600 hover:bg-green-500 text-white rounded-lg px-4 py-2 text-sm font-semibold mt-2">Fermer</button>
             </div>
           ) : importPreview ? (
@@ -460,9 +466,15 @@ export default function CrmClient() {
                 </table>
                 {importPreview.length > 100 && <p className="text-slate-500 text-xs text-center py-2">+ {importPreview.length - 100} autres...</p>}
               </div>
+              <div className="flex items-center gap-4">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={autoProspect} onChange={e => setAutoProspect(e.target.checked)} className="accent-amber-500 w-4 h-4" />
+                  <span className="text-sm text-slate-300">Envoyer offres automatiquement (email + SMS)</span>
+                </label>
+              </div>
               <div className="flex gap-2">
                 <button onClick={handleImportConfirm} disabled={importing} className="bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg px-5 py-2 text-sm transition disabled:opacity-40">
-                  {importing ? `Import en cours (${importPreview.length})...` : `Importer ${importPreview.length} leads`}
+                  {importing ? `Import en cours...` : autoProspect ? `Importer + Envoyer ${importPreview.length} offres` : `Importer ${importPreview.length} leads`}
                 </button>
                 <button onClick={() => setImportPreview(null)} className="bg-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm hover:bg-slate-600">Modifier</button>
               </div>

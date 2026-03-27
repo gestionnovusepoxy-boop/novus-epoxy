@@ -135,6 +135,7 @@ export async function POST(req: NextRequest) {
     text?: string;
     leads?: ParsedLead[];
     source?: string;
+    autoProspect?: boolean;
   };
 
   // PARSE — return preview
@@ -170,6 +171,7 @@ export async function POST(req: NextRequest) {
     // Batch insert — 50 at a time
     let imported = 0;
     let skipped = 0;
+    const insertedIds: number[] = [];
     const batchSize = 50;
 
     for (let i = 0; i < leads.length; i += batchSize) {
@@ -197,11 +199,31 @@ export async function POST(req: NextRequest) {
       }
 
       if (values.length > 0) {
-        await query(
-          `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature) VALUES ${values.join(',')}`,
+        const insertedRows = await query(
+          `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature) VALUES ${values.join(',')} RETURNING id`,
           params,
         );
         imported += values.length;
+        insertedIds.push(...insertedRows.map(r => (r as { id: number }).id));
+      }
+    }
+
+    // Auto-prospect: send emails + SMS to all imported leads with email
+    let prospectResult = null;
+    if (body.autoProspect && insertedIds.length > 0) {
+      try {
+        const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+        const res = await fetch(`${base}/api/leads/jason/prospect`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': process.env.ADMIN_API_KEY ?? '',
+          },
+          body: JSON.stringify({ leadIds: insertedIds }),
+        });
+        if (res.ok) prospectResult = await res.json();
+      } catch (err) {
+        console.error('[Import] Auto-prospect failed:', err);
       }
     }
 
@@ -211,6 +233,7 @@ export async function POST(req: NextRequest) {
       ignores: skipped,
       total: leads.length,
       source,
+      prospect: prospectResult,
     });
   }
 

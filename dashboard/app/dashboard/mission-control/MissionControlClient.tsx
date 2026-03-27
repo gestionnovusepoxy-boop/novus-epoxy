@@ -175,8 +175,8 @@ const AGENTS = [
     ],
   },
   {
-    id: 'jason', name: 'Jason', emoji: '🏗️', role: 'Vendeur Terrain',
-    desc: 'Prospection, emails, SMS, leads de Jason',
+    id: 'jason', name: 'Denis', emoji: '🏗️', role: 'Prospecteur Avance',
+    desc: 'Prospection autonome — emails, SMS, leads de Jason',
     color: 'yellow',
     ring: 'ring-yellow-500/40', bg: 'bg-yellow-600', text: 'text-yellow-400',
     border: 'border-yellow-500/20', glow: 'shadow-yellow-500/10',
