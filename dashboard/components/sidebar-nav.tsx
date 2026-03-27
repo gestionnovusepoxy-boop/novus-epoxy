@@ -13,19 +13,24 @@ const SECTIONS: NavSection[] = [
     title: 'Principal',
     links: [
       { href: '/dashboard/mission-control', label: 'Mission Control', icon: '🚀' },
-      { href: '/dashboard/marcel',     label: 'Marcel IA',       icon: '🤖' },
       { href: '/dashboard',            label: 'Vue d\'ensemble', icon: '\u{1F4CA}' },
       { href: '/dashboard/calendrier', label: 'Calendrier',      icon: '\u{1F4C5}' },
-      { href: '/dashboard/soumissions',label: 'Soumissions',     icon: '\u{1F4CB}' },
     ],
   },
   {
-    title: 'Clients & Ventes',
+    title: 'Ventes',
     links: [
-      { href: '/dashboard/clients',  label: 'Clients',    icon: '\u{1F465}' },
-      { href: '/dashboard/crm',      label: 'CRM Leads', icon: '\u{1F4C7}' },
+      { href: '/dashboard/soumissions',label: 'Soumissions',     icon: '\u{1F4CB}' },
       { href: '/dashboard/devis',    label: 'Devis',      icon: '\u{1F4DD}' },
       { href: '/dashboard/factures', label: 'Factures',   icon: '\u{1F9FE}' },
+      { href: '/dashboard/crm',      label: 'CRM Leads', icon: '\u{1F4C7}' },
+    ],
+  },
+  {
+    title: 'Clients',
+    links: [
+      { href: '/dashboard/clients',  label: 'Clients',    icon: '\u{1F465}' },
+      { href: '/dashboard/emails', label: 'Emails',       icon: '\u{1F4E7}' },
     ],
   },
   {
@@ -37,17 +42,15 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
-    title: 'Agents IA',
+    title: 'IA',
     links: [
+      { href: '/dashboard/marcel',     label: 'Marcel IA',       icon: '🤖' },
       { href: '/dashboard/conversations', label: 'Nova',        icon: '\u{1F916}' },
-      { href: '/dashboard/contenu',        label: 'Marketing',  icon: '\u270D\uFE0F' },
-      { href: '/dashboard/leadhunter',     label: 'Lead Hunter', icon: '\u{1F3AF}' },
     ],
   },
   {
     title: 'Outils',
     links: [
-      { href: '/dashboard/emails', label: 'Emails',       icon: '\u{1F4E7}' },
       { href: '/dashboard/stats',  label: 'Statistiques', icon: '\u{1F4C8}' },
       { href: '/dashboard/portfolio', label: 'Portfolio', icon: '\u{1F4F8}' },
     ],
