@@ -57,7 +57,6 @@ const AGENTS = [
   },
   {
     id: 'hunter', name: 'Hunter', emoji: '🎯', role: 'Dark Hunter',
-    image: '/logo-email.jpg',
     desc: 'Prospecte, score leads, génère plans d\'attaque',
     color: 'red',
     ring: 'ring-red-500/40', bg: 'bg-red-600', text: 'text-red-400',

@@ -30,9 +30,12 @@ export function DashboardShell({ email, signOutAction, sidebar, children }: Dash
         ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}
       `}>
         <div className="p-6 border-b border-slate-700 flex items-center justify-between">
-          <div>
-            <h1 className="text-white font-bold text-lg leading-tight">Novus Epoxy</h1>
-            <p className="text-amber-400 text-xs mt-0.5 font-medium">Admin</p>
+          <div className="flex items-center gap-3">
+            <img src="/logo-email.jpg" alt="Novus Epoxy" className="w-10 h-10 rounded-lg" />
+            <div>
+              <h1 className="text-white font-bold text-lg leading-tight">Novus Epoxy</h1>
+              <p className="text-amber-400 text-xs mt-0.5 font-medium">Admin</p>
+            </div>
           </div>
           <button
             onClick={() => setOpen(false)}
