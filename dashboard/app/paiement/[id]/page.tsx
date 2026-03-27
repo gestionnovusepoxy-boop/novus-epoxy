@@ -100,6 +100,10 @@ export default function ClientPortalPage() {
   const balance = total - depot;
   const statut = data.statut as string;
 
+  // 3% card processing fee
+  const depotFraisCarte = Math.round(depot * 0.03 * 100) / 100;
+  const balanceFraisCarte = Math.round(balance * 0.03 * 100) / 100;
+
   const hasDates = !!data.jour1_date;
   const contractSigned = !!data.contrat_signe_at || ['contrat_signe', 'depot_paye', 'planifie', 'complete'].includes(statut);
   const depositPaid = !!data.deposit_paid_at || (success && statut === 'contrat_signe');
@@ -246,10 +250,13 @@ export default function ClientPortalPage() {
                 display: 'block', width: '100%', padding: '18px', textAlign: 'center',
                 background: '#16a34a', color: '#ffffff', borderRadius: '10px',
                 textDecoration: 'none', fontWeight: 700, fontSize: '17px',
-                marginBottom: '10px', boxSizing: 'border-box',
+                marginBottom: '4px', boxSizing: 'border-box',
               }}>
-              Payer en ligne — {formatMoney(depot)}
+              Payer par carte — {formatMoney(depot + depotFraisCarte)}
             </a>
+            <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '11px', margin: '0 0 10px' }}>
+              {formatMoney(depot)} + {formatMoney(depotFraisCarte)} frais de traitement (3%)
+            </p>
             {!interacSent ? (
               <button onClick={handleInterac}
                 style={{
@@ -257,7 +264,7 @@ export default function ClientPortalPage() {
                   background: '#1e293b', color: '#f8fafc', borderRadius: '10px', border: '1px solid #475569',
                   fontWeight: 700, fontSize: '15px', cursor: 'pointer',
                 }}>
-                Je paie par virement Interac
+                Virement Interac — {formatMoney(depot)} (0$ de frais)
               </button>
             ) : (
               <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
@@ -281,17 +288,20 @@ export default function ClientPortalPage() {
                 display: 'block', width: '100%', padding: '18px', textAlign: 'center',
                 background: '#f59e0b', color: '#0f172a', borderRadius: '10px',
                 textDecoration: 'none', fontWeight: 700, fontSize: '17px',
-                marginBottom: '10px', boxSizing: 'border-box',
+                marginBottom: '4px', boxSizing: 'border-box',
               }}>
-              Payer le solde — {formatMoney(balance)}
+              Payer par carte — {formatMoney(balance + balanceFraisCarte)}
             </a>
+            <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '11px', margin: '0 0 10px' }}>
+              {formatMoney(balance)} + {formatMoney(balanceFraisCarte)} frais de traitement (3%)
+            </p>
             <button onClick={handleInterac}
               style={{
                 display: interacSent ? 'none' : 'block', width: '100%', padding: '14px', textAlign: 'center',
                 background: '#1e293b', color: '#f8fafc', borderRadius: '10px', border: '1px solid #475569',
                 fontWeight: 600, fontSize: '14px', cursor: 'pointer',
               }}>
-              Je paie le solde par virement Interac
+              Virement Interac — {formatMoney(balance)} (0$ de frais)
             </button>
             {interacSent && (
               <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '14px', textAlign: 'center' }}>

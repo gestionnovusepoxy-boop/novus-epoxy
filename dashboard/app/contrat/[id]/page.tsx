@@ -401,7 +401,7 @@ export default function ContratPage() {
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
                 <span style={{ color: '#94a3b8' }}>Solde (70%) a la fin des travaux</span><span>{formatMoney(Number(quote.total) - Number(quote.depot_requis))}</span>
               </div>
-              <p style={{ margin: '8px 0 0', color: '#94a3b8', fontSize: '12px' }}>Modes de paiement: virement Interac, cheque.</p>
+              <p style={{ margin: '8px 0 0', color: '#94a3b8', fontSize: '12px' }}>Virement Interac : 0$ de frais | Carte de credit : 3% frais de traitement</p>
             </div>
           </div>
 

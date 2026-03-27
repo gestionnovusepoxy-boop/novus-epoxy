@@ -58,7 +58,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (statut === 'contrat_signe') {
     // Need to pay deposit
     amount = depot;
-    description = `Novus Epoxy — Devis #${quoteId} — Depot 30% (${formatMoney(depot)})`;
+    description = `Novus Epoxy — Devis #${quoteId} — Depot 30%`;
     paymentType = 'deposit';
   } else if (['depot_paye', 'planifie', 'complete'].includes(statut)) {
     // Deposit paid, need balance
@@ -66,12 +66,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       return NextResponse.redirect(`${baseUrl}/paiement/${quoteId}?success=true`);
     }
     amount = balance;
-    description = `Novus Epoxy — Devis #${quoteId} — Solde 70% (${formatMoney(balance)})`;
+    description = `Novus Epoxy — Devis #${quoteId} — Solde 70%`;
     paymentType = 'balance';
   } else {
     // Not ready for payment yet
     return NextResponse.redirect(`${baseUrl}/paiement/${quoteId}`);
   }
+
+  // 3% card processing fee
+  const fraisCarte = Math.round(amount * 0.03 * 100) / 100;
+  const totalAvecFrais = amount + fraisCarte;
 
   try {
     const session = await stripe.checkout.sessions.create({
@@ -83,7 +87,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
             product_data: {
               name: description,
             },
-            unit_amount: Math.round(amount * 100), // Stripe uses cents
+            unit_amount: Math.round(amount * 100),
+          },
+          quantity: 1,
+        },
+        {
+          price_data: {
+            currency: 'cad',
+            product_data: {
+              name: 'Frais de traitement carte (3%)',
+            },
+            unit_amount: Math.round(fraisCarte * 100),
           },
           quantity: 1,
         },
