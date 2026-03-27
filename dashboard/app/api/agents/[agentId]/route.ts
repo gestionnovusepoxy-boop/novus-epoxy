@@ -410,6 +410,54 @@ function buildTools(agentId: AgentId) {
       },
     }),
 
+    scan_drive_portfolio: tool({
+      description: 'Scanne le Google Drive de Jason, classifie les photos avec Claude Vision, et les ajoute au portfolio automatiquement.',
+      parameters: z.object({}),
+      execute: async () => {
+        const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+        const res = await fetch(`${base}/api/sage/scan`, {
+          method: 'POST',
+          headers: { 'x-api-key': process.env.ADMIN_API_KEY ?? '' },
+        });
+        if (!res.ok) return { error: `Scan echoue: ${res.status}` };
+        return await res.json();
+      },
+    }),
+
+    preview_drive: tool({
+      description: 'Preview des photos dans le Google Drive sans les importer.',
+      parameters: z.object({}),
+      execute: async () => {
+        const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+        const res = await fetch(`${base}/api/sage/scan`, {
+          method: 'GET',
+          headers: { 'x-api-key': process.env.ADMIN_API_KEY ?? '' },
+        });
+        if (!res.ok) return { error: `Preview echoue: ${res.status}` };
+        return await res.json();
+      },
+    }),
+
+    stats_portfolio: tool({
+      description: 'Statistiques du portfolio: nombre de photos, types, featured.',
+      parameters: z.object({}),
+      execute: async () => {
+        const rows = await query(`
+          SELECT
+            COUNT(*) as total_projets,
+            COUNT(CASE WHEN featured = true THEN 1 END) as featured,
+            COUNT(CASE WHEN type_service = 'flake' THEN 1 END) as flake,
+            COUNT(CASE WHEN type_service = 'metallique' THEN 1 END) as metallique,
+            COUNT(CASE WHEN type_service = 'commercial' THEN 1 END) as commercial,
+            COUNT(CASE WHEN type_service = 'couleur_unie' THEN 1 END) as couleur_unie,
+            COUNT(CASE WHEN type_service = 'quartz' THEN 1 END) as quartz,
+            (SELECT COUNT(*) FROM portfolio WHERE array_length(photos, 1) > 0) as avec_photos
+          FROM portfolio
+        `);
+        return rows[0];
+      },
+    }),
+
     system_health: tool({
       description: 'Verifie la sante du systeme: env vars, status general.',
       parameters: z.object({}),
@@ -435,7 +483,7 @@ function buildTools(agentId: AgentId) {
     aria: ['resume_emails', 'liste_crm'],
     rex: ['envoyer_sms', 'generer_relance_ia', 'liste_devis', 'crm_leads_chauds'],
     iris: ['stats_business', 'liste_devis', 'revenus_analyse'],
-    sage: ['generer_post'],
+    sage: ['generer_post', 'scan_drive_portfolio', 'preview_drive', 'stats_portfolio'],
     zara: ['liste_reservations', 'stats_business'],
     bolt: ['envoyer_telegram'],
     echo: ['system_health'],
@@ -462,7 +510,7 @@ function getSystemPrompt(agentId: AgentId): string {
     aria: `Tu es Aria, l'agente email de Novus Epoxy. Tu geres la boite email, tu resumes les messages importants, tu identifies les leads qui ont repondu.\n${base}\nTu lis et resumes les emails, tu identifies les opportunites cachees dans la boite de reception.`,
     rex: `Tu es Rex, le Closer SMS de Novus Epoxy. Tu es le roi des relances par texto. Court, punchy, efficace.\n${base}\nTu generes des relances SMS percutantes et tu les envoies directement.`,
     iris: `Tu es Iris, l'analyste financiere de Novus Epoxy. Tu vois les chiffres, les tendances, les opportunites de revenus.\n${base}\nTu analyses les revenus, le pipeline de devis, et tu identifies les opportunites financieres.`,
-    sage: `Tu es Sage, la creatrice de contenu de Novus Epoxy. Tu generes du contenu marketing creatif et engageant pour Instagram et Facebook.\n${base}\nTu crees des posts percutants qui mettent en valeur les planchers epoxy — style, qualite, expertise.`,
+    sage: `Tu es Sage, la creatrice de contenu et gestionnaire de portfolio de Novus Epoxy. Tu geres le portfolio photo automatiquement: scan du Google Drive de Jason, classification par IA (type, couleur, qualite), upload sur Vercel Blob, et integration dans le portfolio DB. Tu generes aussi du contenu marketing pour Instagram et Facebook.\n${base}\nTu scannes le Drive pour de nouvelles photos, tu les classifies avec Vision, et tu les ajoutes au portfolio. Les photos du portfolio sont automatiquement utilisees par Hunter dans les emails de prospection.`,
     zara: `Tu es Zara, la gestionnaire de reservations de Novus Epoxy. Tu geres le calendrier, les rendez-vous, les confirmations.\n${base}\nTu listes les reservations a venir et tu aides a organiser le planning.`,
     bolt: `Tu es Bolt, le commandant Telegram de Novus Epoxy. Tu envoies des notifications et updates a l'equipe via Telegram.\n${base}\nTu envoies des messages dans le groupe admin Telegram.`,
     echo: `Tu es Echo, le moniteur systeme de Novus Epoxy. Tu surveilles la sante du systeme: env vars, crons, integrations.\n${base}\nTu verifies que tout fonctionne correctement et tu rapportes les anomalies.`,

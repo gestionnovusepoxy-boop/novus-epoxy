@@ -16,6 +16,7 @@ export async function GET() {
     zaraStats,
     novaStats,
     marcelHistory,
+    sageStats,
   ] = await Promise.all([
     query(`SELECT
       COUNT(*) FILTER (WHERE temperature = 'chaud') as chauds,
@@ -42,6 +43,7 @@ export async function GET() {
       COUNT(*) FILTER (WHERE quote_id IS NOT NULL AND created_at::date = CURRENT_DATE) as devis_today
       FROM conversations`),
     query(`SELECT value FROM kv_store WHERE key = 'marcel_history_shared'`),
+    query(`SELECT COUNT(*) as total FROM portfolio WHERE array_length(photos, 1) > 0`),
   ]);
 
   const h = hunterStats[0] as Record<string, string | number>;
@@ -75,7 +77,7 @@ export async function GET() {
     aria:    { emails_today: Number(a.emails_today ?? 0) },
     rex:     { devis_today: Number(r.devis_today ?? 0), en_attente: Number(r.en_attente ?? 0) },
     iris:    { confirmes: fmt(i.confirmes), pipeline: fmt(i.pipeline), actifs: Number(i.actifs ?? 0) },
-    sage:    { posts: 0 },
+    sage:    { posts: 0, portfolio: Number((sageStats[0] as Record<string, number>).total ?? 0), drive_new: 0 },
     zara:    { a_venir: Number(z.a_venir ?? 0), confirmees_today: Number(z.confirmees_today ?? 0) },
     bolt:    { notifications: 0 },
     echo:    { env_ok: envOk, env_total: envVars.length },

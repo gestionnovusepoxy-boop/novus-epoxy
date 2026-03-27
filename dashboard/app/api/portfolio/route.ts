@@ -21,7 +21,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Titre requis' }, { status: 400 });
   }
 
-  const validTypes = ['flake', 'metallique', 'commercial'];
+  const validTypes = ['flake', 'metallique', 'commercial', 'couleur_unie', 'quartz'];
   const typeVal = validTypes.includes(type_service) ? type_service : 'flake';
 
   const photosArr = Array.isArray(photos) ? photos.filter((u: string) => typeof u === 'string' && u.trim()) : [];

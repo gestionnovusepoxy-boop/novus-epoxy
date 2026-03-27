@@ -11,7 +11,7 @@ interface ActivityData {
   aria?:    { emails_today: number };
   rex?:     { devis_today: number; en_attente: number };
   iris?:    { confirmes: string; pipeline: string; actifs: number };
-  sage?:    { posts: number };
+  sage?:    { posts: number; portfolio: number; drive_new: number };
   zara?:    { a_venir: number; confirmees_today: number };
   bolt?:    { notifications: number };
   echo?:    { env_ok: number; env_total: number };
@@ -108,16 +108,16 @@ const AGENTS = [
     ],
   },
   {
-    id: 'sage', name: 'Sage', emoji: '✍️', role: 'Content Creator',
-    desc: 'Posts Instagram, Facebook, contenu marketing',
+    id: 'sage', name: 'Sage', emoji: '✍️', role: 'Content & Portfolio',
+    desc: 'Portfolio auto — scanne Google Drive, classifie, upload',
     color: 'pink',
     ring: 'ring-pink-500/40', bg: 'bg-pink-600', text: 'text-pink-400',
     border: 'border-pink-500/20', glow: 'shadow-pink-500/10',
     quickActions: [
+      { label: '📸 Scanner Drive', msg: 'sage-scan-drive' },
+      { label: '👁️ Preview Drive', msg: 'sage-preview-drive' },
       { label: 'Post Instagram', msg: 'Génère un post Instagram percutant pour Novus Epoxy avec des hashtags' },
-      { label: 'Post Facebook', msg: 'Génère un post Facebook engageant sur nos planchers époxy' },
       { label: 'Post avant/après', msg: 'Génère un post style avant/après pour un projet époxy flake garage' },
-      { label: 'Promo Avril', msg: 'Génère un post promotionnel pour le rabais Avril 20% de Novus Epoxy' },
     ],
   },
   {
@@ -209,8 +209,12 @@ function getConseil(id: AgentId, activity: ActivityData): string {
       if (i.actifs > 0) return `${i.actifs} devis actifs · Pipeline: ${i.pipeline}`;
       return `Revenus confirmés: ${i.confirmes}`;
     }
-    case 'sage':
-      return 'Génère un post qui va envoyer!';
+    case 'sage': {
+      const s = activity.sage;
+      if (!s) return 'Scanne le Drive pour des photos!';
+      if (s.drive_new > 0) return `📸 ${s.drive_new} nouvelle${s.drive_new > 1 ? 's' : ''} photo${s.drive_new > 1 ? 's' : ''} sur Drive!`;
+      return `${s.portfolio} photos au portfolio`;
+    }
     case 'zara': {
       const z = activity.zara;
       if (!z) return 'Vérifie le calendrier';
@@ -258,7 +262,8 @@ function getMetrics(id: AgentId, activity: ActivityData): { label: string; value
       { label: 'Actifs', value: String(activity.iris?.actifs ?? 0) },
     ];
     case 'sage': return [
-      { label: 'Posts générés', value: String(activity.sage?.posts ?? 0) },
+      { label: 'Portfolio', value: String(activity.sage?.portfolio ?? 0) },
+      { label: 'Drive new', value: String(activity.sage?.drive_new ?? 0) },
     ];
     case 'zara': return [
       { label: 'À venir', value: String(activity.zara?.a_venir ?? 0) },
