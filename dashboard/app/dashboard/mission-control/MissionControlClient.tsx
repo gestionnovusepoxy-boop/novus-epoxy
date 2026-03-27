@@ -11,7 +11,7 @@ interface ActivityData {
   aria?:    { emails_today: number };
   rex?:     { devis_today: number; en_attente: number };
   iris?:    { confirmes: string; pipeline: string; actifs: number };
-  sage?:    { posts: number; portfolio: number; drive_new: number };
+  sage?:    { posts: number; portfolio: number; videos: number; drive_new: number };
   zara?:    { a_venir: number; confirmees_today: number };
   bolt?:    { notifications: number };
   echo?:    { env_ok: number; env_total: number };
@@ -262,7 +262,8 @@ function getMetrics(id: AgentId, activity: ActivityData): { label: string; value
       { label: 'Actifs', value: String(activity.iris?.actifs ?? 0) },
     ];
     case 'sage': return [
-      { label: 'Portfolio', value: String(activity.sage?.portfolio ?? 0) },
+      { label: 'Photos', value: String(activity.sage?.portfolio ?? 0) },
+      { label: 'Vid\u00e9os', value: String(activity.sage?.videos ?? 0) },
       { label: 'Drive new', value: String(activity.sage?.drive_new ?? 0) },
     ];
     case 'zara': return [

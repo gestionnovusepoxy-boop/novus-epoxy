@@ -312,6 +312,58 @@
       gallerySection.appendChild(filterBar);
       gallerySection.appendChild(grid);
     }
+
+    // ── Video section — only featured videos (quality 9-10/10) ──
+    fetch('https://novus-epoxy.vercel.app/api/portfolio/videos')
+      .then(function(res) { return res.json(); })
+      .then(function(videos) {
+        if (!videos || !videos.length) return;
+
+        var section = document.createElement('div');
+        section.style.cssText = 'margin-top:60px;padding:0 5%;max-width:1400px;margin-left:auto;margin-right:auto;';
+
+        var title = document.createElement('h3');
+        title.textContent = 'Nos r\u00e9alisations en vid\u00e9o';
+        title.style.cssText = 'text-align:center;color:#c8a96e;font-size:28px;font-weight:700;margin-bottom:8px;';
+
+        var sub = document.createElement('p');
+        sub.textContent = 'D\u00e9couvrez le rendu r\u00e9el de nos planchers \u00e9poxy';
+        sub.style.cssText = 'text-align:center;color:#999;font-size:16px;margin-bottom:30px;';
+
+        var vGrid = document.createElement('div');
+        vGrid.style.cssText = 'display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;';
+
+        section.appendChild(title);
+        section.appendChild(sub);
+        section.appendChild(vGrid);
+
+        var typeMap = { 'flake': 'Flake', 'metallique': 'M\u00e9tallique', 'commercial': 'Commercial', 'couleur_unie': 'Couleur unie', 'quartz': 'Quartz' };
+
+        videos.forEach(function(v) {
+          var card = document.createElement('div');
+          card.style.cssText = 'border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(0,0,0,0.3);background:#111;';
+
+          var vid = document.createElement('video');
+          vid.src = v.url;
+          vid.setAttribute('controls', '');
+          vid.setAttribute('preload', 'metadata');
+          vid.setAttribute('playsinline', '');
+          vid.muted = true;
+          vid.style.cssText = 'width:100%;height:300px;object-fit:cover;display:block;background:#000;';
+
+          var info = document.createElement('div');
+          info.style.cssText = 'padding:14px 16px;';
+          info.innerHTML = '<div style="font-weight:600;font-size:15px;color:#fff;">' + v.titre + '</div>' +
+            '<div style="font-size:13px;color:#c8a96e;margin-top:4px;">' + (typeMap[v.type] || v.type) + '</div>';
+
+          card.appendChild(vid);
+          card.appendChild(info);
+          vGrid.appendChild(card);
+        });
+
+        grid.parentNode.insertBefore(section, grid.nextSibling);
+      })
+      .catch(function() { /* no videos yet */ });
   }
 
   // Fix social links (Facebook, Instagram, LinkedIn)

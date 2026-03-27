@@ -33,7 +33,7 @@ const TYPE_COLORS: Record<string, string> = {
   quartz: 'bg-rose-600',
 };
 
-const SECTIONS = ['tout', 'metallique', 'flake', 'commercial', 'couleur_unie', 'quartz'] as const;
+const SECTIONS = ['tout', 'photos', 'videos', 'metallique', 'flake', 'commercial', 'couleur_unie', 'quartz'] as const;
 
 function PageContent() {
   const [items, setItems] = useState<PortfolioItem[]>([]);
@@ -299,7 +299,12 @@ function PageContent() {
         {/* Section filter tabs */}
         <div className="flex gap-2 flex-wrap">
           {SECTIONS.map(section => {
-            const count = section === 'tout' ? items.length : items.filter(i => i.type_service === section).length;
+            let count: number;
+            let label: string;
+            if (section === 'tout') { count = items.length; label = 'Tout'; }
+            else if (section === 'photos') { count = items.filter(i => i.photos?.length > 0).length; label = 'Photos'; }
+            else if (section === 'videos') { count = items.filter(i => i.videos?.length > 0).length; label = 'Vid\u00e9os'; }
+            else { count = items.filter(i => i.type_service === section).length; label = TYPE_LABELS[section] ?? section; }
             if (section !== 'tout' && count === 0) return null;
             return (
               <button
@@ -307,11 +312,11 @@ function PageContent() {
                 onClick={() => setActiveSection(section)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
                   activeSection === section
-                    ? 'bg-amber-600 text-white'
+                    ? section === 'videos' ? 'bg-blue-600 text-white' : 'bg-amber-600 text-white'
                     : 'bg-slate-800 text-slate-400 hover:text-white border border-slate-700'
                 }`}
               >
-                {section === 'tout' ? 'Tout' : TYPE_LABELS[section] ?? section} ({count})
+                {section === 'videos' ? '🎬 ' : ''}{label} ({count})
               </button>
             );
           })}
@@ -327,25 +332,30 @@ function PageContent() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {items
-            .filter(item => activeSection === 'tout' || item.type_service === activeSection)
+            .filter(item => {
+              if (activeSection === 'tout') return true;
+              if (activeSection === 'photos') return item.photos?.length > 0;
+              if (activeSection === 'videos') return item.videos?.length > 0;
+              return item.type_service === activeSection;
+            })
             .map(item => (
             <div key={item.id} className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden hover:border-slate-600 transition">
-              {/* Thumbnail */}
-              <div className="h-40 bg-slate-700 relative">
-                {item.photos && item.photos.length > 0 ? (
+              {/* Thumbnail / Video */}
+              <div className={`${activeSection === 'videos' || (!item.photos?.length && item.videos?.length) ? 'h-56' : 'h-40'} bg-slate-700 relative`}>
+                {item.videos && item.videos.length > 0 && (activeSection === 'videos' || !item.photos?.length) ? (
+                  <video
+                    src={item.videos[0]}
+                    className="w-full h-full object-cover bg-black"
+                    muted
+                    playsInline
+                    controls
+                    preload="metadata"
+                  />
+                ) : item.photos && item.photos.length > 0 ? (
                   <img
                     src={item.photos[0]}
                     alt={item.titre}
                     className="w-full h-full object-cover"
-                  />
-                ) : item.videos && item.videos.length > 0 ? (
-                  <video
-                    src={item.videos[0]}
-                    className="w-full h-full object-cover"
-                    muted
-                    playsInline
-                    onMouseOver={e => (e.target as HTMLVideoElement).play()}
-                    onMouseOut={e => { const v = e.target as HTMLVideoElement; v.pause(); v.currentTime = 0; }}
                   />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center text-slate-500 text-4xl">
