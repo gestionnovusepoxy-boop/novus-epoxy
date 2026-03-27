@@ -150,6 +150,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Twilio incoming SMS webhook — let it through with basic rate limit
+  if (pathname === '/api/sms/incoming' && req.method === 'POST') {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    if (isRateLimited(`sms-in:${ip}`, 30, 60_000)) {
+      return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+    }
+    return NextResponse.next();
+  }
+
   // SMS devis API
   if (pathname === '/api/sms/devis' && req.method === 'POST') {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
@@ -181,5 +190,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/upload', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis', '/api/quotes/:path*', '/api/stripe/webhook'],
+  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/upload', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis', '/api/sms/incoming', '/api/quotes/:path*', '/api/stripe/webhook'],
 };
