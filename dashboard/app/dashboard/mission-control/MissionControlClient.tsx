@@ -537,8 +537,8 @@ function AgentCard({
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
         <div className={`w-11 h-11 rounded-xl ${agent.bg} flex items-center justify-center text-xl flex-shrink-0 shadow-lg overflow-hidden`}>
-          {agent.image ? (
-            <img src={agent.image} alt={agent.name} className="w-full h-full object-cover" />
+          {(agent as Record<string, unknown>).image ? (
+            <img src={(agent as Record<string, unknown>).image as string} alt={agent.name} className="w-full h-full object-cover" />
           ) : (
             agent.emoji
           )}

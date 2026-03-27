@@ -11,7 +11,7 @@ async function loadPortfolio(): Promise<PortfolioPhoto[]> {
     `SELECT id, titre, type_service, description, photos FROM portfolio WHERE array_length(photos, 1) > 0 ORDER BY featured DESC, created_at DESC`,
     [],
   );
-  return rows as PortfolioPhoto[];
+  return rows as unknown as PortfolioPhoto[];
 }
 
 function pickPhotos(portfolio: PortfolioPhoto[], notes: string, service: string, type: string): { url: string; caption: string }[] {
@@ -263,7 +263,10 @@ export async function POST(req: NextRequest) {
   const portfolio = await loadPortfolio();
   const results: { id: number; nom: string; status: 'sent' | 'skipped' | 'error'; error?: string }[] = [];
 
-  for (const lead of leads) {
+  interface LeadRow { id: number; nom: string; telephone: string; email: string; service: string; ville: string; notes: string; type: string; temperature: string; statut: string; prospect_sent_at: string | null }
+
+  for (const _lead of leads) {
+    const lead = _lead as unknown as LeadRow;
     // Anti-spam: skip if already sent
     if (lead.prospect_sent_at) {
       results.push({ id: lead.id, nom: lead.nom, status: 'skipped', error: 'Offre deja envoyee' });
