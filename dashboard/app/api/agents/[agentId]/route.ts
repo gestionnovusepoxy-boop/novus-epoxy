@@ -420,34 +420,42 @@ function buildTools(agentId: AgentId) {
       },
     }),
 
-    voir_agenda_semaine: tool({
-      description: 'Voir l\'agenda de la semaine: tous les jours avec les reservations planifiees.',
+    voir_agenda: tool({
+      description: 'Voir l\'agenda complet: toutes les reservations a venir, groupees par mois. Montre aussi les jours occupes vs disponibles.',
       parameters: z.object({
-        date_debut: z.string().optional().describe('Date debut semaine (YYYY-MM-DD), defaut = lundi prochain'),
+        mois: z.number().optional().default(3).describe('Nombre de mois a afficher (1-6)'),
       }),
-      execute: async ({ date_debut }) => {
-        const start = date_debut ?? new Date().toISOString().slice(0, 10);
+      execute: async ({ mois = 3 }) => {
+        const nbMois = Math.min(Math.max(mois, 1), 6);
         const rows = await query(
           `SELECT b.*, q.client_nom, q.client_tel, q.type_service, q.superficie, q.total
            FROM bookings b JOIN quotes q ON b.quote_id = q.id
-           WHERE (b.jour1_date >= $1::date AND b.jour1_date < $1::date + INTERVAL '7 days')
-              OR (b.jour2_date >= $1::date AND b.jour2_date < $1::date + INTERVAL '7 days')
+           WHERE b.jour1_date >= CURRENT_DATE AND b.jour1_date < CURRENT_DATE + ($1 || ' months')::INTERVAL
            ORDER BY b.jour1_date`,
-          [start]
+          [nbMois]
         );
-        return { semaine_du: start, reservations: rows, total: rows.length };
+        // Group by month
+        const parMois: Record<string, unknown[]> = {};
+        for (const r of rows) {
+          const d = new Date(r.jour1_date as string);
+          const key = d.toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' });
+          if (!parMois[key]) parMois[key] = [];
+          parMois[key].push(r);
+        }
+        return { mois: nbMois, reservations_par_mois: parMois, total: rows.length };
       },
     }),
 
     jours_disponibles: tool({
-      description: 'Verifie quels jours sont disponibles (pas de reservation) dans les prochaines semaines.',
+      description: 'Verifie quels jours sont disponibles (pas de reservation) dans les prochains mois. Utile pour placer de nouvelles reservations.',
       parameters: z.object({
-        semaines: z.number().optional().default(2).describe('Nombre de semaines a verifier'),
+        mois: z.number().optional().default(2).describe('Nombre de mois a verifier (1-6)'),
       }),
-      execute: async ({ semaines = 2 }) => {
+      execute: async ({ mois = 2 }) => {
+        const nbMois = Math.min(Math.max(mois, 1), 6);
         const rows = await query(
-          `SELECT jour1_date, jour2_date FROM bookings WHERE jour1_date >= CURRENT_DATE AND jour1_date < CURRENT_DATE + ($1 || ' weeks')::INTERVAL AND statut = 'confirme'`,
-          [semaines]
+          `SELECT jour1_date, jour2_date FROM bookings WHERE jour1_date >= CURRENT_DATE AND jour1_date < CURRENT_DATE + ($1 || ' months')::INTERVAL AND statut IN ('confirme', 'en_attente')`,
+          [nbMois]
         );
         const busy = new Set<string>();
         for (const r of rows) {
@@ -457,15 +465,16 @@ function buildTools(agentId: AgentId) {
         // Generate all weekdays in range
         const available: string[] = [];
         const start = new Date();
-        for (let i = 0; i < semaines * 7; i++) {
+        const totalDays = nbMois * 30;
+        for (let i = 0; i < totalDays; i++) {
           const d = new Date(start);
           d.setDate(d.getDate() + i);
           const day = d.getDay();
-          if (day === 0 || day === 6) continue; // skip weekends
+          if (day === 0 || day === 6) continue;
           const iso = d.toISOString().slice(0, 10);
           if (!busy.has(iso)) available.push(iso);
         }
-        return { disponibles: available, occupes: Array.from(busy), semaines };
+        return { disponibles: available, occupes: Array.from(busy), mois: nbMois, total_disponibles: available.length, total_occupes: busy.size };
       },
     }),
 
@@ -677,7 +686,7 @@ function buildTools(agentId: AgentId) {
     rex: ['envoyer_sms', 'generer_relance_ia', 'liste_devis', 'crm_leads_chauds'],
     iris: ['stats_business', 'liste_devis', 'revenus_analyse'],
     sage: ['generer_post', 'scan_drive_portfolio', 'preview_drive', 'stats_portfolio'],
-    zara: ['liste_reservations', 'creer_reservation', 'confirmer_reservation', 'deplacer_reservation', 'voir_agenda_semaine', 'jours_disponibles', 'stats_business', 'liste_devis'],
+    zara: ['liste_reservations', 'creer_reservation', 'confirmer_reservation', 'deplacer_reservation', 'voir_agenda', 'jours_disponibles', 'stats_business', 'liste_devis'],
     bolt: ['envoyer_telegram'],
     echo: ['system_health'],
     nova: ['voir_conversations', 'stats_nova'],
