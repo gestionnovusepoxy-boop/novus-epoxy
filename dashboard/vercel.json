@@ -47,6 +47,10 @@
     {
       "path": "/api/cron/referral",
       "schedule": "0 16 * * 1"
+    },
+    {
+      "path": "/api/cron/prospect-followup",
+      "schedule": "0 14 * * *"
     }
   ],
   "headers": [
