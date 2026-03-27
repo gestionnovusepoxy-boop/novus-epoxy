@@ -465,62 +465,109 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       const apiKeyBulk = process.env.ANTHROPIC_API_KEY;
       if (!apiKeyBulk) return JSON.stringify({ error: 'ANTHROPIC_API_KEY manquant' });
 
-      // Parse the list with Claude
-      const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'x-api-key': apiKeyBulk, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 4000,
-          messages: [{ role: 'user', content: `Parse cette liste de leads pour une entreprise de planchers epoxy au Quebec. Extrait chaque personne.\n\nLISTE:\n${liste.slice(0, 8000)}\n\nReponds UNIQUEMENT avec un JSON array (pas de texte avant ou apres):\n[{"nom":"Prenom Nom","telephone":"10 chiffres ou vide","email":"email ou vide","service":"flake|metallique|commercial|quartz|couleur_unie ou vide","superficie":"nombre ou vide","ville":"ville ou vide","notes":"autres infos ou vide"}]` }],
-        }),
-      });
+      // Split into chunks of ~6000 chars to handle large lists (200-500+ contacts)
+      const allLines = liste.split('\n').filter(l => l.trim());
+      const chunks: string[] = [];
+      let currentChunk = '';
+      for (const line of allLines) {
+        if (currentChunk.length + line.length > 6000) {
+          chunks.push(currentChunk);
+          currentChunk = '';
+        }
+        currentChunk += line + '\n';
+      }
+      if (currentChunk.trim()) chunks.push(currentChunk);
 
-      if (!parseRes.ok) return JSON.stringify({ error: 'Erreur parsing Claude' });
+      // Parse each chunk with Claude in parallel (max 3 concurrent)
+      type ParsedLead = { nom: string; telephone: string; email: string; service: string; superficie: string; ville: string; notes: string };
+      const allLeads: ParsedLead[] = [];
 
-      const parseData = await parseRes.json();
-      const rawText = (parseData.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+      const parseChunk = async (chunk: string): Promise<ParsedLead[]> => {
+        const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'x-api-key': apiKeyBulk, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 4000,
+            messages: [{ role: 'user', content: `Parse cette liste de leads pour une entreprise de planchers epoxy au Quebec. Extrait chaque personne.\n\nLISTE:\n${chunk}\n\nReponds UNIQUEMENT avec un JSON array (pas de texte avant ou apres):\n[{"nom":"Prenom Nom","telephone":"10 chiffres ou vide","email":"email ou vide","service":"flake|metallique|commercial|quartz|couleur_unie ou vide","superficie":"nombre ou vide","ville":"ville ou vide","notes":"autres infos ou vide"}]` }],
+          }),
+        });
+        if (!parseRes.ok) return [];
+        const data = await parseRes.json();
+        const raw = (data.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; }
+        catch { return []; }
+      };
 
-      let leads: Array<{ nom: string; telephone: string; email: string; service: string; superficie: string; ville: string; notes: string }> = [];
-      try {
-        leads = JSON.parse(rawText);
-      } catch {
-        return JSON.stringify({ error: 'Erreur parsing reponse Claude', raw: rawText.slice(0, 200) });
+      // Process chunks in batches of 3
+      for (let i = 0; i < chunks.length; i += 3) {
+        const batch = chunks.slice(i, i + 3);
+        const results = await Promise.all(batch.map(parseChunk));
+        for (const r of results) allLeads.push(...r);
       }
 
-      if (!Array.isArray(leads) || leads.length === 0) {
+      if (allLeads.length === 0) {
         return JSON.stringify({ error: 'Aucun lead detecte dans la liste' });
       }
 
-      // Bulk insert into crm_leads
+      // Auto-score temperature
+      function scoreTemp(lead: ParsedLead): 'chaud' | 'tiede' | 'froid' {
+        let score = 0;
+        if (lead.email) score += 2;
+        if (lead.telephone) score += 2;
+        if (lead.service) score += 1;
+        if (lead.superficie) score += 1;
+        if (lead.ville) score += 1;
+        const text = `${lead.notes} ${lead.service}`.toLowerCase();
+        if (text.includes('urgent') || text.includes('bientot') || text.includes('soumission')) score += 3;
+        if (score >= 6) return 'chaud';
+        if (score >= 3) return 'tiede';
+        return 'froid';
+      }
+
+      // Batch INSERT — 50 at a time (much faster than 1 by 1)
       let imported = 0;
       let skipped = 0;
-      for (const lead of leads) {
-        if (!lead.nom || lead.nom.trim().length < 2) { skipped++; continue; }
-        try {
-          await query(
-            `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'nouveau','tiede')`,
-            [
-              lead.nom.trim().slice(0, 120),
-              (lead.telephone || '').replace(/\D/g, '').slice(-10) || null,
-              (lead.email || '').slice(0, 255) || null,
-              lead.service || null,
-              lead.superficie || null,
-              (lead.ville || '').slice(0, 120) || null,
-              lead.notes || null,
-              source,
-            ]
+      const batchSize = 50;
+
+      for (let i = 0; i < allLeads.length; i += batchSize) {
+        const batch = allLeads.slice(i, i + batchSize);
+        const values: string[] = [];
+        const params: (string | null)[] = [];
+        let paramIdx = 1;
+
+        for (const lead of batch) {
+          if (!lead.nom || lead.nom.trim().length < 2) { skipped++; continue; }
+          const temp = scoreTemp(lead);
+          values.push(`($${paramIdx},$${paramIdx + 1},$${paramIdx + 2},$${paramIdx + 3},$${paramIdx + 4},$${paramIdx + 5},$${paramIdx + 6},$${paramIdx + 7},'nouveau',$${paramIdx + 8})`);
+          params.push(
+            lead.nom.trim().slice(0, 120),
+            (lead.telephone || '').replace(/\D/g, '').slice(-10) || null,
+            (lead.email || '').slice(0, 255) || null,
+            lead.service || null,
+            lead.superficie || null,
+            (lead.ville || '').slice(0, 120) || null,
+            lead.notes || null,
+            source,
+            temp,
           );
-          imported++;
-        } catch { skipped++; }
+          paramIdx += 9;
+        }
+
+        if (values.length > 0) {
+          await query(
+            `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature) VALUES ${values.join(',')}`,
+            params,
+          );
+          imported += values.length;
+        }
       }
 
       return JSON.stringify({
         ok: true,
         importes: imported,
         ignores: skipped,
-        total_detectes: leads.length,
+        total_detectes: allLeads.length,
         source,
         dashboard: 'https://novus-epoxy.vercel.app/dashboard/crm',
       });
@@ -944,8 +991,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    if (doc.file_size > 2 * 1024 * 1024) {
-      await sendTelegram(chatId, 'Fichier trop grand (max 2MB).');
+    if (doc.file_size > 5 * 1024 * 1024) {
+      await sendTelegram(chatId, 'Fichier trop grand (max 5MB).');
       return NextResponse.json({ ok: true });
     }
 
@@ -968,8 +1015,8 @@ export async function POST(req: NextRequest) {
       : caption.includes('facebook') || caption.includes('meta') ? 'facebook'
       : 'jason';
 
-    // Use the importer tool directly
-    const importResult = await executeTool('importer_leads_liste', { liste: fileText.slice(0, 12000), source });
+    // Use the importer tool directly (no truncation — chunked parsing handles large files)
+    const importResult = await executeTool('importer_leads_liste', { liste: fileText, source });
     const result = JSON.parse(importResult);
 
     if (result.error) {

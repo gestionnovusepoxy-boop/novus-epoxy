@@ -207,6 +207,15 @@ export default function CrmClient() {
   const [prospectingId, setProspectingId] = useState<number | null>(null);
   const [prospectMsg, setProspectMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [selected, setSelected] = useState<Set<number>>(new Set());
+
+  // Import modal state
+  const [showImport, setShowImport] = useState(false);
+  const [importText, setImportText] = useState('');
+  const [importSource, setImportSource] = useState('jason');
+  const [importParsing, setImportParsing] = useState(false);
+  const [importPreview, setImportPreview] = useState<Array<{ nom: string; telephone: string; email: string; service: string; ville: string; temperature: string }> | null>(null);
+  const [importResult, setImportResult] = useState<{ importes: number; ignores: number } | null>(null);
+  const [importing, setImporting] = useState(false);
   const [bulkSending, setBulkSending] = useState(false);
 
   function toggleSelect(id: number) {
@@ -306,6 +315,53 @@ export default function CrmClient() {
     load();
   }
 
+  async function handleImportParse() {
+    if (!importText.trim()) return;
+    setImportParsing(true);
+    setImportPreview(null);
+    setImportResult(null);
+    const res = await fetch('/api/crm/leads/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'parse', text: importText }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      setImportPreview(json.leads ?? []);
+    }
+    setImportParsing(false);
+  }
+
+  async function handleImportConfirm() {
+    if (!importPreview?.length) return;
+    setImporting(true);
+    const res = await fetch('/api/crm/leads/import', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'import', leads: importPreview, source: importSource }),
+    });
+    if (res.ok) {
+      const json = await res.json();
+      setImportResult(json);
+      setImportPreview(null);
+      setImportText('');
+      load();
+    }
+    setImporting(false);
+  }
+
+  function handleImportFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setImportText(ev.target?.result as string ?? '');
+      setImportPreview(null);
+      setImportResult(null);
+    };
+    reader.readAsText(file);
+  }
+
   useEffect(() => { load(); }, [load]);
 
   return (
@@ -314,7 +370,10 @@ export default function CrmClient() {
         <h2 className="text-2xl font-bold text-white">CRM Leads</h2>
         <div className="flex items-center gap-3">
           <span className="text-slate-400 text-sm">{total} au total</span>
-          <button onClick={() => setShowAdd(!showAdd)} className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-4 py-2 text-sm transition">
+          <button onClick={() => { setShowImport(!showImport); setShowAdd(false); }} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition">
+            Importer
+          </button>
+          <button onClick={() => { setShowAdd(!showAdd); setShowImport(false); }} className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-4 py-2 text-sm transition">
             + Nouveau lead
           </button>
         </div>
@@ -339,6 +398,97 @@ export default function CrmClient() {
             </button>
             <button onClick={() => setShowAdd(false)} className="bg-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm transition hover:bg-slate-600">Annuler</button>
           </div>
+        </div>
+      )}
+
+      {showImport && (
+        <div className="bg-slate-800 border border-blue-500/30 rounded-xl p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-white font-semibold text-lg">Importer des leads en bulk</h3>
+            <button onClick={() => { setShowImport(false); setImportPreview(null); setImportResult(null); }} className="text-slate-400 hover:text-white text-lg">&times;</button>
+          </div>
+
+          {importResult ? (
+            <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-4 text-center space-y-2">
+              <p className="text-green-400 font-semibold text-lg">{importResult.importes} leads importes!</p>
+              {importResult.ignores > 0 && <p className="text-slate-400 text-sm">{importResult.ignores} ignores (nom manquant)</p>}
+              <button onClick={() => { setImportResult(null); setShowImport(false); }} className="bg-green-600 hover:bg-green-500 text-white rounded-lg px-4 py-2 text-sm font-semibold mt-2">Fermer</button>
+            </div>
+          ) : importPreview ? (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-slate-300 text-sm">{importPreview.length} leads detectes — verifie avant d&apos;importer</p>
+                <select value={importSource} onChange={e => setImportSource(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white">
+                  <option value="jason">Source: Jason</option>
+                  <option value="luca">Source: Luca</option>
+                  <option value="champfield">Source: Champfield</option>
+                  <option value="google_ads">Source: Google Ads</option>
+                  <option value="facebook">Source: Facebook</option>
+                  <option value="autre">Source: Autre</option>
+                </select>
+              </div>
+              <div className="max-h-64 overflow-y-auto rounded-lg border border-slate-700">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-700/50 sticky top-0">
+                    <tr>
+                      <th className="text-left px-3 py-2 text-slate-400 font-medium">Nom</th>
+                      <th className="text-left px-3 py-2 text-slate-400 font-medium">Tel</th>
+                      <th className="text-left px-3 py-2 text-slate-400 font-medium">Email</th>
+                      <th className="text-left px-3 py-2 text-slate-400 font-medium">Ville</th>
+                      <th className="text-left px-3 py-2 text-slate-400 font-medium">Temp</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.slice(0, 100).map((l, i) => (
+                      <tr key={i} className="border-t border-slate-700/50">
+                        <td className="px-3 py-1.5 text-white">{l.nom}</td>
+                        <td className="px-3 py-1.5 text-slate-300">{l.telephone || '—'}</td>
+                        <td className="px-3 py-1.5 text-slate-300">{l.email || '—'}</td>
+                        <td className="px-3 py-1.5 text-slate-300">{l.ville || '—'}</td>
+                        <td className="px-3 py-1.5">
+                          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${l.temperature === 'chaud' ? 'bg-red-500/20 text-red-300' : l.temperature === 'froid' ? 'bg-blue-500/20 text-blue-300' : 'bg-yellow-500/20 text-yellow-300'}`}>
+                            {l.temperature === 'chaud' ? '🔥' : l.temperature === 'froid' ? '🔵' : '🟡'} {l.temperature}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {importPreview.length > 100 && <p className="text-slate-500 text-xs text-center py-2">+ {importPreview.length - 100} autres...</p>}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={handleImportConfirm} disabled={importing} className="bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg px-5 py-2 text-sm transition disabled:opacity-40">
+                  {importing ? `Import en cours (${importPreview.length})...` : `Importer ${importPreview.length} leads`}
+                </button>
+                <button onClick={() => setImportPreview(null)} className="bg-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm hover:bg-slate-600">Modifier</button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-slate-400 text-sm">Colle ta liste de contacts ou upload un fichier CSV/TXT. Format libre — l&apos;IA detecte automatiquement les noms, telephones, emails, villes.</p>
+              <textarea
+                value={importText}
+                onChange={e => setImportText(e.target.value)}
+                placeholder={"Jean Tremblay, 581-234-5678, jean@email.com, Quebec\nMarie Lavoie, 418-555-1234, Levis\nPierre Gagnon, pgagnon@gmail.com, garage flake 800pi2, Beauport"}
+                rows={8}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 font-mono"
+              />
+              <div className="flex items-center gap-3">
+                <label className="bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg px-4 py-2 text-sm cursor-pointer transition border border-slate-600">
+                  Upload CSV/TXT
+                  <input type="file" accept=".csv,.txt,.tsv" onChange={handleImportFile} className="hidden" />
+                </label>
+                <button
+                  onClick={handleImportParse}
+                  disabled={importParsing || !importText.trim()}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-5 py-2 text-sm transition disabled:opacity-40"
+                >
+                  {importParsing ? 'Analyse en cours...' : 'Analyser'}
+                </button>
+                <span className="text-slate-500 text-xs">{importText.split('\n').filter(l => l.trim()).length} lignes</span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
