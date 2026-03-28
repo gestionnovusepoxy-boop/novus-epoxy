@@ -2,8 +2,9 @@ import { google } from 'googleapis';
 
 /**
  * Sends system emails (devis, contrats, replies Aria, etc.)
- * Primary: Gmail API (gestionnovusepoxy@gmail.com)
- * Fallback: Resend (info@novusepoxy.shop) if Gmail is blocked/rate-limited
+ * Primary: Resend (info@novusepoxy.shop) — Pro plan 50k/month
+ * Fallback: Gmail API if Resend fails
+ * Reply-To: gestionnovusepoxy@gmail.com (Aria monitors)
  */
 export async function sendEmail({
   to,
@@ -16,14 +17,14 @@ export async function sendEmail({
   html: string;
   replyTo?: string;
 }): Promise<{ id: string }> {
-  // Try Gmail first, fallback to Resend on ANY error
+  // Primary: Resend (reliable, Pro plan 50k/month)
+  // Gmail is rate-limited and silently bounces — use Resend for everything
   try {
-    const result = await sendViaGmail({ to, subject, html, replyTo });
-    return result;
+    return await sendViaResend({ to, subject, html, replyTo });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), falling back to Resend`);
-    return sendViaResend({ to, subject, html, replyTo });
+    console.log(`[sendEmail] Resend failed (${msg.slice(0, 100)}), trying Gmail as fallback`);
+    return sendViaGmail({ to, subject, html, replyTo });
   }
 }
 
