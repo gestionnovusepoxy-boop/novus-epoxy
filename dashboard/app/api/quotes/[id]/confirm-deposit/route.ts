@@ -159,5 +159,44 @@ ${calendarHtml}
     ).catch(() => {});
   }
 
+  // === IRIS: Auto-create invoice + payment record for deposit ===
+  try {
+    const depotMontant = Number(quote.depot_requis) || Number(quote.total) * 0.3;
+
+    // Find or create invoice
+    let invoiceId: number | null = null;
+    const existingInv = await query(`SELECT id FROM invoices WHERE quote_id = $1 LIMIT 1`, [quoteId]);
+    if (existingInv.length > 0) {
+      invoiceId = existingInv[0].id as number;
+    } else {
+      // Auto-generate invoice number
+      const yearStr = new Date().getFullYear().toString();
+      const lastInv = await query(`SELECT numero FROM invoices WHERE numero LIKE $1 ORDER BY numero DESC LIMIT 1`, [`NE-${yearStr}-%`]);
+      const nextNum = lastInv.length > 0 ? parseInt((lastInv[0].numero as string).split('-')[2]) + 1 : 1;
+      const numero = `NE-${yearStr}-${String(nextNum).padStart(3, '0')}`;
+
+      const invRows = await query(
+        `INSERT INTO invoices (numero, quote_id, type_service, superficie, prix_pied_carre, sous_total, tps, tvq, total, depot_montant, final_montant, statut, date_emission)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'depot_recu',CURRENT_DATE) RETURNING id`,
+        [numero, quoteId, quote.type_service, quote.superficie, quote.prix_pied_carre, quote.sous_total, quote.tps, quote.tvq, quote.total, depotMontant, Number(quote.total) - depotMontant]
+      );
+      invoiceId = invRows[0].id as number;
+    }
+
+    // Create payment record if not exists
+    const existingPay = await query(`SELECT id FROM payments WHERE invoice_id = $1 AND type = 'depot' LIMIT 1`, [invoiceId]);
+    if (existingPay.length === 0) {
+      await query(
+        `INSERT INTO payments (invoice_id, type, montant, methode, paid_at) VALUES ($1, 'depot', $2, 'virement', NOW())`,
+        [invoiceId, depotMontant]
+      );
+    }
+
+    // Update invoice deposit status
+    await query(`UPDATE invoices SET depot_paye = true, depot_paye_at = NOW(), statut = 'depot_recu' WHERE id = $1`, [invoiceId]);
+  } catch (err) {
+    console.error('[Iris] Auto-invoice/payment creation failed:', err);
+  }
+
   return NextResponse.json({ success: true, confirmed: true });
 }

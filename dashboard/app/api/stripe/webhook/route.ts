@@ -164,6 +164,32 @@ ${calendarHtml}
         : `Novus Epoxy: Depot recu pour devis #${quoteId} MAIS dates en conflit! ${formatMoney(Number(quote.depot_requis))} de ${clientName}. Verifier ASAP!\nhttps://novus-epoxy.vercel.app/dashboard/devis`;
       await Promise.all(adminPhones.map(phone => sendSMS(phone, smsMsg)));
 
+      // === IRIS: Auto-create invoice + payment record ===
+      try {
+        const depotMontant = Number(quote.depot_requis) || Number(quote.total) * 0.3;
+        let invoiceId: number | null = null;
+        const existingInv = await query(`SELECT id FROM invoices WHERE quote_id = $1 LIMIT 1`, [parseInt(quoteId)]);
+        if (existingInv.length > 0) {
+          invoiceId = existingInv[0].id as number;
+        } else {
+          const yearStr = new Date().getFullYear().toString();
+          const lastInv = await query(`SELECT numero FROM invoices WHERE numero LIKE $1 ORDER BY numero DESC LIMIT 1`, [`NE-${yearStr}-%`]);
+          const nextNum = lastInv.length > 0 ? parseInt((lastInv[0].numero as string).split('-')[2]) + 1 : 1;
+          const numero = `NE-${yearStr}-${String(nextNum).padStart(3, '0')}`;
+          const invRows = await query(
+            `INSERT INTO invoices (numero, quote_id, type_service, superficie, prix_pied_carre, sous_total, tps, tvq, total, depot_montant, final_montant, statut, date_emission)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'depot_recu',CURRENT_DATE) RETURNING id`,
+            [numero, parseInt(quoteId), quote.type_service, quote.superficie, quote.prix_pied_carre, quote.sous_total, quote.tps, quote.tvq, quote.total, depotMontant, Number(quote.total) - depotMontant]
+          );
+          invoiceId = invRows[0].id as number;
+        }
+        const existingPay = await query(`SELECT id FROM payments WHERE invoice_id = $1 AND type = 'depot' LIMIT 1`, [invoiceId]);
+        if (existingPay.length === 0) {
+          await query(`INSERT INTO payments (invoice_id, type, montant, methode, paid_at) VALUES ($1, 'depot', $2, 'carte', NOW())`, [invoiceId, depotMontant]);
+        }
+        await query(`UPDATE invoices SET depot_paye = true, depot_paye_at = NOW(), depot_methode = 'carte', statut = 'depot_recu' WHERE id = $1`, [invoiceId]);
+      } catch (err) { console.error('[Iris] Stripe auto-invoice failed:', err); }
+
       // Notify admins via Telegram
       const telegramMsg = datesAvailable
         ? `💰 *Depot recu pour devis #${quoteId}!*\n\nClient: ${clientName}\nMontant: ${formatMoney(Number(quote.depot_requis))}\nDates confirmees ✅\n\n[Voir le devis](https://novus-epoxy.vercel.app/dashboard/devis/${quoteId})`
