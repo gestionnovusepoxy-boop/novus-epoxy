@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { sendEmail } from '@/lib/send-email';
+import { sendProspectEmail } from '@/lib/send-prospect-email';
 
 // Aria follow-up on Hunter prospect emails
 // Relance 1: 48h after prospect sent
@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
 </div></body></html>`;
 
     try {
-      await sendEmail({ to: lead.email as string, subject: `${prenom}, on peut vous aider avec votre projet?`, html });
+      await sendProspectEmail({ to: lead.email as string, subject: `${prenom}, on peut vous aider avec votre projet?`, html });
       await query(`UPDATE crm_leads SET prospect_relance_1_at = NOW(), updated_at = NOW() WHERE id = $1`, [lead.id]);
       sent1++;
     } catch (err) {
@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
 </div></body></html>`;
 
     try {
-      await sendEmail({ to: lead.email as string, subject: `${prenom} — Derniere chance soumission gratuite`, html });
+      await sendProspectEmail({ to: lead.email as string, subject: `${prenom} — Derniere chance soumission gratuite`, html });
       await query(`UPDATE crm_leads SET prospect_relance_2_at = NOW(), updated_at = NOW() WHERE id = $1`, [lead.id]);
       sent2++;
     } catch (err) {

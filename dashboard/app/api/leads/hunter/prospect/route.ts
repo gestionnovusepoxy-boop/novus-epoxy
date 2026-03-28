@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { sendEmail } from '@/lib/send-email';
+import { sendProspectEmail } from '@/lib/send-prospect-email';
 
 // Dynamic photo picking from portfolio DB
 interface PortfolioPhoto { id: number; titre: string; type_service: string; description: string | null; photos: string[] }
@@ -289,7 +289,7 @@ export async function POST(req: NextRequest) {
         ? `${prenom} — Partenariat planchers epoxy — Novus Epoxy`
         : `${prenom} — Votre projet en epoxy avec Novus Epoxy`;
 
-      const emailResult = await sendEmail({
+      const emailResult = await sendProspectEmail({
         to: lead.email,
         subject,
         html,

@@ -5,6 +5,7 @@ import { sendSMS, notifyAdminSMS } from '@/lib/sms';
 import { timingSafeEqual } from 'crypto';
 import { google } from 'googleapis';
 import { sendEmail } from '@/lib/send-email';
+import { sendProspectEmail } from '@/lib/send-prospect-email';
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -654,7 +655,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
             'Merci de votre interet',
             `Bonjour ${firstName},\n\nMerci de votre interet`
           );
-          await sendEmail({ to: lead.email, subject: 'Nos tarifs et services — Novus Epoxy', html: personalizedHtml });
+          await sendProspectEmail({ to: lead.email, subject: 'Nos tarifs et services — Novus Epoxy', html: personalizedHtml });
           await query(
             `UPDATE crm_leads SET statut = 'contacte', last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $1`,
             [lead.id]

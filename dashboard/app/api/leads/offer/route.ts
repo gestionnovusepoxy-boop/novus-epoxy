@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { sendEmail } from '@/lib/send-email';
+import { sendProspectEmail } from '@/lib/send-prospect-email';
 
 const OFFER_HTML = `<!DOCTYPE html>
 <html lang="fr">
@@ -180,7 +180,7 @@ export async function POST(req: NextRequest) {
   for (const r of recipients) {
     const html = OFFER_HTML.replace(/\{\{PRENOM\}\}/g, r.prenom || 'Bonjour');
     try {
-      const data = await sendEmail({ to: r.email, subject: 'Partenariat planchers epoxy — Novus Epoxy', html });
+      const data = await sendProspectEmail({ to: r.email, subject: 'Partenariat planchers epoxy — Novus Epoxy', html });
       await query(
         `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
         [data.id ?? '', r.email, 'Offre de service — Partenariat Novus Epoxy', 'sent'],
