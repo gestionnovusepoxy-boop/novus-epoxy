@@ -572,12 +572,15 @@ export async function GET(req: NextRequest) {
     } catch { /* ignore */ }
 
     // Skip our own emails — BUT allow jason@novusepoxy.shop (lead imports)
-    const isJasonShop = fromEmail.toLowerCase() === 'jason@novusepoxy.shop';
+    const isJasonShop = fromEmail.toLowerCase().includes('jason@novusepoxy') || fromHeader.toLowerCase().includes('jason@novusepoxy');
+    console.log(`[Email Scan] Processing: from=${fromEmail} isJasonShop=${isJasonShop} subject=${subject.slice(0, 50)}`);
     if (!isJasonShop && (fromEmail.includes('novusepoxy') || fromEmail.includes('gestionnovusepoxy'))) continue;
 
     // === JASON LEAD IMPORT VIA EMAIL ===
     // When Jason sends a list of leads by email, auto-import into CRM + prospect
-    if (isJasonShop) {
+    // Detect by sender (jason@novusepoxy.shop) OR by subject containing "ARIA" + "LEAD"
+    const isLeadEmail = isJasonShop || (subject.toUpperCase().includes('ARIA') && subject.toUpperCase().includes('LEAD'));
+    if (isLeadEmail) {
       // Get body text
       let jasonBody = '';
       const jParts = fullMsg.data.payload?.parts ?? [];
