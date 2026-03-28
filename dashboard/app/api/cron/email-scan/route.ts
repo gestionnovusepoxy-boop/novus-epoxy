@@ -93,13 +93,16 @@ Reponds en JSON strict:
   "reply_suggestion": "suggestion de reponse si c'est un client ou message important, null sinon"
 }
 
-- type "facture" = c'est une facture/invoice/receipt qu'on a recue (depense)
+- type "facture" = c'est une facture/invoice/receipt d'un FOURNISSEUR EXTERNE qu'on doit payer (depense d'achat de materiaux, equipement, services, etc.)
+- IMPORTANT: Les factures/soumissions que NOVUS EPOXY envoie a SES clients ne sont PAS des depenses. Si l'email est une copie/confirmation d'une facture envoyee PAR Novus Epoxy a un client, mets type "autre" et NON "facture".
+- Exemples de factures VALIDES (depenses): Les Idees Epoxy, Groupe Novus, Home Depot, quincailleries, fournisseurs de materiaux, sous-traitants, Torginol, assurances, etc.
+- Exemples a NE PAS classer comme facture: confirmation d'envoi de soumission, copie de facture envoyee au client, notifications Stripe de paiement recu
 - type "client" = un client potentiel ou existant qui ecrit (demande de soumission, questions sur les services, reponse a une offre de service)
 - type "important" = message important (gouvernement, banque, urgent, etc.)
 - type "spam" = pub, newsletter, spam
 - type "autre" = autre chose
 - Pour les taxes Quebec: TPS = 5%, TVQ = 9.975%
-- Si c'est une image de facture, extrais les montants de l'image
+- Si c'est une image de facture/PDF, extrais les montants de l'image
 - Categorie seulement si type = facture
 
 IMPORTANT pour les clients:
@@ -875,52 +878,123 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    // === FACTURE: Auto-create expense ===
+    // === FACTURE: Auto-create expense with receipt + project assignment ===
     if (analysis.type === 'facture' && analysis.montant_ttc && analysis.montant_ttc > 0) {
       // Validate categorie against allowed values (DB CHECK constraint)
       const VALID_CATEGORIES = ['materiaux', 'equipement', 'vehicule', 'essence', 'assurance', 'publicite', 'sous-traitance', 'bureau', 'telecommunication', 'formation', 'repas', 'entretien', 'loyer', 'autre'];
       const safeCategorie = VALID_CATEGORIES.includes(analysis.categorie ?? '') ? analysis.categorie : 'autre';
 
-      // Check duplicate
-      const existing = await query(
+      // Check duplicate by gmail_msg_id or by fournisseur+montant+date
+      const existingByMsg = msg.id ? await query(`SELECT id FROM expenses WHERE gmail_msg_id = $1`, [msg.id]) : [];
+      const existingByData = existingByMsg.length > 0 ? existingByMsg : await query(
         `SELECT id FROM expenses WHERE fournisseur = $1 AND montant_ttc = $2 AND date_depense = $3`,
         [analysis.fournisseur ?? 'Inconnu', analysis.montant_ttc, analysis.date_depense ?? new Date().toISOString().slice(0, 10)],
       );
 
-      if (existing.length === 0) {
+      if (existingByMsg.length === 0 && existingByData.length === 0) {
         try {
-        await query(
-          `INSERT INTO expenses (fournisseur, description, montant_ht, tps, tvq, montant_ttc, categorie, date_depense, methode, source)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-          [
-            analysis.fournisseur ?? 'Inconnu',
-            analysis.description ?? subject,
-            analysis.montant_ht ?? 0,
-            analysis.tps ?? 0,
-            analysis.tvq ?? 0,
-            analysis.montant_ttc,
-            safeCategorie,
-            analysis.date_depense ?? new Date().toISOString().slice(0, 10),
-            'autre',
-            'email-scan',
-          ],
-        );
-        invoicesCreated++;
+          // Upload PDF/image attachment to Vercel Blob as receipt
+          let receiptUrl: string | null = null;
+          let receiptFilename: string | null = null;
+
+          for (const part of parts) {
+            if (
+              part.body?.attachmentId &&
+              (part.mimeType?.startsWith('image/') || part.mimeType === 'application/pdf')
+            ) {
+              try {
+                const att = await gmail.users.messages.attachments.get({
+                  userId: 'me',
+                  messageId: msg.id!,
+                  id: part.body.attachmentId,
+                });
+                if (att.data.data) {
+                  const b64 = att.data.data.replace(/-/g, '+').replace(/_/g, '/');
+                  const buffer = Buffer.from(b64, 'base64');
+                  receiptFilename = part.filename ?? `receipt-${Date.now()}.${part.mimeType === 'application/pdf' ? 'pdf' : 'jpg'}`;
+                  const contentType = part.mimeType ?? 'application/pdf';
+
+                  // Upload to Vercel Blob
+                  const { put } = await import('@vercel/blob');
+                  const blob = await put(`receipts/${receiptFilename}`, buffer, {
+                    access: 'public',
+                    contentType,
+                  });
+                  receiptUrl = blob.url;
+                  break;
+                }
+              } catch (blobErr) {
+                console.error('[Email Scan] Receipt upload failed:', blobErr);
+              }
+            }
+          }
+
+          const expenseRows = await query(
+            `INSERT INTO expenses (fournisseur, description, montant_ht, tps, tvq, montant_ttc, categorie, date_depense, methode, source, gmail_msg_id, receipt_url, receipt_filename, pending_project)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'email-scan', $10, $11, $12, TRUE) RETURNING id`,
+            [
+              analysis.fournisseur ?? 'Inconnu',
+              analysis.description ?? subject,
+              analysis.montant_ht ?? 0,
+              analysis.tps ?? 0,
+              analysis.tvq ?? 0,
+              analysis.montant_ttc,
+              safeCategorie,
+              analysis.date_depense ?? new Date().toISOString().slice(0, 10),
+              'autre',
+              msg.id ?? null,
+              receiptUrl,
+              receiptFilename,
+            ],
+          );
+          const expenseId = (expenseRows[0] as { id: number })?.id;
+          invoicesCreated++;
+
+          // Get recent active invoices for project assignment buttons
+          const activeInvoices = await query(
+            `SELECT inv.id, inv.numero, c.nom AS client_nom
+             FROM invoices inv JOIN clients c ON c.id = inv.client_id
+             WHERE inv.statut NOT IN ('annulee', 'completee')
+             ORDER BY inv.created_at DESC LIMIT 5`
+          );
+
+          // Build inline keyboard for Telegram — assign to project
+          const keyboard: Array<Array<{ text: string; callback_data: string }>> = [];
+          for (const inv of activeInvoices) {
+            keyboard.push([{
+              text: `${inv.numero} — ${(inv.client_nom as string).slice(0, 25)}`,
+              callback_data: `assign_expense_${expenseId}_inv_${inv.id}`,
+            }]);
+          }
+          keyboard.push([{ text: 'Aucun projet (general)', callback_data: `assign_expense_${expenseId}_none` }]);
+
+          // Notify admin with project assignment buttons
+          for (const chatId of ADMIN_CHAT_IDS()) {
+            const token = BOT_TOKEN();
+            if (!token) continue;
+            await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chatId,
+                text: [
+                  `📧 <b>Facture detectee</b>`,
+                  ``,
+                  `🏪 ${analysis.fournisseur ?? 'Inconnu'}`,
+                  `💰 ${analysis.montant_ttc?.toFixed(2)}$ TTC`,
+                  `📂 ${analysis.categorie ?? 'autre'}`,
+                  `📝 ${analysis.description ?? subject}`,
+                  receiptFilename ? `📎 ${receiptFilename}` : '',
+                  ``,
+                  `👇 <b>C'est pour quel projet?</b>`,
+                ].filter(Boolean).join('\n'),
+                parse_mode: 'HTML',
+                reply_markup: { inline_keyboard: keyboard },
+              }),
+            }).catch(() => {});
+          }
         } catch (insertErr) {
           console.error(`[Email Scan] Expense insert failed for ${fromEmail}:`, insertErr);
-          // Don't crash the whole scan — just skip this expense
-        }
-
-        // Notify admin
-        for (const chatId of ADMIN_CHAT_IDS()) {
-          await sendTelegram(chatId,
-            `📧 <b>Facture detectee par email</b>\n\n` +
-            `🏪 ${analysis.fournisseur ?? 'Inconnu'}\n` +
-            `💰 ${analysis.montant_ttc?.toFixed(2)}$ TTC\n` +
-            `📂 ${analysis.categorie ?? 'autre'}\n` +
-            `📝 ${analysis.description ?? subject}\n\n` +
-            `✅ Ajoutee automatiquement aux depenses`,
-          );
         }
       }
     }

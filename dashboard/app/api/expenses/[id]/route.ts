@@ -8,7 +8,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const allowed = ['date_depense', 'fournisseur', 'description', 'categorie', 'montant_ht', 'tps', 'tvq', 'montant_ttc', 'methode', 'reference'];
+  const allowed = ['date_depense', 'fournisseur', 'description', 'categorie', 'montant_ht', 'tps', 'tvq', 'montant_ttc', 'methode', 'reference', 'invoice_id', 'quote_id', 'pending_project'];
 
   const sets: string[] = [];
   const values: unknown[] = [];

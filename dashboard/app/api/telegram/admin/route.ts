@@ -785,6 +785,30 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // assign_expense_123_inv_456 or assign_expense_123_none — assign expense to invoice/project
+    if (cbData.startsWith('assign_expense_')) {
+      const parts = cbData.replace('assign_expense_', '').split('_');
+      const expenseId = parseInt(parts[0]);
+      const isNone = parts[1] === 'none';
+      const invoiceId = !isNone && parts[1] === 'inv' ? parseInt(parts[2]) : null;
+
+      try {
+        if (isNone) {
+          await query(`UPDATE expenses SET pending_project = FALSE WHERE id = $1`, [expenseId]);
+          await sendTelegram(cbChatId, `✅ Depense #${expenseId} — marquee comme generale (aucun projet).`);
+        } else if (invoiceId) {
+          await query(`UPDATE expenses SET invoice_id = $1, pending_project = FALSE WHERE id = $2`, [invoiceId, expenseId]);
+          const invRows = await query(`SELECT numero FROM invoices WHERE id = $1`, [invoiceId]);
+          const numero = (invRows[0]?.numero as string) ?? `#${invoiceId}`;
+          await sendTelegram(cbChatId, `✅ Depense #${expenseId} → liee a la facture ${numero}`);
+        }
+      } catch (err) {
+        console.error('Assign expense error:', err);
+        await sendTelegram(cbChatId, `Erreur: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     // confirm_deposit_123 — manually confirm deposit received (Interac/cheque)
     if (cbData.startsWith('confirm_deposit_')) {
       const quoteId = parseInt(cbData.replace('confirm_deposit_', ''));
