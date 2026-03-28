@@ -6,8 +6,13 @@ import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Auth: session OR API key (for internal auto-send from deposit confirmation)
   const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  const apiKey = _req.headers.get('x-api-key') ?? '';
+  const validApiKey = process.env.ADMIN_API_KEY ?? '';
+  if (!session && (!validApiKey || apiKey !== validApiKey)) {
+    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  }
 
   const { id } = await params;
   const rows = await query(
