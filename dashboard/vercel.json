@@ -51,6 +51,14 @@
     {
       "path": "/api/cron/prospect-followup",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/iris-report",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/deposit-watch",
+      "schedule": "0 */2 * * *"
     }
   ],
   "headers": [

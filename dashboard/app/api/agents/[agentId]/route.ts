@@ -340,6 +340,144 @@ function buildTools(agentId: AgentId) {
       },
     }),
 
+    rapport_projet: tool({
+      description: 'Rapport financier complet pour un projet (devis): revenus, depenses, main-d\'oeuvre, profit.',
+      parameters: z.object({
+        quote_id: z.number().describe('ID du devis/projet'),
+      }),
+      execute: async ({ quote_id }) => {
+        const quotes = await query('SELECT * FROM quotes WHERE id = $1', [quote_id]);
+        if (!quotes[0]) return { error: 'Projet non trouve' };
+        const qt = quotes[0];
+
+        const invoices = await query('SELECT * FROM invoices WHERE quote_id = $1', [quote_id]);
+        const invoiceIds = invoices.map((inv) => inv.id as number);
+        let payments: Record<string, unknown>[] = [];
+        if (invoiceIds.length > 0) {
+          const ph = invoiceIds.map((_, i) => `$${i + 1}`).join(',');
+          payments = await query(`SELECT * FROM payments WHERE invoice_id IN (${ph})`, invoiceIds);
+        }
+        const totalRevenue = payments.reduce((s, p) => s + parseFloat(String(p.montant ?? 0)), 0);
+
+        const expenses = await query('SELECT * FROM expenses WHERE quote_id = $1', [quote_id]);
+        const totalExpenses = expenses.reduce((s, e) => s + parseFloat(String(e.montant_ttc ?? e.montant_ht ?? 0)), 0);
+
+        const labor = await query(
+          `SELECT te.*, e.nom, e.taux_horaire FROM time_entries te JOIN employees e ON te.employee_id = e.id WHERE te.quote_id = $1 ORDER BY te.date_travail`,
+          [quote_id]
+        );
+        let totalHours = 0, totalLaborCost = 0;
+        for (const entry of labor) {
+          const h = parseFloat(String(entry.heures ?? 0));
+          const t = parseFloat(String(entry.taux_horaire ?? 0));
+          totalHours += h;
+          totalLaborCost += h * t;
+        }
+
+        const profit = Math.round((totalRevenue - totalExpenses - totalLaborCost) * 100) / 100;
+        const margin = totalRevenue > 0 ? Math.round((profit / totalRevenue) * 10000) / 100 : 0;
+
+        return {
+          projet: { id: qt.id, client: qt.client_nom, service: qt.type_service, total: qt.total, statut: qt.statut },
+          revenus: formatMoney(totalRevenue),
+          depenses: formatMoney(totalExpenses),
+          main_oeuvre: { heures: Math.round(totalHours * 10) / 10, cout: formatMoney(totalLaborCost) },
+          profit: formatMoney(profit),
+          marge: `${margin}%`,
+          nb_factures: invoices.length,
+          nb_paiements: payments.length,
+          nb_depenses: expenses.length,
+          nb_entrees_temps: labor.length,
+        };
+      },
+    }),
+
+    liste_employes: tool({
+      description: 'Liste les employes de Novus Epoxy.',
+      parameters: z.object({}),
+      execute: async () => {
+        const rows = await query(
+          `SELECT id, nom, telephone, role, taux_horaire, actif FROM employees ORDER BY nom`
+        );
+        return { employes: rows, total: rows.length };
+      },
+    }),
+
+    ajouter_heures: tool({
+      description: 'Ajoute une entree de temps (heures travaillees) pour un employe sur un projet.',
+      parameters: z.object({
+        employee_id: z.number().describe('ID de l\'employe'),
+        quote_id: z.number().describe('ID du devis/projet'),
+        date_travail: z.string().describe('Date du travail (YYYY-MM-DD)'),
+        heures: z.number().describe('Nombre d\'heures'),
+        type: z.enum(['travail', 'deplacement', 'preparation', 'nettoyage']).default('travail'),
+        notes: z.string().optional(),
+      }),
+      execute: async ({ employee_id, quote_id, date_travail, heures, type, notes }) => {
+        const emp = await query('SELECT id, nom FROM employees WHERE id = $1', [employee_id]);
+        if (!emp[0]) return { error: 'Employe non trouve' };
+        const qt = await query('SELECT id, client_nom FROM quotes WHERE id = $1', [quote_id]);
+        if (!qt[0]) return { error: 'Projet non trouve' };
+
+        const rows = await query(
+          `INSERT INTO time_entries (employee_id, quote_id, date_travail, heures, type, notes)
+           VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+          [employee_id, quote_id, date_travail, heures, type, notes ?? null]
+        );
+        return { ok: true, entree: rows[0], employe: emp[0].nom, projet: qt[0].client_nom };
+      },
+    }),
+
+    relier_depense: tool({
+      description: 'Relie une depense a un projet (devis).',
+      parameters: z.object({
+        expense_id: z.number().describe('ID de la depense'),
+        quote_id: z.number().describe('ID du devis/projet'),
+      }),
+      execute: async ({ expense_id, quote_id }) => {
+        const qt = await query('SELECT id, client_nom FROM quotes WHERE id = $1', [quote_id]);
+        if (!qt[0]) return { error: 'Projet non trouve' };
+        const exp = await query('SELECT id, description, montant_ttc FROM expenses WHERE id = $1', [expense_id]);
+        if (!exp[0]) return { error: 'Depense non trouvee' };
+
+        await query('UPDATE expenses SET quote_id = $1 WHERE id = $2', [quote_id, expense_id]);
+        return { ok: true, depense: exp[0], projet: qt[0].client_nom };
+      },
+    }),
+
+    depenses_non_reliees: tool({
+      description: 'Liste les depenses non reliees a un projet (quote_id IS NULL).',
+      parameters: z.object({
+        limit: z.number().optional().default(20),
+      }),
+      execute: async ({ limit = 20 }) => {
+        const lim = Math.min(limit, 50);
+        const rows = await query(
+          `SELECT id, date_depense, fournisseur, description, categorie, montant_ttc, methode
+           FROM expenses WHERE quote_id IS NULL ORDER BY date_depense DESC LIMIT $1`,
+          [lim]
+        );
+        return { depenses: rows, total: rows.length };
+      },
+    }),
+
+    reconciliation_banque: tool({
+      description: 'Affiche les depenses non reconciliees (pas encore matchees avec une transaction bancaire).',
+      parameters: z.object({
+        limit: z.number().optional().default(20),
+      }),
+      execute: async ({ limit = 20 }) => {
+        const lim = Math.min(limit, 50);
+        const rows = await query(
+          `SELECT id, date_depense, fournisseur, description, categorie, montant_ttc, methode
+           FROM expenses WHERE reconciled = false ORDER BY date_depense DESC LIMIT $1`,
+          [lim]
+        );
+        const total = rows.reduce((s, r) => s + parseFloat(String(r.montant_ttc ?? 0)), 0);
+        return { non_reconciliees: rows, total_non_reconcilie: formatMoney(total), count: rows.length };
+      },
+    }),
+
     liste_reservations: tool({
       description: 'Liste les reservations a venir avec les infos client du devis.',
       parameters: z.object({}),
@@ -904,7 +1042,7 @@ function buildTools(agentId: AgentId) {
     hunter: ['scorer_leads', 'plan_attaque', 'generer_relance_ia', 'crm_leads_chauds', 'liste_crm'],
     aria: ['resume_emails', 'liste_crm'],
     rex: ['envoyer_sms', 'generer_relance_ia', 'liste_devis', 'crm_leads_chauds'],
-    iris: ['stats_business', 'liste_devis', 'revenus_analyse'],
+    iris: ['stats_business', 'liste_devis', 'revenus_analyse', 'rapport_projet', 'liste_employes', 'ajouter_heures', 'relier_depense', 'depenses_non_reliees', 'reconciliation_banque'],
     sage: ['generer_post', 'scan_drive_portfolio', 'preview_drive', 'stats_portfolio'],
     zara: ['liste_reservations', 'creer_reservation', 'confirmer_reservation', 'deplacer_reservation', 'voir_agenda', 'jours_disponibles', 'stats_business', 'liste_devis'],
     bolt: ['envoyer_telegram', 'resume_journee', 'planning_semaine', 'alerte_leads_chauds', 'devis_en_attente', 'stats_business'],
@@ -932,7 +1070,7 @@ function getSystemPrompt(agentId: AgentId): string {
     hunter: `Tu es Hunter, le Dark Hunter de Novus Epoxy. Ta mission: traquer, scorer et qualifier les leads. Tu es un predateur commercial — chaque lead compte.\n${base}\nTu scores les leads, tu generes des plans d'attaque, tu identifies les opportunites chaudes.`,
     aria: `Tu es Aria, l'agente email de Novus Epoxy. Tu geres la boite email, tu resumes les messages importants, tu identifies les leads qui ont repondu.\n${base}\nTu lis et resumes les emails, tu identifies les opportunites cachees dans la boite de reception.`,
     rex: `Tu es Rex, le Closer SMS de Novus Epoxy. Tu es le roi des relances par texto. Court, punchy, efficace.\n${base}\nTu generes des relances SMS percutantes et tu les envoies directement.`,
-    iris: `Tu es Iris, l'analyste financiere de Novus Epoxy. Tu vois les chiffres, les tendances, les opportunites de revenus.\n${base}\nTu analyses les revenus, le pipeline de devis, et tu identifies les opportunites financieres.`,
+    iris: `Tu es Iris, l'analyste financiere de Novus Epoxy. Tu vois les chiffres, les tendances, les opportunites de revenus.\n${base}\nTu analyses les revenus, le pipeline de devis, et tu identifies les opportunites financieres.\nTu peux aussi: generer des rapports par projet, gerer les heures des employes, relier des depenses aux projets, et faire la reconciliation bancaire.`,
     sage: `Tu es Sage, la creatrice de contenu et gestionnaire de portfolio de Novus Epoxy. Tu geres le portfolio photo automatiquement: scan du Google Drive de Jason, classification par IA (type, couleur, qualite), upload sur Vercel Blob, et integration dans le portfolio DB. Tu generes aussi du contenu marketing pour Instagram et Facebook.\n${base}\nTu scannes le Drive pour de nouvelles photos, tu les classifies avec Vision, et tu les ajoutes au portfolio. Les photos du portfolio sont automatiquement utilisees par Hunter dans les emails de prospection.`,
     zara: `Tu es Zara, la gestionnaire de reservations de Novus Epoxy. Tu geres le calendrier complet: creer, deplacer, confirmer des reservations.\n${base}\nLes travaux epoxy prennent generalement 2 jours consecutifs (jour1 = application, jour2 = finition). Slot = matin ou apres-midi.\nQuand on te demande de placer une reservation, verifie les jours disponibles d'abord, puis cree la reservation.\nQuand un depot est paye et que le client veut reserver, cree la reservation et confirme-la.\nTu peux aussi voir l'agenda de la semaine et deplacer des reservations si besoin.\nPas de travaux la fin de semaine (samedi/dimanche).`,
     bolt: `Tu es Bolt, le commandant des communications de Novus Epoxy. Tu es le lien entre le dashboard et l'equipe sur Telegram.\n${base}\nTon role:\n- Resume quotidien: compile les stats du jour et envoie un beau message sur Telegram\n- Planning semaine: genere le planning avec tous les chantiers de la semaine\n- Alerte leads chauds: identifie les leads a contacter d'urgence\n- Devis en attente: rappelle les devis qui trainent\nQuand tu envoies sur Telegram, formate en HTML (<b>, <i>, emojis) pour que ce soit clair et beau.\nTu es le motivateur de l'equipe — chaque message doit etre energique et actionnable.`,
