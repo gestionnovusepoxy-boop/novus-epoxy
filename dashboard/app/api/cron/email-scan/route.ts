@@ -518,8 +518,11 @@ export async function GET(req: NextRequest) {
     `SELECT value FROM kv_store WHERE key = 'last_email_scan'`,
   );
   const lastScan = lastScanRows?.[0]?.value as string | undefined;
-  // Default: scan last 24h
-  const afterDate = lastScan ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  // Support ?hours=X to force scan over a longer period
+  const hoursParam = parseInt(req.nextUrl.searchParams.get('hours') ?? '0', 10);
+  const afterDate = hoursParam > 0
+    ? new Date(Date.now() - hoursParam * 60 * 60 * 1000).toISOString()
+    : lastScan ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const afterEpoch = Math.floor(new Date(afterDate).getTime() / 1000);
 
   // Fetch emails — support ?all=true to include read emails
