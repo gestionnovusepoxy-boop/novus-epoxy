@@ -302,9 +302,14 @@ Reponds en JSON strict (sans markdown):
     return;
   }
 
-  // 5. If spam/concurrent/non-interesse: close lead
-  if (['SPAM', 'CONCURRENT', 'NON_INTERESSE'].includes(parsed.type)) {
-    await query(`UPDATE crm_leads SET statut = 'ferme', updated_at = NOW() WHERE id = $1`, [leadId]);
+  // 5. Spam only: skip silently. NEVER auto-close leads — only humans can close.
+  // Even "non-interesse" leads get marked contacté so Luca/Jason can follow up with rabais etc.
+  if (parsed.type === 'SPAM') {
+    await query(`UPDATE email_logs SET statut = 'skipped' WHERE resend_id = $1`, [`lead-${msgId}`]);
+    return;
+  }
+  if (parsed.type === 'CONCURRENT') {
+    await query(`UPDATE crm_leads SET statut = 'contacte', notes = COALESCE(notes, '') || E'\n[Concurrent detecte]', updated_at = NOW() WHERE id = $1`, [leadId]);
     await query(`UPDATE email_logs SET statut = 'skipped' WHERE resend_id = $1`, [`lead-${msgId}`]);
     return;
   }
