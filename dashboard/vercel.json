@@ -38,7 +38,7 @@
     },
     {
       "path": "/api/cron/health-check",
-      "schedule": "0 * * * *"
+      "schedule": "0 8 * * *"
     },
     {
       "path": "/api/cron/relance-prospect",
