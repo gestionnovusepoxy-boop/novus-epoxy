@@ -761,8 +761,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Detect system/monitoring emails that should NOT be skipped (Sentry, Vercel, Stripe, etc.)
-    const isSystemAlert = /sentry|vercel|stripe|twilio|neon\.tech|cloudflare|github/i.test(fromEmail + ' ' + fromHeader)
-      && /error|alert|issue|incident|fail|warn|limit|spike|degrad/i.test(subject);
+    const isSystemAlert = /sentry|vercel|stripe|twilio|neon\.tech|cloudflare|github|resend|google|mailer-daemon/i.test(fromEmail + ' ' + fromHeader)
+      && /error|alert|issue|incident|fail|warn|limit|spike|degrad|quota|block|bounce|reject|suspend|delivery/i.test(subject + ' ' + fromEmail);
 
     // Skip auto-replies, newsletters, notifications, bulk senders — BUT NOT system alerts
     const autoSubmitted = headers.find(h => h.name?.toLowerCase() === 'auto-submitted')?.value ?? '';
