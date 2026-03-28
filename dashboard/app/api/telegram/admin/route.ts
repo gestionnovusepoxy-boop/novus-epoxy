@@ -205,17 +205,6 @@ const TOOLS = [
       required: ['liste'],
     },
   },
-  {
-    name: 'lancer_liste_prix',
-    description: 'Envoie la liste de prix Novus Epoxy par email a tous les leads CRM qui ont un email et statut = nouveau. Utilise quand Luca ou Jason dit "lance la liste de prix" ou "envoie les prix aux leads".',
-    input_schema: {
-      type: 'object',
-      properties: {
-        source: { type: 'string', description: 'Filtrer par source (optionnel)', default: '' },
-      },
-      required: [],
-    },
-  },
 ];
 
 // Execute tool calls
@@ -612,60 +601,6 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify({ leads: rows, periode: `${days} derniers jours`, total: rows.length });
     }
 
-    case 'lancer_liste_prix': {
-      const source = (input.source as string) || '';
-      const leads = source
-        ? await query(
-            `SELECT id, nom, email FROM crm_leads WHERE statut = 'nouveau' AND email IS NOT NULL AND TRIM(email) != '' AND source = $1`,
-            [source]
-          )
-        : await query(
-            `SELECT id, nom, email FROM crm_leads WHERE statut = 'nouveau' AND email IS NOT NULL AND TRIM(email) != ''`
-          );
-
-      if (leads.length === 0) return JSON.stringify({ ok: true, envoyes: 0, message: 'Aucun lead nouveau avec email' });
-
-
-      const priceListHtml = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#1e293b;">
-    <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:50px;margin-bottom:20px;" />
-    <h2 style="color:#0f172a;margin:0 0 16px;">Nos services et tarifs</h2>
-    <p>Merci de votre interet pour Novus Epoxy! Voici un apercu de nos services:</p>
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin:16px 0;border-collapse:collapse;">
-      <tr style="background:#f8fafc;"><td style="padding:10px;border:1px solid #e2e8f0;font-weight:600;">Epoxy Flake/Flocon</td><td style="padding:10px;border:1px solid #e2e8f0;">A partir de 8,50$/pi\u00b2</td><td style="padding:10px;border:1px solid #e2e8f0;color:#64748b;">Garage, sous-sol</td></tr>
-      <tr><td style="padding:10px;border:1px solid #e2e8f0;font-weight:600;">Epoxy Quartz</td><td style="padding:10px;border:1px solid #e2e8f0;">A partir de 11,00$/pi\u00b2</td><td style="padding:10px;border:1px solid #e2e8f0;color:#64748b;">Balcons, exterieurs</td></tr>
-      <tr style="background:#f8fafc;"><td style="padding:10px;border:1px solid #e2e8f0;font-weight:600;">Epoxy Metallique</td><td style="padding:10px;border:1px solid #e2e8f0;">A partir de 12,75$/pi\u00b2</td><td style="padding:10px;border:1px solid #e2e8f0;color:#64748b;">Premium, haut de gamme</td></tr>
-      <tr><td style="padding:10px;border:1px solid #e2e8f0;font-weight:600;">Commercial/Industriel</td><td style="padding:10px;border:1px solid #e2e8f0;">A partir de 15,00$/pi\u00b2</td><td style="padding:10px;border:1px solid #e2e8f0;color:#64748b;">Entrepots, commerces</td></tr>
-    </table>
-    <p style="color:#64748b;font-size:13px;">* Prix selon superficie, preparation du beton et complexite du projet.</p>
-    <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:20px 0;text-align:center;">
-      <p style="margin:0;font-weight:700;font-size:16px;">Soumission gratuite en ligne</p>
-      <p style="margin:8px 0 12px;color:#64748b;">Choisissez vos couleurs et options en 2 minutes</p>
-      <a href="https://novusepoxy.ca/#contact" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;">Obtenir ma soumission gratuite</a>
-    </div>
-    <p>Vous pouvez aussi nous appeler directement:<br/><strong>Luca: 581-307-5983</strong> | <strong>Jason: 581-307-2678</strong></p>
-    <hr style="border:none;border-top:1px solid #e2e8f0;margin:24px 0;" />
-    <p style="color:#64748b;font-size:12px;">Novus Epoxy \u2014 RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/><a href="https://novusepoxy.ca">novusepoxy.ca</a></p>
-  </div>`;
-
-      let sent = 0;
-      for (const lead of leads as Array<{ id: number; nom: string; email: string }>) {
-        try {
-          const firstName = lead.nom.split(' ')[0];
-          const personalizedHtml = priceListHtml.replace(
-            'Merci de votre interet',
-            `Bonjour ${firstName},\n\nMerci de votre interet`
-          );
-          await sendProspectEmail({ to: lead.email, subject: 'Nos tarifs et services — Novus Epoxy', html: personalizedHtml });
-          await query(
-            `UPDATE crm_leads SET statut = 'contacte', last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $1`,
-            [lead.id]
-          );
-          sent++;
-        } catch { /* continue */ }
-      }
-
-      return JSON.stringify({ ok: true, envoyes: sent, total_leads: leads.length });
-    }
 
     default:
       return JSON.stringify({ error: `Outil inconnu: ${name}` });
@@ -688,16 +623,10 @@ TU PEUX:
 - Ajouter des photos au portfolio (envoie une photo avec caption "portfolio")
 - Scanner des recus/factures (envoie une photo du recu)
 - Importer une liste de leads en bulk dans la banque CRM (outil importer_leads_liste)
-- Lancer la liste de prix par email a tous les leads nouveau (outil lancer_liste_prix)
 - Analyser et classer les leads/soumissions recents (chaud/tiede/froid, urgence, action suggeree)
 - Repondre aux questions sur les clients et leur suivi
 
-PRIX:
-- Flake (Flocon): 8.50$/pi2
-- Metallique: 12.75$/pi2
-- Commercial: 15.00$/pi2
-- Taxes: TPS 5% + TVQ 9.975%
-- Depot: 30% du total
+IMPORTANT: Ne JAMAIS envoyer les prix/tarifs par email aux prospects. Les prix sont donnes uniquement dans les soumissions officielles.
 
 SERVICES OFFERTS:
 - Planchers epoxy metallique (residentiel et commercial)
