@@ -1282,7 +1282,7 @@ Reponds en JSON strict:
       if (histRow.length > 0) history = JSON.parse(histRow[0].value as string);
     } catch { /* start fresh */ }
 
-    const messages: ClaudeMessage[] = [...history, { role: 'user', content: text }];
+    let messages: ClaudeMessage[] = [...history, { role: 'user', content: text }];
 
     let finalResponse = '';
     let iterations = 0;
@@ -1309,6 +1309,15 @@ Reponds en JSON strict:
       if (!claudeRes.ok) {
         const err = await claudeRes.text();
         console.error('Claude API error:', err);
+
+        // Auto-fix: if history is corrupted (tool_use_id mismatch), clear it and retry once
+        if ((err.includes('tool_use_id') || err.includes('tool_result')) && iterations <= 1) {
+          console.log('[Telegram] Corrupted history detected, clearing and retrying...');
+          await query(`DELETE FROM kv_store WHERE key = $1`, [historyKey]).catch(() => {});
+          messages = [{ role: 'user', content: text }];
+          continue;
+        }
+
         let errMsg = 'Erreur API Claude.';
         try {
           const parsed = JSON.parse(err);
