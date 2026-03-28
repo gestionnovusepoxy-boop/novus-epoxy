@@ -1,13 +1,10 @@
-import { google } from 'googleapis';
-
 /**
- * Sends prospect/outreach emails via Gmail API.
- * Display name: "Jason — Novus Epoxy"
- * From: gestionnovusepoxy@gmail.com (Gmail API — reliable delivery)
- * Reply-To: gestionnovusepoxy@gmail.com (so Aria catches replies)
+ * Sends prospect/outreach emails via Resend API.
+ * Display name: "Jason - Novus Epoxy"
+ * Reply-To: gestionnovusepoxy@gmail.com (Aria catches replies)
  *
- * Previously used Hostinger SMTP (jason@novusepoxy.shop) but domain DNS
- * was not configured (SPF/DKIM missing), so emails never arrived.
+ * Uses Resend instead of Gmail API to avoid Gmail rate limits/blocks.
+ * Resend free tier: 3000 emails/month, 100/day.
  */
 export async function sendProspectEmail({
   to,
@@ -20,36 +17,29 @@ export async function sendProspectEmail({
   html: string;
   replyTo?: string;
 }): Promise<{ id: string }> {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) throw new Error('RESEND_API_KEY missing');
 
-  if (!clientId || !clientSecret || !refreshToken) {
-    throw new Error('Gmail credentials missing');
-  }
-
-  const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
-  oauth2.setCredentials({ refresh_token: refreshToken });
-  const gmail = google.gmail({ version: 'v1', auth: oauth2 });
-
-  const fromHeader = 'Jason - Novus Epoxy <gestionnovusepoxy@gmail.com>';
-
-  const headerLines = [
-    `From: ${fromHeader}`,
-    `To: ${to}`,
-    `Subject: ${subject}`,
-    `Reply-To: ${replyTo ?? 'gestionnovusepoxy@gmail.com'}`,
-    'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=utf-8',
-  ].join('\r\n');
-
-  const raw = `${headerLines}\r\n\r\n${html}`;
-  const encoded = Buffer.from(raw).toString('base64url');
-
-  const res = await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw: encoded },
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: 'Jason - Novus Epoxy <onboarding@resend.dev>',
+      to,
+      subject,
+      html,
+      reply_to: replyTo ?? 'gestionnovusepoxy@gmail.com',
+    }),
   });
 
-  return { id: res.data.id ?? `gmail-${Date.now()}` };
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Resend error ${res.status}: ${err}`);
+  }
+
+  const data = await res.json();
+  return { id: data.id ?? `resend-${Date.now()}` };
 }
