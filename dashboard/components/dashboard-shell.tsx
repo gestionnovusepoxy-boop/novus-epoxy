@@ -65,18 +65,19 @@ export function DashboardShell({ email, signOutAction, sidebar, children }: Dash
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Mobile top bar with hamburger */}
-        <div className="md:hidden flex items-center gap-3 p-3 bg-slate-800 border-b border-slate-700 sticky top-0 z-20">
+        <div className="md:hidden flex items-center gap-3 px-4 py-3 bg-slate-800 border-b border-slate-700 sticky top-0 z-20" style={{ paddingTop: 'max(12px, env(safe-area-inset-top))' }}>
           <button
             onClick={() => setOpen(true)}
-            className="text-white p-2 hover:bg-slate-700 rounded-lg"
+            className="text-white p-3 -m-1 hover:bg-slate-700 rounded-lg active:bg-slate-600"
+            aria-label="Menu"
           >
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <line x1="3" y1="6" x2="21" y2="6" />
               <line x1="3" y1="12" x2="21" y2="12" />
               <line x1="3" y1="18" x2="21" y2="18" />
             </svg>
           </button>
-          <span className="text-white font-semibold text-sm">Novus Epoxy</span>
+          <span className="text-white font-bold text-base">Novus Epoxy</span>
         </div>
 
         <main className="flex-1 overflow-auto">

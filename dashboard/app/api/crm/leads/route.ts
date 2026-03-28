@@ -140,6 +140,15 @@ export async function PATCH(req: NextRequest) {
     params.push(body.temperature);
   }
 
+  // Editable fields from detail panel
+  const textFields = ['telephone', 'email', 'service', 'superficie', 'ville', 'notes', 'type'] as const;
+  for (const field of textFields) {
+    if (body[field] !== undefined) {
+      sets.push(`${field} = $${i++}`);
+      params.push(body[field] || null);
+    }
+  }
+
   if (sets.length === 0) return NextResponse.json({ error: 'rien à mettre à jour' }, { status: 400 });
 
   sets.push(`updated_at = NOW()`);

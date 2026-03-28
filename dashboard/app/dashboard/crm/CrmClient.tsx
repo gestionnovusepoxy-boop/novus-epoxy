@@ -69,6 +69,99 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function LeadDetail({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
+  const [form, setForm] = useState({
+    telephone: lead.telephone ?? '',
+    email: lead.email ?? '',
+    service: lead.service ?? '',
+    superficie: lead.superficie ?? '',
+    ville: lead.ville ?? '',
+    notes: lead.notes ?? '',
+    type: lead.type ?? 'residentiel',
+  });
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  async function save() {
+    setSaving(true);
+    await fetch(`/api/crm/leads?id=${lead.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(form),
+    });
+    setSaving(false);
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+    onUpdate();
+  }
+
+  const inputCls = 'bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-full';
+
+  return (
+    <tr className="bg-slate-800/80 border-b border-slate-700">
+      <td colSpan={10} className="px-4 sm:px-6 py-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="text-slate-500 text-xs mb-1 block">Telephone</label>
+            <input value={form.telephone} onChange={e => setForm(f => ({ ...f, telephone: e.target.value }))} placeholder="581-XXX-XXXX" className={inputCls} />
+          </div>
+          <div>
+            <label className="text-slate-500 text-xs mb-1 block">Email</label>
+            <input value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} placeholder="email@..." className={inputCls} />
+          </div>
+          <div>
+            <label className="text-slate-500 text-xs mb-1 block">Service</label>
+            <select value={form.service} onChange={e => setForm(f => ({ ...f, service: e.target.value }))} className={inputCls}>
+              <option value="">—</option>
+              <option value="flake">Flake / Flocon</option>
+              <option value="metallique">Metallique</option>
+              <option value="couleur_unie">Couleur unie</option>
+              <option value="quartz">Quartz</option>
+              <option value="commercial">Commercial</option>
+              <option value="antiderapant">Antiderapant</option>
+              <option value="meulage">Meulage</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-slate-500 text-xs mb-1 block">Superficie (pi²)</label>
+            <input value={form.superficie} onChange={e => setForm(f => ({ ...f, superficie: e.target.value }))} placeholder="ex: 800" className={inputCls} />
+          </div>
+          <div>
+            <label className="text-slate-500 text-xs mb-1 block">Ville</label>
+            <input value={form.ville} onChange={e => setForm(f => ({ ...f, ville: e.target.value }))} placeholder="Quebec, Levis..." className={inputCls} />
+          </div>
+          <div>
+            <label className="text-slate-500 text-xs mb-1 block">Type</label>
+            <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as LeadType }))} className={inputCls}>
+              <option value="residentiel">Residentiel</option>
+              <option value="commercial">Commercial</option>
+            </select>
+          </div>
+          <div className="col-span-2 sm:col-span-3">
+            <label className="text-slate-500 text-xs mb-1 block">Notes</label>
+            <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Details du projet, adresse, infos de l'appel..." rows={3} className={inputCls} />
+          </div>
+        </div>
+        <div className="flex items-center gap-3 mt-3">
+          <button onClick={save} disabled={saving} className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-5 py-2 text-sm transition disabled:opacity-50">
+            {saving ? 'Sauvegarde...' : saved ? '✓ Sauvegarde!' : 'Sauvegarder'}
+          </button>
+          {lead.telephone && (
+            <a href={`tel:${lead.telephone.replace(/[^0-9+]/g, '')}`} className="bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition">
+              Appeler
+            </a>
+          )}
+          {lead.email && (
+            <a href={`mailto:${lead.email}`} className="text-amber-400 hover:text-amber-300 text-sm">
+              {lead.email}
+            </a>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle, onExpand, isExpanded }: { lead: Lead; onUpdate: () => void; onProspect: (id: number) => void; prospecting: boolean; isSelected: boolean; onToggle: (id: number) => void; onExpand: (id: number) => void; isExpanded: boolean }) {
   const [loadingStatut, setLoadingStatut] = useState(false);
   const [loadingTemp, setLoadingTemp]     = useState(false);
@@ -205,42 +298,7 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
         </div>
       </td>
     </tr>
-    {isExpanded && (
-      <tr className="bg-slate-800/80 border-b border-slate-700">
-        <td colSpan={10} className="px-6 py-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <div>
-              <p className="text-slate-500 text-xs mb-1">Service</p>
-              <p className="text-white">{lead.service || '—'}</p>
-            </div>
-            <div>
-              <p className="text-slate-500 text-xs mb-1">Superficie</p>
-              <p className="text-white">{lead.superficie ? `${lead.superficie} pi²` : '—'}</p>
-            </div>
-            <div>
-              <p className="text-slate-500 text-xs mb-1">Ville</p>
-              <p className="text-white">{lead.ville || '—'}</p>
-            </div>
-            <div>
-              <p className="text-slate-500 text-xs mb-1">Type</p>
-              <p className="text-white">{lead.type === 'commercial' ? 'Commercial' : 'Résidentiel'}</p>
-            </div>
-            {lead.notes && (
-              <div className="col-span-2 sm:col-span-4">
-                <p className="text-slate-500 text-xs mb-1">Notes</p>
-                <p className="text-white whitespace-pre-wrap">{lead.notes}</p>
-              </div>
-            )}
-            {lead.email && (
-              <div className="col-span-2">
-                <p className="text-slate-500 text-xs mb-1">Email</p>
-                <a href={`mailto:${lead.email}`} className="text-amber-400 hover:text-amber-300">{lead.email}</a>
-              </div>
-            )}
-          </div>
-        </td>
-      </tr>
-    )}
+    {isExpanded && <LeadDetail lead={lead} onUpdate={onUpdate} />}
     </>
   );
 }
