@@ -114,8 +114,12 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
         <input type="checkbox" checked={isSelected} onChange={() => onToggle(lead.id)} disabled={!lead.email || !!lead.prospect_sent_at} className="accent-amber-500" />
       </td>
       <td className="px-4 py-3">
-        <p className="text-white text-sm font-medium">{lead.nom}</p>
-        <div className="flex gap-1 items-center">
+        <div className="flex items-center gap-2">
+          <p className="text-white text-sm font-medium">{lead.nom}</p>
+          {lead.type === 'commercial' && <span className="text-[10px] font-semibold bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">Com.</span>}
+          {lead.type === 'residentiel' && <span className="text-[10px] font-semibold bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded border border-sky-500/30">Rés.</span>}
+        </div>
+        <div className="flex gap-1 items-center mt-0.5">
           {lead.source && <span className="text-slate-500 text-xs">via {lead.source}</span>}
           {lead.prospect_sent_at && <span className="text-emerald-400 text-[10px] font-medium bg-emerald-500/20 px-1.5 py-0.5 rounded">Offre envoyee</span>}
         </div>
@@ -531,77 +535,53 @@ export default function CrmClient() {
         ))}
       </div>
 
-      {/* Source filter */}
-      <div className="flex gap-2 flex-wrap">
-        {[
-          { value: '', label: 'Tous', count: sources._total ?? 0 },
-          { value: 'jason', label: '🏗️ Jason', count: sources.jason ?? 0 },
-          { value: 'manuel', label: 'Manuel', count: sources.manuel ?? 0 },
-          ...(sources.champfield ? [{ value: 'champfield', label: 'Champfield', count: sources.champfield }] : []),
-          ...(sources.google_ads ? [{ value: 'google_ads', label: 'Google Ads', count: sources.google_ads }] : []),
-          ...(sources.facebook ? [{ value: 'facebook', label: 'Facebook', count: sources.facebook }] : []),
-          ...(sources.chatbot ? [{ value: 'chatbot', label: 'Chatbot', count: sources.chatbot }] : []),
-        ].map(tab => (
-          <button
-            key={tab.value}
-            onClick={() => { setSourceFilter(tab.value); setPage(1); }}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${
-              sourceFilter === tab.value
-                ? 'bg-blue-600 text-white'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
+      {/* Filters — one compact row */}
+      <div className="flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          placeholder="Rechercher..."
+          value={search}
+          onChange={e => { setSearch(e.target.value); setPage(1); }}
+          className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-48"
+        />
+        <select
+          value={statut}
+          onChange={e => { setStatut(e.target.value); setPage(1); }}
+          className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+        >
+          <option value="">Tous les statuts</option>
+          {STATUTS.map(s => <option key={s} value={s}>{STATUT_LABEL[s]}</option>)}
+        </select>
+        <select
+          value={type}
+          onChange={e => { setType(e.target.value); setPage(1); }}
+          className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
+        >
+          <option value="">Rés. + Com.</option>
+          <option value="residentiel">Résidentiel</option>
+          <option value="commercial">Commercial</option>
+        </select>
+        {Object.keys(sources).filter(k => k !== '_total').length > 1 && (
+          <select
+            value={sourceFilter}
+            onChange={e => { setSourceFilter(e.target.value); setPage(1); }}
+            className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500"
           >
-            {tab.label}
-            {tab.count > 0 && <span className={`text-xs px-1.5 py-0.5 rounded-full ${sourceFilter === tab.value ? 'bg-blue-500' : 'bg-slate-600'}`}>{tab.count}</span>}
-          </button>
-        ))}
-      </div>
-
-      {/* Type filter */}
-      <div className="flex gap-2">
-        {[
-          { value: '', label: 'Tous' },
-          { value: 'residentiel', label: 'Résidentiel' },
-          { value: 'commercial', label: 'Commercial' },
-        ].map(tab => (
+            <option value="">Toutes les sources</option>
+            {Object.entries(sources).filter(([k]) => k !== '_total').map(([key, count]) => (
+              <option key={key} value={key}>{key.charAt(0).toUpperCase() + key.slice(1).replace('_', ' ')} ({count})</option>
+            ))}
+          </select>
+        )}
+        {(statut || type || sourceFilter || tempFilter) && (
           <button
-            key={tab.value}
-            onClick={() => { setType(tab.value); setPage(1); }}
-            className={`px-4 py-2 rounded-lg text-sm font-semibold transition ${
-              type === tab.value
-                ? 'bg-amber-500 text-slate-900'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
+            onClick={() => { setStatut(''); setType(''); setSourceFilter(''); setTempFilter(''); setPage(1); }}
+            className="text-slate-400 hover:text-white text-xs transition"
           >
-            {tab.label}
+            Effacer filtres
           </button>
-        ))}
+        )}
       </div>
-
-      {/* Status filter */}
-      <div className="flex gap-2 flex-wrap">
-        {FILTER_TABS.map(tab => (
-          <button
-            key={tab.value}
-            onClick={() => { setStatut(tab.value); setPage(1); }}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-              statut === tab.value
-                ? 'bg-slate-600 text-white'
-                : 'bg-slate-700 text-slate-400 hover:bg-slate-600'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
-      <input
-        type="text"
-        placeholder="Rechercher nom, téléphone ou email..."
-        value={search}
-        onChange={e => { setSearch(e.target.value); setPage(1); }}
-        className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-full max-w-sm"
-      />
 
       {selected.size > 0 && (
         <div className="flex items-center gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
