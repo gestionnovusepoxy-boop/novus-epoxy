@@ -527,9 +527,13 @@ export async function GET(req: NextRequest) {
 
   // Fetch emails — support ?all=true to include read emails
   const includeRead = req.nextUrl.searchParams.get('all') === 'true';
+  const searchSubject = req.nextUrl.searchParams.get('subject') ?? '';
+  const baseQuery = searchSubject
+    ? `subject:${searchSubject}`
+    : includeRead ? `after:${afterEpoch}` : `is:unread after:${afterEpoch}`;
   const listRes = await gmail.users.messages.list({
     userId: 'me',
-    q: includeRead ? `after:${afterEpoch}` : `is:unread after:${afterEpoch}`,
+    q: baseQuery,
     maxResults: 20,
   });
 
