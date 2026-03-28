@@ -522,10 +522,11 @@ export async function GET(req: NextRequest) {
   const afterDate = lastScan ?? new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
   const afterEpoch = Math.floor(new Date(afterDate).getTime() / 1000);
 
-  // Fetch unread emails
+  // Fetch emails — support ?all=true to include read emails
+  const includeRead = req.nextUrl.searchParams.get('all') === 'true';
   const listRes = await gmail.users.messages.list({
     userId: 'me',
-    q: `is:unread after:${afterEpoch}`,
+    q: includeRead ? `after:${afterEpoch}` : `is:unread after:${afterEpoch}`,
     maxResults: 20,
   });
 
