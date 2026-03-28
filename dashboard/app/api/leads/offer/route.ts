@@ -123,8 +123,8 @@ const OFFER_HTML = `<!DOCTYPE html>
 
     <!-- CTA -->
     <div style="text-align:center;margin:35px 0 20px;">
-      <a href="tel:+15813075983" style="display:inline-block;background:linear-gradient(135deg,#d4a853,#c49b45);color:#111827;text-decoration:none;padding:16px 40px;border-radius:8px;font-weight:700;font-size:16px;">Parlons-en &#8594; 581-307-5983</a>
-      <p style="font-size:13px;color:#94a3b8;margin-top:10px;">Appel ou texto, on r&eacute;pond rapidement</p>
+      <a href="https://novusepoxy.ca/#contact" style="display:inline-block;background:linear-gradient(135deg,#d4a853,#c49b45);color:#111827;text-decoration:none;padding:16px 40px;border-radius:8px;font-weight:700;font-size:16px;">Demander une soumission gratuite</a>
+      <p style="font-size:14px;color:#374151;margin-top:14px;">ou appelez-nous : <a href="tel:+15813075983" style="color:#d4a853;font-weight:700;text-decoration:none;">581-307-5983</a></p>
     </div>
 
     <!-- Signature -->
