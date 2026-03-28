@@ -181,9 +181,10 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
           )}
           <button
             onClick={handleDelete}
-            className="text-slate-600 hover:text-red-400 transition text-xs"
+            className="text-slate-600 hover:text-red-400 transition text-sm"
+            title="Supprimer ce lead"
           >
-            Suppr.
+            🗑
           </button>
         </div>
       </td>
