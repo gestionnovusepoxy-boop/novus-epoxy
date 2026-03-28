@@ -32,7 +32,7 @@ export async function sendProspectEmail({
   oauth2.setCredentials({ refresh_token: refreshToken });
   const gmail = google.gmail({ version: 'v1', auth: oauth2 });
 
-  const fromHeader = 'Jason — Novus Epoxy <gestionnovusepoxy@gmail.com>';
+  const fromHeader = 'Jason - Novus Epoxy <gestionnovusepoxy@gmail.com>';
 
   const headerLines = [
     `From: ${fromHeader}`,
