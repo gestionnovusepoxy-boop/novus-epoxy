@@ -82,6 +82,34 @@ export async function GET(req: NextRequest) {
     checks.push({ name: 'Telegram Bot', ok: false, detail: String(err) });
   }
 
+  // 3b. Telegram webhook — verify it's set and auto-fix if not
+  try {
+    const whRes = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/getWebhookInfo`);
+    const whData = await whRes.json();
+    const webhookUrl = whData.result?.url ?? '';
+    const expectedUrl = 'https://novus-epoxy.vercel.app/api/telegram/admin';
+    if (webhookUrl === expectedUrl) {
+      const lastErr = whData.result?.last_error_message;
+      if (lastErr) {
+        checks.push({ name: 'Telegram Webhook', ok: false, detail: `Webhook actif mais erreur recente: ${lastErr}` });
+      } else {
+        checks.push({ name: 'Telegram Webhook', ok: true, detail: `Webhook actif — ${whData.result?.pending_update_count ?? 0} pending` });
+      }
+    } else {
+      // Auto-fix: re-register webhook
+      const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET ?? '';
+      const fixRes = await fetch(`https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: expectedUrl, secret_token: webhookSecret, allowed_updates: ['message', 'callback_query'] }),
+      });
+      const fixData = await fixRes.json();
+      checks.push({ name: 'Telegram Webhook', ok: fixData.ok, detail: fixData.ok ? 'Webhook repare automatiquement!' : `Auto-fix echoue: ${fixData.description}`, autoFixed: fixData.ok });
+    }
+  } catch (err) {
+    checks.push({ name: 'Telegram Webhook', ok: false, detail: String(err) });
+  }
+
   // 4. Gmail OAuth + Watch
   let watchAutoFixed = false;
   try {
