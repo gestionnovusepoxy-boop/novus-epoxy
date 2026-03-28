@@ -69,7 +69,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle }: { lead: Lead; onUpdate: () => void; onProspect: (id: number) => void; prospecting: boolean; isSelected: boolean; onToggle: (id: number) => void }) {
+function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle, onExpand, isExpanded }: { lead: Lead; onUpdate: () => void; onProspect: (id: number) => void; prospecting: boolean; isSelected: boolean; onToggle: (id: number) => void; onExpand: (id: number) => void; isExpanded: boolean }) {
   const [loadingStatut, setLoadingStatut] = useState(false);
   const [loadingTemp, setLoadingTemp]     = useState(false);
   const [copied, setCopied]               = useState(false);
@@ -109,13 +109,14 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
   }
 
   return (
-    <tr className="border-b border-slate-700 hover:bg-slate-700/30 transition">
+    <>
+    <tr className="border-b border-slate-700 hover:bg-slate-700/30 transition cursor-pointer">
       <td className="px-4 py-3">
         <input type="checkbox" checked={isSelected} onChange={() => onToggle(lead.id)} disabled={!lead.email || !!lead.prospect_sent_at} className="accent-amber-500" />
       </td>
-      <td className="px-4 py-3">
+      <td className="px-4 py-3 cursor-pointer" onClick={() => onExpand(lead.id)}>
         <div className="flex items-center gap-2">
-          <p className="text-white text-sm font-medium">{lead.nom}</p>
+          <p className="text-white text-sm font-medium hover:text-amber-400 transition">{lead.nom}</p>
           {lead.type === 'commercial' && <span className="text-[10px] font-semibold bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">Com.</span>}
           {lead.type === 'residentiel' && <span className="text-[10px] font-semibold bg-sky-500/20 text-sky-300 px-1.5 py-0.5 rounded border border-sky-500/30">Rés.</span>}
         </div>
@@ -126,13 +127,22 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
       </td>
       <td className="px-4 py-3">
         {lead.telephone ? (
-          <button
-            onClick={copyPhone}
-            className="text-slate-300 text-sm hover:text-amber-400 transition text-left"
-            title="Cliquer pour copier"
-          >
-            {copied ? '✓ Copié' : lead.telephone}
-          </button>
+          <div className="flex items-center gap-1.5">
+            <a
+              href={`tel:${lead.telephone.replace(/[^0-9+]/g, '')}`}
+              className="text-amber-400 hover:text-amber-300 transition text-sm font-medium"
+              title="Appeler"
+            >
+              {lead.telephone}
+            </a>
+            <button
+              onClick={copyPhone}
+              className="text-slate-500 hover:text-white transition text-xs"
+              title="Copier"
+            >
+              {copied ? '✓' : '📋'}
+            </button>
+          </div>
         ) : (
           <span className="text-slate-600 text-sm">—</span>
         )}
@@ -195,6 +205,43 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
         </div>
       </td>
     </tr>
+    {isExpanded && (
+      <tr className="bg-slate-800/80 border-b border-slate-700">
+        <td colSpan={10} className="px-6 py-4">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
+            <div>
+              <p className="text-slate-500 text-xs mb-1">Service</p>
+              <p className="text-white">{lead.service || '—'}</p>
+            </div>
+            <div>
+              <p className="text-slate-500 text-xs mb-1">Superficie</p>
+              <p className="text-white">{lead.superficie ? `${lead.superficie} pi²` : '—'}</p>
+            </div>
+            <div>
+              <p className="text-slate-500 text-xs mb-1">Ville</p>
+              <p className="text-white">{lead.ville || '—'}</p>
+            </div>
+            <div>
+              <p className="text-slate-500 text-xs mb-1">Type</p>
+              <p className="text-white">{lead.type === 'commercial' ? 'Commercial' : 'Résidentiel'}</p>
+            </div>
+            {lead.notes && (
+              <div className="col-span-2 sm:col-span-4">
+                <p className="text-slate-500 text-xs mb-1">Notes</p>
+                <p className="text-white whitespace-pre-wrap">{lead.notes}</p>
+              </div>
+            )}
+            {lead.email && (
+              <div className="col-span-2">
+                <p className="text-slate-500 text-xs mb-1">Email</p>
+                <a href={`mailto:${lead.email}`} className="text-amber-400 hover:text-amber-300">{lead.email}</a>
+              </div>
+            )}
+          </div>
+        </td>
+      </tr>
+    )}
+    </>
   );
 }
 
@@ -227,6 +274,7 @@ export default function CrmClient() {
   const [importing, setImporting] = useState(false);
   const [autoProspect, setAutoProspect] = useState(true);
   const [bulkSending, setBulkSending] = useState(false);
+  const [expandedId, setExpandedId] = useState<number | null>(null);
 
   function toggleSelect(id: number) {
     setSelected(prev => {
@@ -617,7 +665,7 @@ export default function CrmClient() {
             {!loading && leads.length === 0 && (
               <tr><td colSpan={10} className="text-center py-8 text-slate-500 text-sm">Aucun lead</td></tr>
             )}
-            {!loading && leads.map(l => <LeadRow key={l.id} lead={l} onUpdate={load} onProspect={sendProspect} prospecting={prospectingId === l.id} isSelected={selected.has(l.id)} onToggle={toggleSelect} />)}
+            {!loading && leads.map(l => <LeadRow key={l.id} lead={l} onUpdate={load} onProspect={sendProspect} prospecting={prospectingId === l.id} isSelected={selected.has(l.id)} onToggle={toggleSelect} onExpand={(id) => setExpandedId(expandedId === id ? null : id)} isExpanded={expandedId === l.id} />)}
           </tbody>
         </table>
       </div>
