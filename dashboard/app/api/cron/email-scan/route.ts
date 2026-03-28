@@ -567,8 +567,163 @@ export async function GET(req: NextRequest) {
       });
     } catch { /* ignore */ }
 
-    // Skip our own emails
-    if (fromEmail.includes('novusepoxy') || fromEmail.includes('gestionnovusepoxy')) continue;
+    // Skip our own emails — BUT allow jason@novusepoxy.shop (lead imports)
+    const isJasonShop = fromEmail.toLowerCase() === 'jason@novusepoxy.shop';
+    if (!isJasonShop && (fromEmail.includes('novusepoxy') || fromEmail.includes('gestionnovusepoxy'))) continue;
+
+    // === JASON LEAD IMPORT VIA EMAIL ===
+    // When Jason sends a list of leads by email, auto-import into CRM + prospect
+    if (isJasonShop) {
+      // Get body text
+      let jasonBody = '';
+      const jParts = fullMsg.data.payload?.parts ?? [];
+      const jTextPart = jParts.find((p: { mimeType?: string }) => p.mimeType === 'text/plain');
+      if (jTextPart?.body?.data) {
+        jasonBody = Buffer.from(jTextPart.body.data, 'base64url').toString('utf-8');
+      } else if (fullMsg.data.payload?.body?.data) {
+        jasonBody = Buffer.from(fullMsg.data.payload.body.data, 'base64url').toString('utf-8');
+      }
+
+      // Check for CSV/TXT attachment
+      let attachedText = '';
+      for (const part of jParts) {
+        if (
+          part.body?.attachmentId &&
+          (part.mimeType === 'text/csv' || part.mimeType === 'text/plain' ||
+           part.filename?.endsWith('.csv') || part.filename?.endsWith('.txt'))
+        ) {
+          try {
+            const att = await gmail.users.messages.attachments.get({
+              userId: 'me',
+              messageId: msg.id,
+              id: part.body.attachmentId,
+            });
+            if (att.data.data) {
+              attachedText = Buffer.from(att.data.data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+            }
+          } catch { /* skip */ }
+          break;
+        }
+      }
+
+      const leadsText = attachedText || jasonBody;
+
+      // Check if it looks like a lead list (has phone numbers or multiple lines with names)
+      const lines = leadsText.split('\n').filter((l: string) => l.trim().length > 3);
+      const hasPhones = (leadsText.match(/\d{3}[\s.-]?\d{3}[\s.-]?\d{4}/g) || []).length >= 2;
+      const hasMultipleLines = lines.length >= 3;
+
+      if (hasPhones || hasMultipleLines) {
+        // Parse with Claude
+        const apiKey = ANTHROPIC_KEY();
+        if (apiKey) {
+          try {
+            const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
+              method: 'POST',
+              headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: 'claude-haiku-4-5-20251001',
+                max_tokens: 4000,
+                messages: [{ role: 'user', content: `Parse cette liste de leads pour une entreprise de planchers epoxy au Quebec. Extrait chaque personne.\n\nLISTE:\n${leadsText.slice(0, 8000)}\n\nReponds UNIQUEMENT avec un JSON array:\n[{"nom":"Prenom Nom","telephone":"10 chiffres ou vide","email":"email ou vide","service":"flake|metallique|commercial|quartz ou vide","superficie":"nombre ou vide","ville":"ville ou vide","notes":"autres infos ou vide"}]` }],
+              }),
+            });
+
+            if (parseRes.ok) {
+              const data = await parseRes.json();
+              const raw = (data.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+              type ParsedLead = { nom: string; telephone: string; email: string; service: string; superficie: string; ville: string; notes: string };
+              let leads: ParsedLead[] = [];
+              try { const arr = JSON.parse(raw); leads = Array.isArray(arr) ? arr : []; } catch { /* */ }
+
+              if (leads.length > 0) {
+                // Score temperature
+                function scoreTemp(lead: ParsedLead): 'chaud' | 'tiede' | 'froid' {
+                  let score = 0;
+                  if (lead.email) score += 2;
+                  if (lead.telephone) score += 2;
+                  if (lead.service) score += 1;
+                  if (lead.superficie) score += 1;
+                  if (lead.ville) score += 1;
+                  const text = `${lead.notes} ${lead.service}`.toLowerCase();
+                  if (text.includes('urgent') || text.includes('bientot') || text.includes('soumission')) score += 3;
+                  if (score >= 6) return 'chaud';
+                  if (score >= 3) return 'tiede';
+                  return 'froid';
+                }
+
+                // Batch insert
+                let imported = 0;
+                const insertedIds: number[] = [];
+                const batchSize = 50;
+
+                for (let i = 0; i < leads.length; i += batchSize) {
+                  const batch = leads.slice(i, i + batchSize);
+                  const values: string[] = [];
+                  const params: (string | null)[] = [];
+                  let paramIdx = 1;
+
+                  for (const lead of batch) {
+                    if (!lead.nom || lead.nom.trim().length < 2) continue;
+                    const temp = scoreTemp(lead);
+                    values.push(`($${paramIdx},$${paramIdx+1},$${paramIdx+2},$${paramIdx+3},$${paramIdx+4},$${paramIdx+5},$${paramIdx+6},$${paramIdx+7},'nouveau',$${paramIdx+8})`);
+                    params.push(
+                      lead.nom.trim().slice(0, 120),
+                      (lead.telephone || '').replace(/\D/g, '').slice(-10) || null,
+                      (lead.email || '').slice(0, 255) || null,
+                      lead.service || null,
+                      lead.superficie || null,
+                      (lead.ville || '').slice(0, 120) || null,
+                      lead.notes || null,
+                      'jason',
+                      temp,
+                    );
+                    paramIdx += 9;
+                  }
+
+                  if (values.length > 0) {
+                    const insertedRows = await query(
+                      `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature) VALUES ${values.join(',')} RETURNING id`,
+                      params,
+                    );
+                    imported += values.length;
+                    insertedIds.push(...insertedRows.map((r: Record<string, unknown>) => (r as { id: number }).id));
+                  }
+                }
+
+                // Auto-prospect
+                let prospectResult = null;
+                if (insertedIds.length > 0) {
+                  try {
+                    const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+                    const res = await fetch(`${base}/api/leads/jason/prospect`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ADMIN_API_KEY ?? '' },
+                      body: JSON.stringify({ leadIds: insertedIds }),
+                    });
+                    if (res.ok) prospectResult = await res.json();
+                  } catch { /* */ }
+                }
+
+                // Notify Telegram
+                for (const chatId of ADMIN_CHAT_IDS()) {
+                  await sendTelegram(chatId,
+                    `📥 <b>Leads importes par email (Jason)</b>\n\n` +
+                    `📊 ${imported} leads importes dans le CRM\n` +
+                    `📧 Source: ${fromEmail}\n` +
+                    (prospectResult ? `🚀 Auto-prospect: ${(prospectResult as Record<string, unknown>).sent ?? 0} emails envoyes\n` : '') +
+                    `\n🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`,
+                  );
+                }
+              }
+            }
+          } catch (err) {
+            console.error('[Email Scan] Jason lead import error:', err);
+          }
+        }
+        continue; // Done processing this email
+      }
+      // If not a lead list, fall through to normal processing
+    }
 
     // Detect system/monitoring emails that should NOT be skipped (Sentry, Vercel, Stripe, etc.)
     const isSystemAlert = /sentry|vercel|stripe|twilio|neon\.tech|cloudflare|github/i.test(fromEmail + ' ' + fromHeader)
