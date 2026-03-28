@@ -14,12 +14,15 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search') ?? '';
   const offset = (page - 1) * limit;
 
-  let where = 'WHERE 1=1';
+  // By default, hide quotes that became invoices (depot_paye, planifie, complete)
+  // Unless a specific statut is requested or ?all=true
+  const showAll = searchParams.get('all') === 'true';
+  let where = showAll ? 'WHERE 1=1' : `WHERE statut NOT IN ('depot_paye', 'planifie', 'complete')`;
   const params: unknown[] = [];
   let i = 1;
 
   if (statut) {
-    where += ` AND statut = $${i++}`;
+    where = `WHERE statut = $${i++}`;
     params.push(statut);
   }
   if (search) {
