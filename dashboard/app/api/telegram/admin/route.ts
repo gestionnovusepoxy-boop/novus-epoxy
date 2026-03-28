@@ -515,7 +515,24 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         return 'froid';
       }
 
-      // Batch INSERT — 50 at a time (much faster than 1 by 1)
+      // Anti-doublon: check existing leads by phone or email
+      const existingPhones = new Set<string>();
+      const existingEmails = new Set<string>();
+      const phonesToCheck = allLeads.map(l => (l.telephone || '').replace(/\D/g, '').slice(-10)).filter(p => p.length === 10);
+      const emailsToCheck = allLeads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e.includes('@'));
+
+      if (phonesToCheck.length > 0) {
+        const phPlaceholders = phonesToCheck.map((_, i) => `$${i + 1}`).join(',');
+        const phRows = await query(`SELECT telephone FROM crm_leads WHERE telephone IN (${phPlaceholders})`, phonesToCheck);
+        phRows.forEach((r: Record<string, unknown>) => existingPhones.add(r.telephone as string));
+      }
+      if (emailsToCheck.length > 0) {
+        const emPlaceholders = emailsToCheck.map((_, i) => `$${i + 1}`).join(',');
+        const emRows = await query(`SELECT LOWER(email) as email FROM crm_leads WHERE LOWER(email) IN (${emPlaceholders})`, emailsToCheck);
+        emRows.forEach((r: Record<string, unknown>) => existingEmails.add(r.email as string));
+      }
+
+      // Batch INSERT — 50 at a time, skip duplicates
       let imported = 0;
       let skipped = 0;
       const insertedIds: number[] = [];
@@ -529,6 +546,11 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
 
         for (const lead of batch) {
           if (!lead.nom || lead.nom.trim().length < 2) { skipped++; continue; }
+          const phone = (lead.telephone || '').replace(/\D/g, '').slice(-10);
+          const email = (lead.email || '').toLowerCase().trim();
+          // Skip if phone or email already exists in CRM
+          if (phone.length === 10 && existingPhones.has(phone)) { skipped++; continue; }
+          if (email.includes('@') && existingEmails.has(email)) { skipped++; continue; }
           const temp = scoreTemp(lead);
           values.push(`($${paramIdx},$${paramIdx + 1},$${paramIdx + 2},$${paramIdx + 3},$${paramIdx + 4},$${paramIdx + 5},$${paramIdx + 6},$${paramIdx + 7},'nouveau',$${paramIdx + 8})`);
           params.push(

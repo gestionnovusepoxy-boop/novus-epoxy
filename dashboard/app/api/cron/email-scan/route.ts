@@ -651,8 +651,26 @@ export async function GET(req: NextRequest) {
                   return 'froid';
                 }
 
-                // Batch insert
+                // Anti-doublon: check existing leads by phone or email
+                const existingPhones = new Set<string>();
+                const existingEmails = new Set<string>();
+                const phonesToCheck = leads.map(l => (l.telephone || '').replace(/\D/g, '').slice(-10)).filter(p => p.length === 10);
+                const emailsToCheck = leads.map(l => (l.email || '').toLowerCase().trim()).filter(e => e.includes('@'));
+
+                if (phonesToCheck.length > 0) {
+                  const phPlaceholders = phonesToCheck.map((_, i) => `$${i + 1}`).join(',');
+                  const phRows = await query(`SELECT telephone FROM crm_leads WHERE telephone IN (${phPlaceholders})`, phonesToCheck);
+                  phRows.forEach((r: Record<string, unknown>) => existingPhones.add(r.telephone as string));
+                }
+                if (emailsToCheck.length > 0) {
+                  const emPlaceholders = emailsToCheck.map((_, i) => `$${i + 1}`).join(',');
+                  const emRows = await query(`SELECT LOWER(email) as email FROM crm_leads WHERE LOWER(email) IN (${emPlaceholders})`, emailsToCheck);
+                  emRows.forEach((r: Record<string, unknown>) => existingEmails.add(r.email as string));
+                }
+
+                // Batch insert (skip duplicates)
                 let imported = 0;
+                let skipped = 0;
                 const insertedIds: number[] = [];
                 const batchSize = 50;
 
@@ -664,11 +682,16 @@ export async function GET(req: NextRequest) {
 
                   for (const lead of batch) {
                     if (!lead.nom || lead.nom.trim().length < 2) continue;
+                    const phone = (lead.telephone || '').replace(/\D/g, '').slice(-10);
+                    const email = (lead.email || '').toLowerCase().trim();
+                    // Skip if phone or email already exists
+                    if (phone.length === 10 && existingPhones.has(phone)) { skipped++; continue; }
+                    if (email.includes('@') && existingEmails.has(email)) { skipped++; continue; }
                     const temp = scoreTemp(lead);
                     values.push(`($${paramIdx},$${paramIdx+1},$${paramIdx+2},$${paramIdx+3},$${paramIdx+4},$${paramIdx+5},$${paramIdx+6},$${paramIdx+7},'nouveau',$${paramIdx+8})`);
                     params.push(
                       lead.nom.trim().slice(0, 120),
-                      (lead.telephone || '').replace(/\D/g, '').slice(-10) || null,
+                      phone || null,
                       (lead.email || '').slice(0, 255) || null,
                       lead.service || null,
                       lead.superficie || null,
@@ -709,6 +732,7 @@ export async function GET(req: NextRequest) {
                   await sendTelegram(chatId,
                     `📥 <b>Leads importes par email (Jason)</b>\n\n` +
                     `📊 ${imported} leads importes dans le CRM\n` +
+                    (skipped > 0 ? `⏭️ ${skipped} doublons ignores\n` : '') +
                     `📧 Source: ${fromEmail}\n` +
                     (prospectResult ? `🚀 Auto-prospect: ${(prospectResult as Record<string, unknown>).sent ?? 0} emails envoyes\n` : '') +
                     `\n🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`,
