@@ -214,19 +214,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. Send SMS from Jason's Twilio number (if lead has phone)
-    if (lead.telephone?.trim()) {
-      try {
-        const smsMsg = lead.email
-          ? `Bonjour ${prenom}! C'est Jason de Novus Epoxy. Je viens de t'envoyer un email avec des photos de nos realisations. Si t'as un projet de plancher epoxy, on fait des soumissions gratuites! Reponds-moi ou appelle au 581-307-2678. Bonne journee!`
-          : `Bonjour ${prenom}! C'est Jason de Novus Epoxy. On se specialise en planchers epoxy haut de gamme dans la region de Quebec. Si t'as un projet, on offre une soumission gratuite! Appelle-moi au 581-307-2678 ou visite novusepoxy.ca. A bientot!`;
-
-        const sent = await sendSMS(lead.telephone, smsMsg, JASON_TWILIO);
-        if (sent) { smsSent++; contacted = true; }
-      } catch (err) {
-        console.error(`[Jason Prospect] SMS failed for ${lead.nom}:`, err);
-      }
-    }
+    // 2. PAS de SMS pour les offres de service — email seulement
+    // Les SMS sont reserves pour les relances apres reponse du client
 
     // 3. Update lead status ONLY if at least one contact method succeeded
     if (contacted) {

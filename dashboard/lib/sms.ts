@@ -5,7 +5,17 @@ const TWILIO_SID = () => process.env.TWILIO_ACCOUNT_SID ?? '';
 const TWILIO_TOKEN = () => process.env.TWILIO_AUTH_TOKEN ?? '';
 const TWILIO_FROM = () => process.env.TWILIO_PHONE_NUMBER ?? '';
 
-export async function sendSMS(to: string, body: string, fromOverride?: string): Promise<boolean> {
+export async function sendSMS(to: string, body: string, fromOverride?: string, skipQuietHours = true): Promise<boolean> {
+  // Quiet hours: no outbound SMS before 8h or after 21h Eastern (unless skipQuietHours=false)
+  if (skipQuietHours) {
+    const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Toronto' }));
+    const hour = now.getHours();
+    if (hour < 8 || hour >= 21) {
+      console.log(`[SMS] Quiet hours (${hour}h ET) — SMS bloque pour ${to}`);
+      return false;
+    }
+  }
+
   const sid = TWILIO_SID();
   const token = TWILIO_TOKEN();
   const from = fromOverride ?? TWILIO_FROM();
