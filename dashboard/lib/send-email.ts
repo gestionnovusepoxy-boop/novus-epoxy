@@ -16,18 +16,14 @@ export async function sendEmail({
   html: string;
   replyTo?: string;
 }): Promise<{ id: string }> {
-  // Try Gmail first
+  // Try Gmail first, fallback to Resend on ANY error
   try {
     const result = await sendViaGmail({ to, subject, html, replyTo });
     return result;
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // If Gmail rate limited or blocked, fallback to Resend
-    if (msg.includes('limit') || msg.includes('429') || msg.includes('quota') || msg.includes('suspended') || msg.includes('PERMISSION_DENIED')) {
-      console.log(`[sendEmail] Gmail blocked (${msg.slice(0, 80)}), falling back to Resend`);
-      return sendViaResend({ to, subject, html, replyTo });
-    }
-    throw err;
+    console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), falling back to Resend`);
+    return sendViaResend({ to, subject, html, replyTo });
   }
 }
 
