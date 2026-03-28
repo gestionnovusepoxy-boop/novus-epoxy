@@ -577,7 +577,7 @@ export async function GET(req: NextRequest) {
       // Get body text
       let jasonBody = '';
       const jParts = fullMsg.data.payload?.parts ?? [];
-      const jTextPart = jParts.find((p: { mimeType?: string }) => p.mimeType === 'text/plain');
+      const jTextPart = jParts.find((p) => p.mimeType === 'text/plain');
       if (jTextPart?.body?.data) {
         jasonBody = Buffer.from(jTextPart.body.data, 'base64url').toString('utf-8');
       } else if (fullMsg.data.payload?.body?.data) {
