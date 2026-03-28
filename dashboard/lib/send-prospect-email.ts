@@ -1,24 +1,14 @@
-import nodemailer from 'nodemailer';
+import { google } from 'googleapis';
 
 /**
- * Sends prospect/outreach emails FROM jason@novusepoxy.shop via Hostinger SMTP.
- * Used by Hunter (initial outreach) and Aria (follow-ups).
- * System/admin emails still go through Gmail API via sendEmail().
+ * Sends prospect/outreach emails via Gmail API.
+ * Display name: "Jason — Novus Epoxy"
+ * From: gestionnovusepoxy@gmail.com (Gmail API — reliable delivery)
+ * Reply-To: gestionnovusepoxy@gmail.com (so Aria catches replies)
+ *
+ * Previously used Hostinger SMTP (jason@novusepoxy.shop) but domain DNS
+ * was not configured (SPF/DKIM missing), so emails never arrived.
  */
-
-const JASON_EMAIL = 'jason@novusepoxy.shop';
-const JASON_PASSWORD = 'Jaydaytek300@';
-
-const transporter = nodemailer.createTransport({
-  host: 'smtp.hostinger.com',
-  port: 465,
-  secure: true,
-  auth: {
-    user: JASON_EMAIL,
-    pass: JASON_PASSWORD,
-  },
-});
-
 export async function sendProspectEmail({
   to,
   subject,
@@ -30,13 +20,36 @@ export async function sendProspectEmail({
   html: string;
   replyTo?: string;
 }): Promise<{ id: string }> {
-  const info = await transporter.sendMail({
-    from: `"Jason — Novus Epoxy" <${JASON_EMAIL}>`,
-    to,
-    subject,
-    html,
-    replyTo: replyTo ?? JASON_EMAIL,
+  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+  if (!clientId || !clientSecret || !refreshToken) {
+    throw new Error('Gmail credentials missing');
+  }
+
+  const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
+  oauth2.setCredentials({ refresh_token: refreshToken });
+  const gmail = google.gmail({ version: 'v1', auth: oauth2 });
+
+  const fromHeader = 'Jason — Novus Epoxy <gestionnovusepoxy@gmail.com>';
+
+  const headerLines = [
+    `From: ${fromHeader}`,
+    `To: ${to}`,
+    `Subject: ${subject}`,
+    `Reply-To: ${replyTo ?? 'gestionnovusepoxy@gmail.com'}`,
+    'MIME-Version: 1.0',
+    'Content-Type: text/html; charset=utf-8',
+  ].join('\r\n');
+
+  const raw = `${headerLines}\r\n\r\n${html}`;
+  const encoded = Buffer.from(raw).toString('base64url');
+
+  const res = await gmail.users.messages.send({
+    userId: 'me',
+    requestBody: { raw: encoded },
   });
 
-  return { id: info.messageId ?? `smtp-${Date.now()}` };
+  return { id: res.data.id ?? `gmail-${Date.now()}` };
 }
