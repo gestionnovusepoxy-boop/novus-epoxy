@@ -868,6 +868,24 @@ export async function GET(req: NextRequest) {
     );
     if (crmLeadRows.length > 0) {
       const lead = crmLeadRows[0] as { id: number; nom: string };
+
+      // Check if this email is on the no-auto-reply list (notify only, no response)
+      const noReplyRows = await query(`SELECT value FROM kv_store WHERE key = 'aria_no_reply_emails'`).catch(() => []);
+      const noReplyList: string[] = noReplyRows.length > 0 ? JSON.parse(noReplyRows[0].value as string) : [];
+      if (noReplyList.some(e => e.toLowerCase() === fromEmail.toLowerCase())) {
+        // Just notify admins on Telegram — do NOT auto-reply
+        for (const chatId of ADMIN_CHAT_IDS()) {
+          await sendTelegram(chatId,
+            `📬 <b>${lead.nom} a ecrit!</b>\n\n` +
+            `📧 ${fromEmail}\n` +
+            `📝 ${subject}\n\n` +
+            `💬 ${bodyText.slice(0, 500)}\n\n` +
+            `⚠️ <i>Pas de reponse auto — a toi de repondre!</i>`
+          );
+        }
+        continue;
+      }
+
       await handleLeadFollowUp(msg.id, fromEmail, subject, bodyText, lead.id, lead.nom);
       continue;
     }
