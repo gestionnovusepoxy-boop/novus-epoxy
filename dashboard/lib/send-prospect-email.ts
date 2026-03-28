@@ -27,7 +27,7 @@ export async function sendProspectEmail({
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Jason - Novus Epoxy <onboarding@resend.dev>',
+      from: 'Jason - Novus Epoxy <jason@novusepoxy.shop>',
       to,
       subject,
       html,
