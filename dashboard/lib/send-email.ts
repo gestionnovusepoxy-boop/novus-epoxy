@@ -86,6 +86,7 @@ async function sendViaResend({
       subject,
       html,
       reply_to: replyTo ?? 'gestionnovusepoxy@gmail.com',
+      bcc: ['gestionnovusepoxy@gmail.com'],
     }),
   });
 

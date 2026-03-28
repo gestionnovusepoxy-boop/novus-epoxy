@@ -32,6 +32,7 @@ export async function sendProspectEmail({
       subject,
       html,
       reply_to: replyTo ?? 'gestionnovusepoxy@gmail.com',
+      bcc: ['gestionnovusepoxy@gmail.com'],
     }),
   });
 
