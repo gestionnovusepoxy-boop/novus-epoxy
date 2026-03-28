@@ -5,8 +5,8 @@ import { query } from '@/lib/db';
 // Google sends a POST with a Pub/Sub message when new emails arrive.
 // We decode it, verify it's legit, then trigger the existing email-scan endpoint.
 
-// Cooldown: minimum 2 minutes between scans to avoid Telegram spam
-const COOLDOWN_MS = 2 * 60 * 1000;
+// Cooldown: minimum 10 seconds between scans for near-real-time processing
+const COOLDOWN_MS = 10 * 1000;
 
 export async function POST(req: NextRequest) {
   try {
