@@ -220,7 +220,7 @@ export async function POST(req: NextRequest) {
     // 3. Update lead status ONLY if at least one contact method succeeded
     if (contacted) {
       await query(
-        `UPDATE crm_leads SET prospect_sent_at = NOW(), statut = CASE WHEN statut = 'nouveau' THEN 'contacte' ELSE statut END, updated_at = NOW() WHERE id = $1`,
+        `UPDATE crm_leads SET prospect_sent_at = NOW(), statut = CASE WHEN statut = 'nouveau' THEN 'offre_envoyee' ELSE statut END, updated_at = NOW() WHERE id = $1`,
         [lead.id],
       ).catch(err => console.error(`[Jason Prospect] Status update failed for ${lead.id}:`, err));
     }

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 
-const VALID_STATUT = ['nouveau', 'contacte', 'devis_envoye', 'rdv_pris', 'ferme', 'gagne'] as const;
+const VALID_STATUT = ['nouveau', 'offre_envoyee', 'contacte', 'devis_envoye', 'rdv_pris', 'ferme', 'gagne'] as const;
 const VALID_TEMP   = ['chaud', 'tiede', 'froid'] as const;
 
 // Auto-score lead temperature based on notes keywords

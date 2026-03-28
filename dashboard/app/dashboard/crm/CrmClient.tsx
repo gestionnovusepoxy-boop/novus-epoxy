@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useEffect } from 'react';
 
-type Statut = 'nouveau' | 'contacte' | 'devis_envoye' | 'rdv_pris' | 'ferme' | 'gagne';
+type Statut = 'nouveau' | 'offre_envoyee' | 'contacte' | 'devis_envoye' | 'rdv_pris' | 'ferme' | 'gagne';
 type Temperature = 'chaud' | 'tiede' | 'froid';
 type LeadType = 'residentiel' | 'commercial';
 
@@ -23,24 +23,26 @@ interface Lead {
   created_at: string;
 }
 
-const STATUTS: Statut[] = ['nouveau', 'contacte', 'devis_envoye', 'rdv_pris', 'ferme', 'gagne'];
+const STATUTS: Statut[] = ['nouveau', 'offre_envoyee', 'contacte', 'devis_envoye', 'rdv_pris', 'ferme', 'gagne'];
 
 const STATUT_LABEL: Record<Statut, string> = {
-  nouveau:      'Nouveau',
-  contacte:     'Contacté',
-  devis_envoye: 'Devis envoyé',
-  rdv_pris:     'RDV pris',
-  ferme:        'Fermé',
-  gagne:        'Gagné',
+  nouveau:       'Nouveau',
+  offre_envoyee: 'Offre envoyée',
+  contacte:      'Contacté',
+  devis_envoye:  'Devis envoyé',
+  rdv_pris:      'RDV pris',
+  ferme:         'Fermé',
+  gagne:         'Gagné',
 };
 
 const STATUT_BADGE: Record<Statut, string> = {
-  nouveau:      'bg-slate-500/20 text-slate-300 border-slate-500/30',
-  contacte:     'bg-blue-500/20 text-blue-300 border-blue-500/30',
-  devis_envoye: 'bg-orange-500/20 text-orange-300 border-orange-500/30',
-  rdv_pris:     'bg-purple-500/20 text-purple-300 border-purple-500/30',
-  ferme:        'bg-red-500/20 text-red-300 border-red-500/30',
-  gagne:        'bg-green-500/20 text-green-300 border-green-500/30',
+  nouveau:       'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  offre_envoyee: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+  contacte:      'bg-blue-500/20 text-blue-300 border-blue-500/30',
+  devis_envoye:  'bg-orange-500/20 text-orange-300 border-orange-500/30',
+  rdv_pris:      'bg-purple-500/20 text-purple-300 border-purple-500/30',
+  ferme:         'bg-red-500/20 text-red-300 border-red-500/30',
+  gagne:         'bg-green-500/20 text-green-300 border-green-500/30',
 };
 
 const TEMP_LABEL: Record<Temperature, string> = {
@@ -69,7 +71,7 @@ function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('fr-CA', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function LeadDetail({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
+function LeadDetail({ lead, onUpdate, onClose }: { lead: Lead; onUpdate: () => void; onClose: () => void }) {
   const [form, setForm] = useState({
     telephone: lead.telephone ?? '',
     email: lead.email ?? '',
@@ -100,6 +102,10 @@ function LeadDetail({ lead, onUpdate }: { lead: Lead; onUpdate: () => void }) {
   return (
     <tr className="bg-slate-800/80 border-b border-slate-700">
       <td colSpan={10} className="px-4 sm:px-6 py-4">
+        <div className="flex justify-between items-center mb-3">
+          <p className="text-white font-semibold text-sm">{lead.nom}</p>
+          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl px-2">&times;</button>
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
             <label className="text-slate-500 text-xs mb-1 block">Telephone</label>
@@ -298,7 +304,7 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
         </div>
       </td>
     </tr>
-    {isExpanded && <LeadDetail lead={lead} onUpdate={onUpdate} />}
+    {isExpanded && <LeadDetail lead={lead} onUpdate={onUpdate} onClose={() => onExpand(lead.id)} />}
     </>
   );
 }
