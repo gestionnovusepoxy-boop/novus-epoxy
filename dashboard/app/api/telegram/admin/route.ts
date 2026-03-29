@@ -894,10 +894,127 @@ export async function POST(req: NextRequest) {
   if (!message) return NextResponse.json({ ok: true });
 
   const chatId = String(message.chat.id);
+  const senderId = String(message.from?.id ?? '');
   const adminIds = ADMIN_CHAT_IDS();
+  const isGroup = message.chat.type === 'group' || message.chat.type === 'supergroup';
+  const isAdmin = adminIds.includes(chatId) || adminIds.includes(senderId);
 
-  // Check if sender is an admin
-  if (adminIds.length > 0 && !adminIds.includes(chatId)) {
+  // GROUP MESSAGE: auto-detect leads from Jason's messages
+  if (isGroup) {
+    const text = (message.text ?? message.caption ?? '').trim();
+    if (!text || text.length < 10) return NextResponse.json({ ok: true });
+
+    // Check if message looks like leads (has phone numbers or multiple names)
+    const hasPhones = (text.match(/\d{3}[\s.\-]?\d{3}[\s.\-]?\d{4}/g) || []).length >= 1;
+    const hasMultipleLines = text.split('\n').filter((l: string) => l.trim().length > 3).length >= 2;
+    const looksLikeLeads = hasPhones || hasMultipleLines;
+
+    if (looksLikeLeads) {
+      // Parse leads with Claude Haiku
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (apiKey) {
+        try {
+          const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 4000,
+              messages: [{ role: 'user', content: `Parse cette liste de leads pour une entreprise de planchers epoxy au Quebec. Extrait chaque personne.\n\nLISTE:\n${text.slice(0, 8000)}\n\nSi ce n'est PAS une liste de leads/contacts (c'est une conversation normale, une question, etc.), reponds juste: []\n\nSinon reponds UNIQUEMENT avec un JSON array:\n[{"nom":"Prenom Nom","telephone":"10 chiffres ou vide","email":"email ou vide","service":"flake|metallique|commercial|quartz ou vide","superficie":"nombre ou vide","ville":"ville ou vide","notes":"autres infos ou vide"}]` }],
+            }),
+          });
+
+          if (parseRes.ok) {
+            const data = await parseRes.json();
+            const raw = (data.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            type ParsedLead = { nom: string; telephone: string; email: string; service: string; superficie: string; ville: string; notes: string };
+            let leads: ParsedLead[] = [];
+            try { const arr = JSON.parse(raw); leads = Array.isArray(arr) ? arr : []; } catch { /* not leads */ }
+
+            if (leads.length > 0) {
+              // Score temperature
+              function scoreTemp(lead: ParsedLead): 'chaud' | 'tiede' | 'froid' {
+                let score = 0;
+                if (lead.email) score += 2;
+                if (lead.telephone) score += 2;
+                if (lead.service) score += 1;
+                if (lead.superficie) score += 1;
+                if (lead.ville) score += 1;
+                const t = `${lead.notes} ${lead.service}`.toLowerCase();
+                if (t.includes('urgent') || t.includes('bientot') || t.includes('soumission')) score += 3;
+                if (score >= 6) return 'chaud';
+                if (score >= 3) return 'tiede';
+                return 'froid';
+              }
+
+              // Anti-doublon: check existing by phone or email
+              let imported = 0;
+              let skipped = 0;
+
+              for (const lead of leads) {
+                if (!lead.nom || lead.nom.trim().length < 2) continue;
+                const phone = (lead.telephone || '').replace(/\D/g, '').slice(-10);
+                const email = (lead.email || '').toLowerCase().trim();
+
+                // Check duplicates
+                if (phone.length === 10) {
+                  const existing = await query(`SELECT id FROM crm_leads WHERE telephone LIKE $1 LIMIT 1`, [`%${phone.slice(-7)}%`]);
+                  if (existing.length > 0) { skipped++; continue; }
+                }
+                if (email.includes('@')) {
+                  const existing = await query(`SELECT id FROM crm_leads WHERE LOWER(email) = LOWER($1) LIMIT 1`, [email]);
+                  if (existing.length > 0) { skipped++; continue; }
+                }
+
+                const temp = scoreTemp(lead);
+                await query(
+                  `INSERT INTO crm_leads (nom, telephone, email, service, superficie, ville, notes, source, statut, temperature)
+                   VALUES ($1,$2,$3,$4,$5,$6,$7,'jason','nouveau',$8)`,
+                  [lead.nom.trim().slice(0, 120), phone || null, email || null, lead.service || null, lead.superficie || null, (lead.ville || '').slice(0, 120) || null, lead.notes || null, temp]
+                );
+                imported++;
+              }
+
+              // Auto-prospect: send offers by EMAIL only (no SMS)
+              if (imported > 0) {
+                const newLeads = await query(
+                  `SELECT id FROM crm_leads WHERE source = 'jason' AND prospect_sent_at IS NULL AND email IS NOT NULL ORDER BY id DESC LIMIT $1`,
+                  [imported]
+                );
+                if (newLeads.length > 0) {
+                  const baseUrl = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+                  try {
+                    await fetch(`${baseUrl}/api/leads/jason/prospect`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ADMIN_API_KEY ?? '' },
+                      body: JSON.stringify({ leadIds: newLeads.map((r: Record<string, unknown>) => r.id) }),
+                    });
+                  } catch { /* best effort */ }
+                }
+              }
+
+              // Notify admins in private
+              for (const adminId of adminIds) {
+                await sendTelegram(adminId,
+                  `📥 <b>Leads importes du groupe</b>\n\n` +
+                  `📊 ${imported} nouveaux leads\n` +
+                  (skipped > 0 ? `⏭️ ${skipped} doublons ignores\n` : '') +
+                  `📧 Offres de service envoyees par email (pas de SMS)\n\n` +
+                  `🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`
+                );
+              }
+            }
+          }
+        } catch (err) {
+          console.error('[Telegram Group] Lead import error:', err);
+        }
+      }
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // PRIVATE MESSAGE: Check if sender is an admin
+  if (adminIds.length > 0 && !isAdmin) {
     await sendTelegram(chatId, "Acces refuse. Ce bot est reserve aux admins Novus Epoxy.");
     return NextResponse.json({ ok: true });
   }
