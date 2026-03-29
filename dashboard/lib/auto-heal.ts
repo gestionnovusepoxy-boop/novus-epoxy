@@ -94,11 +94,54 @@ export async function autoHeal(): Promise<void> {
     // Notify if any repairs were made
     if (repairs.length > 0) {
       await notifyRepair(
-        `🔧 <b>Aria — Auto-reparation</b>\n\n` +
+        `🔧 <b>Echo — Auto-reparation</b>\n\n` +
         repairs.map(r => `✅ ${r}`).join('\n') +
         `\n\n<i>Systeme repare automatiquement. Aucune action requise.</i>`
       );
     }
+
+    // Periodic status report — every 6 hours in the group
+    try {
+      const lastReportRows = await query(`SELECT value FROM kv_store WHERE key = 'last_echo_report'`);
+      const lastReport = lastReportRows?.[0]?.value as string | undefined;
+      const hoursSinceReport = lastReport ? (now - new Date(lastReport).getTime()) / (1000 * 60 * 60) : 999;
+
+      if (hoursSinceReport >= 6) {
+        // Gather system stats
+        const [gmailRows, telegramCheck, leadCount, todayLeads, pendingQuotes, activeJobs, emailsSent] = await Promise.all([
+          query(`SELECT value FROM kv_store WHERE key = 'last_email_scan'`),
+          (async () => { try { const r = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getWebhookInfo`); return (await r.json()).result; } catch { return null; } })(),
+          query(`SELECT COUNT(*)::int AS c FROM crm_leads`),
+          query(`SELECT COUNT(*)::int AS c FROM crm_leads WHERE created_at >= CURRENT_DATE`),
+          query(`SELECT COUNT(*)::int AS c FROM quotes WHERE statut IN ('brouillon', 'en_attente', 'envoye')`),
+          query(`SELECT COUNT(*)::int AS c FROM quotes WHERE statut IN ('depot_paye', 'planifie')`),
+          query(`SELECT COUNT(*)::int AS c FROM email_logs WHERE created_at >= CURRENT_DATE`),
+        ]);
+
+        const lastScanAgo = gmailRows[0]?.value ? Math.round((now - new Date(gmailRows[0].value as string).getTime()) / 60000) : -1;
+        const telegramOk = telegramCheck && !telegramCheck.last_error_message;
+
+        const statusEmoji = (ok: boolean) => ok ? '✅' : '❌';
+
+        await notifyRepair(
+          `📊 <b>Echo — Rapport systeme</b>\n\n` +
+          `${statusEmoji(lastScanAgo >= 0 && lastScanAgo < 720)} Gmail scan: ${lastScanAgo >= 0 ? `il y a ${lastScanAgo} min` : 'jamais'}\n` +
+          `${statusEmoji(!!telegramOk)} Telegram webhook: ${telegramOk ? 'OK' : 'ERREUR'}\n` +
+          `${statusEmoji(true)} Base de donnees: OK\n\n` +
+          `📈 <b>Activite aujourd'hui</b>\n` +
+          `👥 ${todayLeads[0]?.c || 0} nouveaux leads (${leadCount[0]?.c || 0} total)\n` +
+          `📝 ${pendingQuotes[0]?.c || 0} devis en attente\n` +
+          `🔨 ${activeJobs[0]?.c || 0} travaux actifs\n` +
+          `📧 ${emailsSent[0]?.c || 0} emails envoyes\n\n` +
+          `<i>Prochain rapport dans 6h. Tout roule 24/7.</i>`
+        );
+
+        await query(
+          `INSERT INTO kv_store (key, value) VALUES ('last_echo_report', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+          [new Date().toISOString()]
+        );
+      }
+    } catch { /* report failed — non-fatal */ }
   } catch {
     // Auto-heal itself should never crash anything
   }
