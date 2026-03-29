@@ -24,12 +24,39 @@ async function notifyRepair(message: string) {
   }
 }
 
-// Cooldown: don't check more than once every 5 minutes
+// Cooldown: don't check more than once every 2 minutes
 let lastCheckTime = 0;
+// Webhook check has its own faster cooldown (30s) — must stay alive
+let lastWebhookCheck = 0;
+
+export async function checkWebhookAlive(): Promise<void> {
+  const now = Date.now();
+  if (now - lastWebhookCheck < 30 * 1000) return; // 30s cooldown
+  lastWebhookCheck = now;
+  try {
+    const token = process.env.TELEGRAM_BOT_TOKEN ?? '';
+    if (!token) return;
+    const whRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
+    const whData = await whRes.json();
+    const expectedUrl = 'https://novus-epoxy.vercel.app/api/telegram/admin';
+    const currentUrl = whData.result?.url ?? '';
+    if (currentUrl !== expectedUrl) {
+      const secret = process.env.TELEGRAM_WEBHOOK_SECRET ?? '';
+      await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: expectedUrl, secret_token: secret, allowed_updates: ['message', 'callback_query'] }),
+      });
+      await notifyRepair(`🔧 <b>Echo:</b> Webhook Telegram repare automatiquement. Tout est OK.`);
+    }
+  } catch { /* non-fatal */ }
+}
 
 export async function autoHeal(): Promise<void> {
   const now = Date.now();
-  if (now - lastCheckTime < 5 * 60 * 1000) return; // 5 min cooldown
+  // Always check webhook first (fast, 30s cooldown)
+  await checkWebhookAlive();
+  if (now - lastCheckTime < 2 * 60 * 1000) return; // 2 min cooldown
   lastCheckTime = now;
 
   try {
