@@ -80,7 +80,7 @@ export function DashboardShell({ email, signOutAction, sidebar, children }: Dash
           <span className="text-white font-bold text-base">Novus Epoxy</span>
         </div>
 
-        <main className="flex-1 overflow-auto">
+        <main className="flex-1 overflow-auto pb-[env(safe-area-inset-bottom)]">
           {children}
         </main>
       </div>

@@ -131,11 +131,11 @@ function PageContent() {
 
   return (
     <PollingProvider onRefresh={load}>
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-white">Comptabilite</h2>
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Comptabilite</h2>
+          <div className="flex items-center gap-2 sm:gap-3">
             <select value={year} onChange={e => setYear(parseInt(e.target.value))}
               className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
               {[2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y}</option>)}
@@ -150,7 +150,7 @@ function PageContent() {
         {data && (
           <>
             {/* === SECTION 1: VUE D'ENSEMBLE === */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               <StatCard label="Revenus" value={formatMoney(data.revenue_total)} sub={`${data.nb_completees} factures`} color="green" />
               <StatCard label="Depenses" value={formatMoney(data.depenses_total)} sub={`${data.nb_depenses} depenses`} color="red" />
               <StatCard label="Profit net" value={formatMoney(data.profit_net)} color={data.profit_net >= 0 ? 'amber' : 'red'} />
@@ -158,10 +158,10 @@ function PageContent() {
             </div>
 
             {/* === SECTION 2: TRIMESTRES TPS/TVQ === */}
-            <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+            <div className="bg-slate-800 border border-slate-700 rounded-xl p-3 sm:p-6">
               <h3 className="text-white font-semibold mb-4">TPS/TVQ par trimestre</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+                <table className="w-full text-xs sm:text-sm min-w-[700px]">
                   <thead>
                     <tr className="border-b border-slate-700">
                       <th className="text-left py-2 text-slate-400 font-medium">Trimestre</th>
@@ -247,7 +247,7 @@ function PageContent() {
                 <h3 className="text-white font-semibold mb-4">Comptes a recevoir</h3>
 
                 {/* Aging bars */}
-                <div className="grid grid-cols-4 gap-3 mb-5">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                   <div className="bg-slate-700/50 rounded-lg p-3 text-center">
                     <p className="text-green-400 font-bold text-lg">{formatMoney(aging.current)}</p>
                     <p className="text-slate-400 text-xs">0-30 jours</p>
@@ -274,8 +274,8 @@ function PageContent() {
                     const totalDu = depotDu + soldeDu;
                     const ageColor = inv.jours_depuis > 90 ? 'text-red-400' : inv.jours_depuis > 60 ? 'text-orange-400' : inv.jours_depuis > 30 ? 'text-yellow-400' : 'text-slate-400';
                     return (
-                      <div key={inv.id} className="flex items-center justify-between border border-slate-700 rounded-lg px-4 py-2">
-                        <div className="flex items-center gap-4">
+                      <div key={inv.id} className="flex flex-col sm:flex-row sm:items-center justify-between border border-slate-700 rounded-lg px-3 sm:px-4 py-2 gap-1 sm:gap-0">
+                        <div className="flex items-center gap-2 sm:gap-4 flex-wrap">
                           <span className="text-white font-medium text-sm">{inv.client_nom}</span>
                           <span className="text-slate-500 text-xs">#{inv.numero}</span>
                           {depotDu > 0 && <span className="text-xs bg-amber-500/20 text-amber-400 px-2 py-0.5 rounded">Depot: {formatMoney(depotDu)}</span>}
@@ -342,7 +342,7 @@ function PageContent() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
                 <h3 className="text-white font-semibold mb-4">Paiements & Encaissements</h3>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                   <div>
                     <p className="text-slate-400 text-xs uppercase tracking-wider">Paiements recus</p>
                     <p className="text-white text-xl font-bold mt-1">{formatMoney(data.total_paiements)}</p>

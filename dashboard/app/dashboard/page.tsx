@@ -36,19 +36,19 @@ function DashboardContent() {
 
   return (
     <PollingProvider onRefresh={loadData}>
-      <div className="p-6 space-y-6">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-2xl font-bold text-white">Vue d&apos;ensemble</h2>
+            <h2 className="text-xl sm:text-2xl font-bold text-white">Vue d&apos;ensemble</h2>
             <RefreshBadge />
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 sm:gap-2">
             {(['7d', '30d', '90d'] as const).map(p => (
               <button
                 key={p}
                 onClick={() => setPeriode(p)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
+                className={`px-2 sm:px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition ${
                   periode === p
                     ? 'bg-amber-500 text-slate-900'
                     : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
@@ -61,7 +61,7 @@ function DashboardContent() {
         </div>
 
         {!stats && (
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
             {Array.from({ length: 5 }).map((_, i) => (
               <div key={i} className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3 animate-pulse">
                 <div className="h-3 w-16 bg-slate-700 rounded" />
@@ -75,7 +75,7 @@ function DashboardContent() {
         {stats && (
           <>
             {/* Metriques principales */}
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
               <StatsCard
                 titre="Revenus"
                 valeur={stats.metriques.revenus}

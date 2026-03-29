@@ -233,10 +233,10 @@ function PageContent() {
 
   return (
     <PollingProvider onRefresh={load}>
-      <div className="p-6 space-y-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-white">Depenses</h2>
-          <div className="flex items-center gap-3">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-5">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <h2 className="text-xl sm:text-2xl font-bold text-white">Depenses</h2>
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
             <span className="text-slate-400 text-sm">{total} au total</span>
             <label className={`${scanning ? 'bg-purple-400' : 'bg-purple-500 hover:bg-purple-400'} text-white font-semibold rounded-lg px-4 py-2 text-sm transition cursor-pointer`}>
               {scanning ? 'Analyse...' : 'Scanner des recus'}
@@ -329,8 +329,8 @@ function PageContent() {
 
         {/* Form */}
         {showForm && (
-          <form onSubmit={handleSubmit} className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <form onSubmit={handleSubmit} className="bg-slate-800 border border-slate-700 rounded-xl p-3 sm:p-6 space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm text-slate-400 mb-1">Date *</label>
                 <input type="date" required value={form.date_depense} onChange={e => setForm({ ...form, date_depense: e.target.value })}
@@ -356,7 +356,7 @@ function PageContent() {
                 </select>
               </div>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
               <div>
                 <label className="block text-sm text-slate-400 mb-1">Montant HT *</label>
                 <input type="number" step="0.01" min="0" required value={form.montant_ht}
@@ -503,10 +503,10 @@ function PageContent() {
         </div>
 
         {/* Filters */}
-        <div className="flex gap-3 flex-wrap">
+        <div className="flex gap-2 sm:gap-3 flex-wrap">
           <input type="text" placeholder="Rechercher fournisseur..." value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-64" />
+            className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-full sm:w-64" />
           <select value={categorie} onChange={e => { setCat(e.target.value); setPage(1); }}
             className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
             <option value="">Toutes les categories</option>
@@ -515,17 +515,17 @@ function PageContent() {
         </div>
 
         {/* Table */}
-        <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-          <table className="w-full">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-x-auto">
+          <table className="w-full min-w-[600px]">
             <thead>
               <tr className="border-b border-slate-700 bg-slate-900/50">
-                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Date</th>
-                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Fournisseur</th>
-                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Categorie</th>
-                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">HT</th>
-                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">TTC</th>
-                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Reconcilie</th>
-                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider"></th>
+                <th className="text-left px-2 sm:px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Date</th>
+                <th className="text-left px-2 sm:px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Fournisseur</th>
+                <th className="text-left px-2 sm:px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Categorie</th>
+                <th className="text-left px-2 sm:px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">HT</th>
+                <th className="text-left px-2 sm:px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">TTC</th>
+                <th className="text-left px-2 sm:px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Reconcilie</th>
+                <th className="text-left px-2 sm:px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider"></th>
               </tr>
             </thead>
             <tbody>
@@ -534,20 +534,20 @@ function PageContent() {
               )}
               {data.map(exp => (
                 <tr key={exp.id} className="border-b border-slate-700 hover:bg-slate-700/50 transition">
-                  <td className="px-4 py-3 text-slate-300 text-sm">{formatDate(exp.date_depense)}</td>
-                  <td className="px-4 py-3">
-                    <p className="text-white text-sm font-medium">{exp.fournisseur}</p>
+                  <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm whitespace-nowrap">{formatDate(exp.date_depense)}</td>
+                  <td className="px-2 sm:px-4 py-3">
+                    <p className="text-white text-xs sm:text-sm font-medium">{exp.fournisseur}</p>
                     {exp.description && <p className="text-slate-400 text-xs">{exp.description}</p>}
                   </td>
-                  <td className="px-4 py-3 text-slate-300 text-sm">{CAT_LABEL[exp.categorie]}</td>
-                  <td className="px-4 py-3 text-slate-300 text-sm">{formatMoney(Number(exp.montant_ht))}</td>
-                  <td className="px-4 py-3 text-white text-sm font-medium">{formatMoney(Number(exp.montant_ttc))}</td>
-                  <td className="px-4 py-3">
+                  <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">{CAT_LABEL[exp.categorie]}</td>
+                  <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">{formatMoney(Number(exp.montant_ht))}</td>
+                  <td className="px-2 sm:px-4 py-3 text-white text-xs sm:text-sm font-medium">{formatMoney(Number(exp.montant_ttc))}</td>
+                  <td className="px-2 sm:px-4 py-3">
                     <span className={`text-xs ${exp.reconciled ? 'text-green-400' : 'text-slate-500'}`}>
                       {exp.reconciled ? 'Oui' : 'Non'}
                     </span>
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-2 sm:px-4 py-3">
                     <button onClick={() => handleDelete(exp.id)} className="text-red-400 hover:text-red-300 text-xs">Supprimer</button>
                   </td>
                 </tr>

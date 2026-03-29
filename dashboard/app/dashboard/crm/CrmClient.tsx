@@ -153,7 +153,7 @@ function LeadDetail({ lead, onUpdate, onClose }: { lead: Lead; onUpdate: () => v
             {saving ? 'Sauvegarde...' : saved ? '✓ Sauvegarde!' : 'Sauvegarder'}
           </button>
           {lead.telephone && (
-            <a href={`tel:${lead.telephone.replace(/[^0-9+]/g, '')}`} className="bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition">
+            <a href={`tel:${lead.telephone.replace(/[^0-9+]/g, '')}`} className="bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg px-4 py-2.5 text-sm transition min-h-[44px] inline-flex items-center">
               Appeler
             </a>
           )}
@@ -210,10 +210,10 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
   return (
     <>
     <tr className="border-b border-slate-700 hover:bg-slate-700/30 transition cursor-pointer">
-      <td className="px-4 py-3">
+      <td className="px-2 sm:px-4 py-3">
         <input type="checkbox" checked={isSelected} onChange={() => onToggle(lead.id)} disabled={!lead.email || !!lead.prospect_sent_at} className="accent-amber-500" />
       </td>
-      <td className="px-4 py-3 cursor-pointer" onClick={() => onExpand(lead.id)}>
+      <td className="px-2 sm:px-4 py-3 cursor-pointer" onClick={() => onExpand(lead.id)}>
         <div className="flex items-center gap-2">
           <p className="text-white text-sm font-medium hover:text-amber-400 transition">{lead.nom}</p>
           {lead.type === 'commercial' && <span className="text-[10px] font-semibold bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/30">Com.</span>}
@@ -224,12 +224,12 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
           {lead.prospect_sent_at && <span className="text-emerald-400 text-[10px] font-medium bg-emerald-500/20 px-1.5 py-0.5 rounded">Offre envoyee</span>}
         </div>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-2 sm:px-4 py-3">
         {lead.telephone ? (
           <div className="flex items-center gap-1.5">
             <a
               href={`tel:${lead.telephone.replace(/[^0-9+]/g, '')}`}
-              className="text-amber-400 hover:text-amber-300 transition text-sm font-medium"
+              className="text-amber-400 hover:text-amber-300 transition text-sm font-medium py-1 px-1 -mx-1 inline-block min-h-[44px] flex items-center"
               title="Appeler"
             >
               {lead.telephone}
@@ -246,16 +246,16 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
           <span className="text-slate-600 text-sm">—</span>
         )}
       </td>
-      <td className="px-4 py-3 text-slate-300 text-sm">
+      <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">
         {lead.email ?? <span className="text-slate-600">—</span>}
       </td>
-      <td className="px-4 py-3 text-slate-300 text-sm">
+      <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">
         {lead.service ?? <span className="text-slate-600">—</span>}
       </td>
-      <td className="px-4 py-3 text-slate-300 text-sm">
+      <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">
         {lead.ville ?? <span className="text-slate-600">—</span>}
       </td>
-      <td className="px-4 py-3">
+      <td className="px-2 sm:px-4 py-3">
         <select
           value={lead.temperature}
           disabled={loadingTemp}
@@ -267,7 +267,7 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
           ))}
         </select>
       </td>
-      <td className="px-4 py-3">
+      <td className="px-2 sm:px-4 py-3">
         <select
           value={lead.statut}
           disabled={loadingStatut}
@@ -279,8 +279,8 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
           ))}
         </select>
       </td>
-      <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{formatDate(lead.created_at)}</td>
-      <td className="px-4 py-3 whitespace-nowrap">
+      <td className="px-2 sm:px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{formatDate(lead.created_at)}</td>
+      <td className="px-2 sm:px-4 py-3 whitespace-nowrap">
         <div className="flex gap-2">
           {lead.email && (
             <button
@@ -489,15 +489,15 @@ export default function CrmClient() {
   useEffect(() => { load(); }, [load]);
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-white">CRM Leads</h2>
-        <div className="flex items-center gap-3">
+    <div className="p-3 sm:p-6 space-y-4 sm:space-y-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <h2 className="text-xl sm:text-2xl font-bold text-white">CRM Leads</h2>
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <span className="text-slate-400 text-sm">{total} au total</span>
-          <button onClick={() => { setShowImport(!showImport); setShowAdd(false); }} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition">
+          <button onClick={() => { setShowImport(!showImport); setShowAdd(false); }} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-3 sm:px-4 py-2 text-sm transition">
             Importer
           </button>
-          <button onClick={() => { setShowAdd(!showAdd); setShowImport(false); }} className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-4 py-2 text-sm transition">
+          <button onClick={() => { setShowAdd(!showAdd); setShowImport(false); }} className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-3 sm:px-4 py-2 text-sm transition">
             + Nouveau lead
           </button>
         </div>
@@ -648,13 +648,13 @@ export default function CrmClient() {
       </div>
 
       {/* Filters — one compact row */}
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-3">
         <input
           type="text"
           placeholder="Rechercher..."
           value={search}
           onChange={e => { setSearch(e.target.value); setPage(1); }}
-          className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-48"
+          className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-full sm:w-48"
         />
         <select
           value={statut}
@@ -711,12 +711,12 @@ export default function CrmClient() {
         </div>
       )}
 
-      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-        <table className="w-full">
+      <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-x-auto">
+        <table className="w-full min-w-[900px]">
           <thead>
             <tr className="border-b border-slate-700 bg-slate-900/50">
               {['', 'Nom', 'Téléphone', 'Email', 'Service', 'Ville', 'Température', 'Statut', 'Date', ''].map((h, i) => (
-                <th key={h || `col-${i}`} className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider whitespace-nowrap">
+                <th key={h || `col-${i}`} className="text-left px-2 sm:px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider whitespace-nowrap">
                   {i === 0 ? <input type="checkbox" onChange={toggleSelectAll} className="accent-amber-500" /> : h}
                 </th>
               ))}
