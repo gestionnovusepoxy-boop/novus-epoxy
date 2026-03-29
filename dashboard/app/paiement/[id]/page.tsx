@@ -245,70 +245,73 @@ export default function ClientPortalPage() {
 
         {currentStep === 3 && (
           <div style={{ marginBottom: '16px' }}>
-            <a href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}`}
-              style={{
-                display: 'block', width: '100%', padding: '18px', textAlign: 'center',
-                background: '#16a34a', color: '#ffffff', borderRadius: '10px',
-                textDecoration: 'none', fontWeight: 700, fontSize: '17px',
-                marginBottom: '4px', boxSizing: 'border-box',
-              }}>
-              Payer par carte — {formatMoney(depot + depotFraisCarte)}
-            </a>
-            <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '11px', margin: '0 0 10px' }}>
-              {formatMoney(depot)} + {formatMoney(depotFraisCarte)} frais de traitement (3%)
-            </p>
+            {/* INTERAC EN PREMIER — gros et visible */}
             {!interacSent ? (
               <button onClick={handleInterac}
                 style={{
-                  display: 'block', width: '100%', padding: '16px', textAlign: 'center',
-                  background: '#1e293b', color: '#f8fafc', borderRadius: '10px', border: '1px solid #475569',
-                  fontWeight: 700, fontSize: '15px', cursor: 'pointer',
+                  display: 'block', width: '100%', padding: '18px', textAlign: 'center',
+                  background: '#f59e0b', color: '#0f172a', borderRadius: '10px', border: 'none',
+                  fontWeight: 700, fontSize: '17px', cursor: 'pointer',
+                  marginBottom: '6px', boxSizing: 'border-box',
                 }}>
                 Virement Interac — {formatMoney(depot)} (0$ de frais)
               </button>
             ) : (
-              <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '16px', textAlign: 'center' }}>
+              <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '16px', textAlign: 'center', marginBottom: '12px' }}>
                 <p style={{ color: '#22c55e', fontWeight: 700, margin: '0 0 8px' }}>Notre equipe a ete notifiee!</p>
                 <p style={{ color: '#86efac', fontSize: '13px', margin: '0 0 8px' }}>Envoyez <strong>{formatMoney(depot)}</strong> par virement Interac a :</p>
                 <p style={{ color: '#f59e0b', fontWeight: 700, fontSize: '16px', margin: '0 0 4px' }}>gestionnovusepoxy@gmail.com</p>
                 <p style={{ color: '#64748b', fontSize: '12px', margin: '4px 0 0' }}>Message: Devis #{data.id} — {data.client_nom}</p>
               </div>
             )}
+            <p style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', margin: '12px 0 8px' }}>— ou —</p>
+            {/* Carte en petit en dessous */}
+            <a href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}`}
+              style={{
+                display: 'block', width: '100%', padding: '14px', textAlign: 'center',
+                background: '#1e293b', color: '#94a3b8', borderRadius: '10px', border: '1px solid #334155',
+                textDecoration: 'none', fontWeight: 600, fontSize: '14px',
+                boxSizing: 'border-box',
+              }}>
+              Payer par carte — {formatMoney(depot + depotFraisCarte)} (incl. 3% frais)
+            </a>
           </div>
         )}
 
-        {/* Step 4: Solde 70% — dispo dès que dépôt payé */}
+        {/* Step 4: Solde 70% — Interac en premier */}
         {currentStep === 4 && (
           <div style={{ marginBottom: '16px' }}>
             <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '14px', marginBottom: '12px', textAlign: 'center' }}>
               <p style={{ color: '#22c55e', fontWeight: 700, fontSize: '15px', margin: 0 }}>Depot de {formatMoney(depot)} recu &#10003;</p>
             </div>
-            <a href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}&type=balance`}
-              style={{
-                display: 'block', width: '100%', padding: '18px', textAlign: 'center',
-                background: '#f59e0b', color: '#0f172a', borderRadius: '10px',
-                textDecoration: 'none', fontWeight: 700, fontSize: '17px',
-                marginBottom: '4px', boxSizing: 'border-box',
-              }}>
-              Payer par carte — {formatMoney(balance + balanceFraisCarte)}
-            </a>
-            <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '11px', margin: '0 0 10px' }}>
-              {formatMoney(balance)} + {formatMoney(balanceFraisCarte)} frais de traitement (3%)
-            </p>
-            <button onClick={handleInterac}
-              style={{
-                display: interacSent ? 'none' : 'block', width: '100%', padding: '14px', textAlign: 'center',
-                background: '#1e293b', color: '#f8fafc', borderRadius: '10px', border: '1px solid #475569',
-                fontWeight: 600, fontSize: '14px', cursor: 'pointer',
-              }}>
-              Virement Interac — {formatMoney(balance)} (0$ de frais)
-            </button>
-            {interacSent && (
-              <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
+            {/* INTERAC EN PREMIER */}
+            {!interacSent ? (
+              <button onClick={handleInterac}
+                style={{
+                  display: 'block', width: '100%', padding: '18px', textAlign: 'center',
+                  background: '#f59e0b', color: '#0f172a', borderRadius: '10px', border: 'none',
+                  fontWeight: 700, fontSize: '17px', cursor: 'pointer',
+                  marginBottom: '6px', boxSizing: 'border-box',
+                }}>
+                Virement Interac — {formatMoney(balance)} (0$ de frais)
+              </button>
+            ) : (
+              <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '14px', textAlign: 'center', marginBottom: '12px' }}>
                 <p style={{ color: '#22c55e', fontWeight: 700, margin: '0 0 6px' }}>Notre equipe a ete notifiee!</p>
                 <p style={{ color: '#86efac', fontSize: '13px', margin: 0 }}>Envoyez <strong>{formatMoney(balance)}</strong> a <strong style={{ color: '#f59e0b' }}>gestionnovusepoxy@gmail.com</strong></p>
               </div>
             )}
+            <p style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', margin: '12px 0 8px' }}>— ou —</p>
+            {/* Carte en petit */}
+            <a href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}&type=balance`}
+              style={{
+                display: 'block', width: '100%', padding: '14px', textAlign: 'center',
+                background: '#1e293b', color: '#94a3b8', borderRadius: '10px', border: '1px solid #334155',
+                textDecoration: 'none', fontWeight: 600, fontSize: '14px',
+                boxSizing: 'border-box',
+              }}>
+              Payer par carte — {formatMoney(balance + balanceFraisCarte)} (incl. 3% frais)
+            </a>
           </div>
         )}
 
