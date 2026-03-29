@@ -373,8 +373,10 @@ export async function GET(req: NextRequest) {
     await notifyTelegram(msg);
   } else if (autoFixes.length > 0) {
     await notifyTelegram(`🔧 *ECHO* — Auto-repare: ${autoFixes.map(f => f.name).join(', ')}. Tous les systemes OK.`);
+  } else {
+    // All good — short status report
+    await notifyTelegram(`✅ *ECHO* — Tous les systemes OK. Score: ${checks.length}/${checks.length}`);
   }
-  // Silence if everything OK — no spam
 
   return NextResponse.json({
     ok: failures.length === 0,
