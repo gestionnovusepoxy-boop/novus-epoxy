@@ -123,7 +123,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
 
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ client_nom: '', client_email: '', client_tel: '', client_adresse: '', type_service: '', superficie: '', notes: '', rabais_pct: '' });
+  const [editForm, setEditForm] = useState({ client_nom: '', client_email: '', client_tel: '', client_adresse: '', type_service: '', superficie: '', notes: '', description_travaux: '', couleur_flake: '', rabais_pct: '' });
   const [saving, setSaving] = useState(false);
 
   function startEdit() {
@@ -136,6 +136,8 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       type_service: quote.type_service ?? 'flake',
       superficie: String(quote.superficie ?? ''),
       notes: quote.notes ?? '',
+      description_travaux: quote.description_travaux ?? '',
+      couleur_flake: quote.couleur_flake ?? '',
       rabais_pct: String(quote.rabais_pct ?? 0),
     });
     setEditing(true);
@@ -281,6 +283,14 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
               <input value={editForm.rabais_pct} onChange={e => setEditForm(f => ({ ...f, rabais_pct: e.target.value }))} type="number" className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
             </div>
             <div className="col-span-2">
+              <label className="text-slate-500 text-xs mb-1 block">Couleur de flake</label>
+              <input value={editForm.couleur_flake} onChange={e => setEditForm(f => ({ ...f, couleur_flake: e.target.value }))} placeholder="Ex: Blizzard, Sand Dollar, Opal..." className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div className="col-span-2">
+              <label className="text-slate-500 text-xs mb-1 block">Description des travaux</label>
+              <textarea value={editForm.description_travaux} onChange={e => setEditForm(f => ({ ...f, description_travaux: e.target.value }))} rows={6} placeholder="Étape 1: Meulage complet...&#10;Étape 2: Première couche..." className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div className="col-span-2">
               <label className="text-slate-500 text-xs mb-1 block">Notes</label>
               <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
             </div>
@@ -333,6 +343,18 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             <div className="col-span-2">
               <p className="text-slate-500">Etat du plancher</p>
               <p className="text-white">{quote.etat_plancher}</p>
+            </div>
+          )}
+          {quote.couleur_flake && (
+            <div className="col-span-2">
+              <p className="text-slate-500">Couleur de flake</p>
+              <p className="text-white font-medium">{quote.couleur_flake}</p>
+            </div>
+          )}
+          {quote.description_travaux && (
+            <div className="col-span-2">
+              <p className="text-slate-500">Description des travaux</p>
+              <p className="text-white whitespace-pre-line">{quote.description_travaux}</p>
             </div>
           )}
           {quote.notes && (

@@ -140,6 +140,8 @@ export interface Quote {
   superficie:      number;
   etat_plancher:   string | null;
   notes:           string | null;
+  description_travaux: string | null;
+  couleur_flake:   string | null;
   prix_pied_carre: number;
   rabais_pct:      number;
   rabais_montant:  number;
