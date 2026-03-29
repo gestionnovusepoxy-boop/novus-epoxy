@@ -31,7 +31,7 @@ let lastWebhookCheck = 0;
 
 export async function checkWebhookAlive(): Promise<void> {
   const now = Date.now();
-  if (now - lastWebhookCheck < 30 * 1000) return; // 30s cooldown
+  if (now - lastWebhookCheck < 10 * 1000) return; // 10s cooldown — must stay ahead of Jason's bot clearing every ~30s
   lastWebhookCheck = now;
   try {
     const token = process.env.TELEGRAM_BOT_TOKEN ?? '';

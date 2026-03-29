@@ -8,6 +8,11 @@ export async function GET() {
   const session = await auth();
   if (!session) return new NextResponse('Non autorisé', { status: 401 });
 
+  // Safe query wrapper — returns fallback row on error so one failure doesn't kill all stats
+  const safeQuery = async (sql: string, fallback: Record<string, unknown> = {}): Promise<Record<string, unknown>[]> => {
+    try { return await query(sql); } catch { return [fallback]; }
+  };
+
   const [
     hunterStats,
     hunterCampaigns,
@@ -23,7 +28,7 @@ export async function GET() {
     jasonStats,
   ] = await Promise.all([
     // Hunter: leads par température + prospects envoyés
-    query(`SELECT
+    safeQuery(`SELECT
       COUNT(*) FILTER (WHERE temperature = 'chaud') as chauds,
       COUNT(*) FILTER (WHERE temperature = 'tiede') as tiedes,
       COUNT(*) FILTER (WHERE temperature = 'froid') as froids,
@@ -31,13 +36,13 @@ export async function GET() {
       COUNT(*) as total
       FROM crm_leads WHERE statut NOT IN ('ferme','perdu')`),
     // Hunter: campagnes/prospects envoyés
-    query(`SELECT
+    safeQuery(`SELECT
       COUNT(*) as total_campaigns,
       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as semaine,
       MAX(created_at) as last_action
       FROM lead_campaigns`),
     // Aria: emails envoyés + ouverts + cliqués
-    query(`SELECT
+    safeQuery(`SELECT
       COUNT(*) as total_envoyes,
       COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as emails_today,
       COUNT(*) FILTER (WHERE statut = 'opened' OR opened_at IS NOT NULL) as ouverts,
@@ -46,7 +51,7 @@ export async function GET() {
       MAX(created_at) as last_action
       FROM email_logs`),
     // Aria: dernière action + closer/import stats
-    query(`SELECT
+    safeQuery(`SELECT
       (SELECT created_at FROM email_logs ORDER BY created_at DESC LIMIT 1) as last_email,
       (SELECT COUNT(*) FROM crm_leads WHERE created_at::date = CURRENT_DATE) as leads_importes_today,
       (SELECT COUNT(*) FROM crm_leads WHERE last_agent_reply_at IS NOT NULL AND last_agent_reply_at::date = CURRENT_DATE) as closer_today,
@@ -54,27 +59,27 @@ export async function GET() {
       (SELECT COUNT(*) FROM crm_leads WHERE statut = 'interesse' AND updated_at >= NOW() - INTERVAL '7 days') as reponses_semaine,
       (SELECT COUNT(*) FROM crm_leads WHERE prospect_sent_at IS NOT NULL AND prospect_sent_at::date = CURRENT_DATE) as offres_today`),
     // Rex: devis en attente + envoyés
-    query(`SELECT
+    safeQuery(`SELECT
       COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as devis_today,
       COUNT(*) FILTER (WHERE statut IN ('brouillon','en_attente')) as en_attente,
       COUNT(*) FILTER (WHERE statut = 'envoye') as envoyes,
       COUNT(*) as total
       FROM quotes`),
     // Iris: finances
-    query(`SELECT
+    safeQuery(`SELECT
       COALESCE(SUM(total),0) FILTER (WHERE statut IN ('contrat_signe','depot_paye','planifie','complete')) as confirmes,
       COALESCE(SUM(total),0) FILTER (WHERE statut = 'envoye') as pipeline,
       COUNT(*) FILTER (WHERE statut IN ('en_attente','approuve','envoye')) as actifs
       FROM quotes`),
     // Zara: bookings
-    query(`SELECT
+    safeQuery(`SELECT
       COUNT(*) FILTER (WHERE jour1_date >= CURRENT_DATE) as a_venir,
       COUNT(*) FILTER (WHERE statut = 'confirme' AND created_at::date = CURRENT_DATE) as confirmees_today,
       COUNT(*) FILTER (WHERE statut = 'confirme') as total_confirmes,
       MIN(jour1_date) FILTER (WHERE jour1_date >= CURRENT_DATE AND statut = 'confirme') as prochain
       FROM bookings`),
     // Nova: conversations chatbot
-    query(`SELECT
+    safeQuery(`SELECT
       COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as today,
       COUNT(*) FILTER (WHERE status = 'pending_approval') as en_attente,
       COUNT(*) FILTER (WHERE quote_id IS NOT NULL AND created_at::date = CURRENT_DATE) as devis_today,
@@ -82,9 +87,9 @@ export async function GET() {
       COUNT(*) as total_convos
       FROM conversations`),
     // Marcel: mémoire partagée
-    query(`SELECT value FROM kv_store WHERE key = 'marcel_history_shared'`),
+    safeQuery(`SELECT value FROM kv_store WHERE key = 'marcel_history_shared'`),
     // Sage: portfolio stats
-    query(`SELECT
+    safeQuery(`SELECT
       COUNT(*) as total_items,
       COUNT(*) FILTER (WHERE array_length(photos, 1) > 0) as avec_photos,
       COUNT(*) FILTER (WHERE array_length(videos, 1) > 0) as avec_videos,
@@ -93,9 +98,9 @@ export async function GET() {
       COALESCE(SUM(array_length(videos, 1)), 0) as total_videos
       FROM portfolio`),
     // Sage: dernier scan
-    query(`SELECT created_at FROM portfolio ORDER BY created_at DESC LIMIT 1`),
+    safeQuery(`SELECT created_at FROM portfolio ORDER BY created_at DESC LIMIT 1`),
     // Jason: leads de prospection
-    query(`SELECT
+    safeQuery(`SELECT
       COUNT(*) as total_leads,
       COUNT(*) FILTER (WHERE temperature = 'chaud') as chauds,
       COUNT(*) FILTER (WHERE prospect_sent_at IS NOT NULL) as emails_envoyes,

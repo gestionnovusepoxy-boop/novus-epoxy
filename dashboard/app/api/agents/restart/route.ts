@@ -44,11 +44,11 @@ async function restartAgent(agentId: string): Promise<{ ok: boolean; message: st
       const base = BASE_URL();
       if (!botToken) return { ok: false, message: 'TELEGRAM_BOT_TOKEN manquant' };
       try {
-        const webhookUrl = `${base}/api/telegram/webhook`;
+        const webhookUrl = `${base}/api/telegram/admin`;
         const res = await fetch(`https://api.telegram.org/bot${botToken}/setWebhook`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ url: webhookUrl }),
+          body: JSON.stringify({ url: webhookUrl, secret_token: process.env.TELEGRAM_WEBHOOK_SECRET ?? '', allowed_updates: ['message', 'callback_query'] }),
           signal: AbortSignal.timeout(5000),
         });
         const data = await res.json() as { ok: boolean; description?: string };
