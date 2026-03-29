@@ -1068,36 +1068,52 @@ export async function POST(req: NextRequest) {
               }
 
               // Auto-prospect: send offers by EMAIL only (no SMS)
+              let emailsSent = 0;
+              let noEmailCount = 0;
               if (imported > 0) {
                 const newLeads = await query(
-                  `SELECT id FROM crm_leads WHERE source = 'jason' AND prospect_sent_at IS NULL AND email IS NOT NULL ORDER BY id DESC LIMIT $1`,
+                  `SELECT id, email FROM crm_leads WHERE source = 'jason' AND prospect_sent_at IS NULL ORDER BY id DESC LIMIT $1`,
                   [imported]
                 );
-                if (newLeads.length > 0) {
+                const withEmail = newLeads.filter((r: Record<string, unknown>) => r.email);
+                noEmailCount = newLeads.length - withEmail.length;
+                if (withEmail.length > 0) {
                   const baseUrl = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
                   try {
-                    await fetch(`${baseUrl}/api/leads/jason/prospect`, {
+                    const prospectRes = await fetch(`${baseUrl}/api/leads/jason/prospect`, {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ADMIN_API_KEY ?? '' },
-                      body: JSON.stringify({ leadIds: newLeads.map((r: Record<string, unknown>) => r.id) }),
+                      body: JSON.stringify({ leadIds: withEmail.map((r: Record<string, unknown>) => r.id) }),
                     });
+                    const prospectData = await prospectRes.json().catch(() => ({}));
+                    emailsSent = (prospectData as Record<string, number>).sent ?? withEmail.length;
                   } catch { /* best effort */ }
                 }
               }
 
-              // Notify in the GROUP so everyone sees — detailed report
+              // Notify in the GROUP — detailed report
               const hotCount = leads.filter(l => scoreTemp(l) === 'chaud').length;
               const warmCount = leads.filter(l => scoreTemp(l) === 'tiede').length;
               const coldCount = leads.filter(l => scoreTemp(l) === 'froid').length;
-              await sendTelegram(chatId,
-                `🤖 <b>Aria — Importation terminee!</b>\n\n` +
-                `📊 <b>${imported}</b> nouveaux leads ajoutes au CRM\n` +
-                (skipped > 0 ? `⏭️ ${skipped} doublons ignores\n` : '') +
-                `\n🔥 Chauds: ${hotCount} | 🟡 Tiedes: ${warmCount} | 🔵 Froids: ${coldCount}\n\n` +
-                `📧 Offres de service envoyees par email automatiquement\n` +
-                `⏰ Suivi automatique dans 48h si pas de reponse\n\n` +
-                `🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`
-              );
+              const lines = [
+                `🤖 <b>Aria — Importation terminee!</b>`,
+                ``,
+                `✅ <b>${imported} leads ajoutes</b> au CRM`,
+                skipped > 0 ? `⛔ <b>${skipped} rejetes</b> (doublons deja dans le CRM)` : `⛔ <b>0 rejetes</b> — aucun doublon`,
+                ``,
+                `🔥 Chauds: ${hotCount} | 🟡 Tiedes: ${warmCount} | 🔵 Froids: ${coldCount}`,
+                ``,
+                `📧 <b>${emailsSent} offres de service envoyees</b> par email`,
+                noEmailCount > 0 ? `⚠️ ${noEmailCount} leads sans email — pas d'offre envoyee` : '',
+                ``,
+                `📋 <b>Prochaines etapes automatiques:</b>`,
+                `• 48h — Suivi #1 si pas de reponse`,
+                `• 5 jours — Suivi #2 dernier rappel`,
+                `• Reponse detectee — Aria closer prend le relais`,
+                ``,
+                `Tout roule! 🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`,
+              ];
+              await sendTelegram(chatId, lines.filter(Boolean).join('\n'));
             }
           }
         } catch (err) {
@@ -1225,20 +1241,23 @@ export async function POST(req: NextRequest) {
     const result = JSON.parse(importResult);
 
     if (result.error) {
-      await sendTelegram(chatId, `Erreur import: ${result.error}`);
+      await sendTelegram(chatId, `❌ Erreur import: ${result.error}`);
     } else {
       await sendTelegram(chatId, [
-        `✅ Importation terminee!`,
+        `🤖 <b>Aria — Importation terminee!</b>`,
         ``,
-        `📥 ${result.importes} leads importes`,
-        result.ignores > 0 ? `⏭️ ${result.ignores} ignores (nom manquant)` : '',
+        `✅ <b>${result.importes} leads ajoutes</b> au CRM`,
+        result.ignores > 0 ? `⛔ <b>${result.ignores} rejetes</b> (doublons)` : `⛔ <b>0 rejetes</b>`,
         `📌 Source: ${result.source}`,
-        result.prospect ? `` : '',
-        result.prospect ? `📧 ${result.prospect.emails} emails envoyes` : '',
-        result.prospect ? `📱 ${result.prospect.sms} SMS envoyes` : '',
-        result.prospect ? `🚀 Prospection auto lancee!` : '',
         ``,
-        `Voir dans le dashboard: ${result.dashboard}`,
+        result.prospect ? `📧 <b>${result.prospect.emails} offres envoyees</b> par email` : '',
+        ``,
+        `📋 <b>Prochaines etapes automatiques:</b>`,
+        `• 48h — Suivi #1 si pas de reponse`,
+        `• 5 jours — Suivi #2 dernier rappel`,
+        `• Reponse detectee — Aria closer prend le relais`,
+        ``,
+        `Tout roule! 🔗 <a href="${result.dashboard}">Voir dans le CRM</a>`,
       ].filter(Boolean).join('\n'));
     }
     return NextResponse.json({ ok: true });
