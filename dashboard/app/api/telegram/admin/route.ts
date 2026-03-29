@@ -993,16 +993,15 @@ export async function POST(req: NextRequest) {
                 }
               }
 
-              // Notify admins in private
-              for (const adminId of adminIds) {
-                await sendTelegram(adminId,
-                  `📥 <b>Leads importes du groupe</b>\n\n` +
-                  `📊 ${imported} nouveaux leads\n` +
-                  (skipped > 0 ? `⏭️ ${skipped} doublons ignores\n` : '') +
-                  `📧 Offres de service envoyees par email (pas de SMS)\n\n` +
-                  `🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`
-                );
-              }
+              // Notify in the GROUP so everyone sees
+              await sendTelegram(chatId,
+                `🤖 <b>Aria — Leads importes!</b>\n\n` +
+                `📊 ${imported} nouveaux leads ajoutes au CRM\n` +
+                (skipped > 0 ? `⏭️ ${skipped} doublons ignores\n` : '') +
+                `📧 Offres de service personnalisees envoyees par email\n` +
+                `🚫 Aucun SMS envoye\n\n` +
+                `🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`
+              );
             }
           }
         } catch (err) {
