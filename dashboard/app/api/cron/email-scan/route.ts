@@ -234,7 +234,14 @@ SOUS_TRAITANT:
 
 QUESTION_GENERALE: reponds avec expertise, transforme en opportunite de quote
 
-CONCURRENT / NON_INTERESSE: reponse courte polie, rien de plus
+CONCURRENT: reponse courte polie, rien de plus
+
+NON_INTERESSE:
+- JAMAIS dire "on ne vous contactera plus" ou "nous respectons votre decision"
+- Reponse chaleureuse: "Pas de souci! Si jamais vous changez d'avis ou avez des questions, on est la."
+- Mentionner qu'on a souvent des promos/rabais saisonniers
+- Laisser la porte GRANDE ouverte — ces leads reviennent souvent plus tard
+- Ne JAMAIS fermer ou abandonner le lead
 
 PRIX (donner si demandes, pas d'hesitation):
 - Flake/flocon (garage, sous-sol): a partir de 8.50$/pi²
@@ -358,7 +365,11 @@ Reponds en JSON strict (sans markdown):
   );
 
   // 8. Update crm_leads statut + temperature + last_agent_reply_at
-  const temperature = parsed.priority === 'haute' ? 'chaud' : parsed.priority === 'basse' ? 'froid' : 'tiede';
+  // NON_INTERESSE: never mark froid — keep tiede so admins can follow up with rabais later
+  const temperature = parsed.type === 'NON_INTERESSE' ? 'tiede'
+    : parsed.priority === 'haute' ? 'chaud'
+    : parsed.priority === 'basse' ? 'froid'
+    : 'tiede';
 
   // Detect complaints/frustration — alert admins immediately
   const frustrationWords = ['rembourse', 'avocat', 'plainte', 'inacceptable', 'jamais revenu', 'arnaque', 'scam', 'poursuivre', 'bbb', 'opc', 'pas content', 'decu', 'horrible', 'worst', 'refund'];
