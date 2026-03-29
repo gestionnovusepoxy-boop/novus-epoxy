@@ -899,12 +899,47 @@ export async function POST(req: NextRequest) {
   const isGroup = message.chat.type === 'group' || message.chat.type === 'supergroup';
   const isAdmin = adminIds.includes(chatId) || adminIds.includes(senderId);
 
-  // GROUP MESSAGE: auto-detect leads from Jason's messages
+  // GROUP MESSAGE: respond to "Aria ..." or auto-detect leads
   if (isGroup) {
     const text = (message.text ?? message.caption ?? '').trim();
-    if (!text || text.length < 10) return NextResponse.json({ ok: true });
+    if (!text || text.length < 3) return NextResponse.json({ ok: true });
+
+    // If message starts with "Aria" — respond as Aria in the group
+    const startsWithAria = /^aria[\s,!?:]/i.test(text);
+    if (startsWithAria) {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (apiKey) {
+        try {
+          // Get recent CRM stats for context
+          const leadCount = await query(`SELECT COUNT(*)::int AS c FROM crm_leads`);
+          const pendingProspect = await query(`SELECT COUNT(*)::int AS c FROM crm_leads WHERE prospect_sent_at IS NOT NULL AND statut = 'offre_envoyee'`);
+          const todayImported = await query(`SELECT COUNT(*)::int AS c FROM crm_leads WHERE created_at >= CURRENT_DATE`);
+          const hotLeads = await query(`SELECT COUNT(*)::int AS c FROM crm_leads WHERE temperature = 'chaud' AND statut NOT IN ('ferme', 'gagne')`);
+
+          const context = `CRM: ${leadCount[0]?.c || 0} leads total, ${todayImported[0]?.c || 0} importes aujourd'hui, ${pendingProspect[0]?.c || 0} offres envoyees en attente, ${hotLeads[0]?.c || 0} leads chauds actifs.`;
+
+          const ariaRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'claude-haiku-4-5-20251001',
+              max_tokens: 500,
+              messages: [{ role: 'user', content: text.replace(/^aria[\s,!?:]*/i, '').trim() }],
+              system: `Tu es Aria, l'assistante IA de Novus Epoxy (planchers epoxy, Quebec). Tu reponds dans un groupe Telegram avec Luca (patron), Jason (chantier), et le bot de Jason. Sois concise, utile, en francais quebecois. Tu geres le CRM, les offres de service, les relances. Voici le contexte actuel:\n${context}\n\nReponds en 2-3 phrases max. Pas de markdown complexe, juste du texte simple.`,
+            }),
+          });
+          if (ariaRes.ok) {
+            const ariaData = await ariaRes.json();
+            const reply = ariaData.content?.[0]?.text ?? '';
+            if (reply) await sendTelegram(chatId, `🤖 <b>Aria:</b> ${reply}`);
+          }
+        } catch { /* ignore errors */ }
+      }
+      return NextResponse.json({ ok: true });
+    }
 
     // Check if message looks like leads (has phone numbers or multiple names)
+    if (text.length < 10) return NextResponse.json({ ok: true });
     const hasPhones = (text.match(/\d{3}[\s.\-]?\d{3}[\s.\-]?\d{4}/g) || []).length >= 1;
     const hasMultipleLines = text.split('\n').filter((l: string) => l.trim().length > 3).length >= 2;
     const looksLikeLeads = hasPhones || hasMultipleLines;
