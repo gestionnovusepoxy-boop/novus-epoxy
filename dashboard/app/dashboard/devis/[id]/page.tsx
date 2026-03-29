@@ -159,16 +159,25 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
     setSaving(false);
   }
 
+  const [sendSuccess, setSendSuccess] = useState('');
   async function handleResend() {
     if (!quote) return;
     setAction('resend');
     setError('');
+    setSendSuccess('');
     try {
       await sendQuote(quote.id);
       const updated = await fetchQuote(quote.id);
       setQuote(updated);
+      setSendSuccess('Devis envoyé au client avec succès!');
+      setTimeout(() => setSendSuccess(''), 5000);
     } catch (e) {
-      setError(`Erreur renvoi: ${e instanceof Error ? e.message : String(e)}`);
+      const msg = e instanceof Error ? e.message : String(e);
+      if (msg.includes('429')) {
+        setSendSuccess('Devis déjà envoyé! Le client l\'a reçu.');
+      } else {
+        setError(`Erreur renvoi: ${msg}`);
+      }
     }
     setAction('');
   }
@@ -230,6 +239,11 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
           <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+      {sendSuccess && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-2">
+          <p className="text-green-400 text-sm">{sendSuccess}</p>
         </div>
       )}
 
