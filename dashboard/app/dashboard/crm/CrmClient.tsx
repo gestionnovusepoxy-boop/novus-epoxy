@@ -148,10 +148,16 @@ function LeadDetail({ lead, onUpdate, onClose }: { lead: Lead; onUpdate: () => v
             <textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Details du projet, adresse, infos de l'appel..." rows={3} className={inputCls} />
           </div>
         </div>
-        <div className="flex items-center gap-3 mt-3">
+        <div className="flex items-center gap-3 mt-3 flex-wrap">
           <button onClick={save} disabled={saving} className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-5 py-2 text-sm transition disabled:opacity-50">
             {saving ? 'Sauvegarde...' : saved ? '✓ Sauvegarde!' : 'Sauvegarder'}
           </button>
+          <a
+            href={`/dashboard/devis/nouveau?lead_id=${lead.id}&nom=${encodeURIComponent(lead.nom)}&email=${encodeURIComponent(lead.email ?? '')}&tel=${encodeURIComponent(lead.telephone ?? '')}&ville=${encodeURIComponent(form.ville)}&service=${encodeURIComponent(form.service)}&superficie=${encodeURIComponent(form.superficie)}&notes=${encodeURIComponent(form.notes)}`}
+            className="bg-orange-500 hover:bg-orange-400 text-white font-semibold rounded-lg px-5 py-2.5 text-sm transition inline-flex items-center gap-1.5"
+          >
+            Creer devis
+          </a>
           {lead.telephone && (
             <a href={`tel:${lead.telephone.replace(/[^0-9+]/g, '')}`} className="bg-green-600 hover:bg-green-500 text-white font-semibold rounded-lg px-4 py-2.5 text-sm transition min-h-[44px] inline-flex items-center">
               Appeler

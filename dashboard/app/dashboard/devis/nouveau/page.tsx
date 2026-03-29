@@ -1,24 +1,28 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createQuote, type ServiceType } from '@/lib/api';
 import { SERVICES, calculateQuote, formatMoney } from '@/lib/pricing';
 
 export default function NouveauDevisPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
 
+  const serviceParam = searchParams.get('service') ?? '';
+  const validService = serviceParam in SERVICES ? serviceParam as ServiceType : 'flake';
+
   const [form, setForm] = useState({
-    client_nom: '',
-    client_email: '',
-    client_tel: '',
-    client_adresse: '',
-    type_service: 'flake' as ServiceType,
-    superficie: '',
+    client_nom: searchParams.get('nom') ?? '',
+    client_email: searchParams.get('email') ?? '',
+    client_tel: searchParams.get('tel') ?? '',
+    client_adresse: searchParams.get('ville') ?? '',
+    type_service: validService,
+    superficie: searchParams.get('superficie') ?? '',
     etat_plancher: '',
-    notes: '',
+    notes: searchParams.get('notes') ?? '',
     rabais_pct: 20,
   });
 
