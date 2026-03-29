@@ -957,7 +957,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const text = (docText || message.text ?? message.caption ?? '').trim();
+    const text = (docText || (message.text ?? message.caption ?? '')).trim();
     if (!text || text.length < 3) return NextResponse.json({ ok: true });
 
     // If message starts with "Aria" — respond as Aria in the group
