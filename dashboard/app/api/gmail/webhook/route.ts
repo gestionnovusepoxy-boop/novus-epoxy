@@ -36,6 +36,20 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Auto-renew Gmail watch if expired or close to expiring (< 2 days left)
+    try {
+      const lastWatchRows = await query(`SELECT value FROM kv_store WHERE key = 'last_gmail_watch'`);
+      const lastWatch = lastWatchRows?.[0]?.value as string | undefined;
+      const daysSinceWatch = lastWatch ? (Date.now() - new Date(lastWatch).getTime()) / (1000 * 60 * 60 * 24) : 999;
+      if (daysSinceWatch >= 5) {
+        const baseUrl2 = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';
+        const adminKey = process.env.ADMIN_API_KEY ?? '';
+        await fetch(`${baseUrl2}/api/gmail/watch`, { method: 'POST', headers: { Authorization: `Bearer ${adminKey}` } });
+        await query(`INSERT INTO kv_store (key, value) VALUES ('last_gmail_watch', $1) ON CONFLICT (key) DO UPDATE SET value = $1`, [new Date().toISOString()]);
+        console.log('[Gmail Webhook] Auto-renewed Gmail watch');
+      }
+    } catch { /* watch renewal failed — non-fatal */ }
+
     // Trigger the existing email-scan endpoint internally
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';
     const cronSecret = process.env.CRON_SECRET;
