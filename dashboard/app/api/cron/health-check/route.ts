@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
   const cronSecret = process.env.CRON_SECRET ?? '';
   const adminKey = process.env.ADMIN_API_KEY ?? '';
-  if (cronSecret && authHeader !== cronSecret && authHeader !== adminKey) {
+  if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -293,7 +293,7 @@ export async function GET(req: NextRequest) {
       `SELECT b.id FROM bookings b LEFT JOIN quotes q ON q.id = b.quote_id WHERE q.id IS NULL`
     );
     if (orphaned.length > 0) {
-      await query(`DELETE FROM bookings WHERE id IN (${orphaned.map(r => r.id).join(',')})`);
+      await query(`DELETE FROM bookings WHERE id = ANY($1::int[])`, [orphaned.map(r => r.id)]);
       checks.push({ name: 'Bookings orphelins', ok: true, detail: `${orphaned.length} booking(s) sans devis supprime(s)`, autoFixed: true });
     }
   } catch { /* ignore */ }
