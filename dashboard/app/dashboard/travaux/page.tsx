@@ -1,9 +1,11 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import { PollingProvider } from '@/components/polling-provider';
 import { formatMoney } from '@/lib/pricing';
+import Link from 'next/link';
 
+/* ─── Types ─── */
 interface Travail {
   id: number;
   client_nom: string;
@@ -22,6 +24,16 @@ interface Travail {
   booking_statut: string | null;
 }
 
+interface JobPhoto {
+  id: number;
+  quote_id: number;
+  type: 'avant' | 'apres';
+  url: string;
+  filename: string;
+  created_at: string;
+}
+
+/* ─── Constants ─── */
 const SERVICE_LABEL: Record<string, string> = {
   flake: 'Flocon',
   metallique: 'Metallique',
@@ -38,6 +50,19 @@ const STATUT_BADGE: Record<string, { label: string; cls: string }> = {
   complete:   { label: 'Complete',   cls: 'bg-green-500/20 text-green-300 border-green-500/30' },
 };
 
+const CHECKLIST_ITEMS = [
+  { key: 'photos_avant', label: 'Photos avant prises' },
+  { key: 'prep_surface', label: 'Preparation surface terminee' },
+  { key: 'epoxy_jour1', label: 'Application epoxy jour 1' },
+  { key: 'finition_jour2', label: 'Finition jour 2' },
+  { key: 'photos_apres', label: 'Photos apres prises' },
+  { key: 'nettoyage', label: 'Nettoyage du chantier' },
+  { key: 'client_satisfait', label: 'Client satisfait' },
+];
+
+const REQUIRED_FOR_COMPLETE = ['photos_apres', 'client_satisfait'];
+
+/* ─── Helpers ─── */
 function formatDateFr(iso: string): string {
   const d = new Date(iso + 'T12:00:00');
   return d.toLocaleDateString('fr-CA', { weekday: 'short', day: 'numeric', month: 'short' });
@@ -69,8 +94,218 @@ function isThisWeek(dateStr: string): boolean {
   return target >= startOfWeek && target <= endOfWeek;
 }
 
+/* ─── Photo Section ─── */
+function PhotoSection({ quoteId }: { quoteId: number }) {
+  const [photos, setPhotos] = useState<JobPhoto[]>([]);
+  const [uploading, setUploading] = useState<'avant' | 'apres' | null>(null);
+  const avantRef = useRef<HTMLInputElement>(null);
+  const apresRef = useRef<HTMLInputElement>(null);
+
+  const loadPhotos = useCallback(async () => {
+    const res = await fetch(`/api/travaux/photos?quoteId=${quoteId}`);
+    if (res.ok) {
+      const json = await res.json();
+      setPhotos(json.data ?? []);
+    }
+  }, [quoteId]);
+
+  useEffect(() => { loadPhotos(); }, [loadPhotos]);
+
+  async function handleUpload(type: 'avant' | 'apres', file: File) {
+    setUploading(type);
+    try {
+      const form = new FormData();
+      form.append('quoteId', String(quoteId));
+      form.append('type', type);
+      form.append('photo', file);
+      const res = await fetch('/api/travaux/photos', { method: 'POST', body: form });
+      if (res.ok) loadPhotos();
+      else alert('Erreur lors du telechargement');
+    } catch {
+      alert('Erreur reseau');
+    } finally {
+      setUploading(null);
+    }
+  }
+
+  async function handleDelete(id: number) {
+    if (!confirm('Supprimer cette photo?')) return;
+    await fetch(`/api/travaux/photos?id=${id}`, { method: 'DELETE' });
+    loadPhotos();
+  }
+
+  const avantPhotos = photos.filter(p => p.type === 'avant');
+  const apresPhotos = photos.filter(p => p.type === 'apres');
+
+  return (
+    <div className="bg-slate-900/50 rounded-lg p-3 space-y-2">
+      <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Photos du chantier</h4>
+      <div className="grid grid-cols-2 gap-3">
+        {/* Avant */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-300 text-xs font-medium">Avant</span>
+            <button
+              onClick={() => avantRef.current?.click()}
+              disabled={uploading === 'avant'}
+              className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded transition disabled:opacity-50"
+            >
+              {uploading === 'avant' ? '...' : '+ Photo'}
+            </button>
+            <input
+              ref={avantRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) handleUpload('avant', f);
+                e.target.value = '';
+              }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {avantPhotos.map(p => (
+              <div key={p.id} className="relative group">
+                <img
+                  src={p.url}
+                  alt={p.filename}
+                  className="w-16 h-16 object-cover rounded border border-slate-600"
+                />
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-4 h-4 text-[10px] leading-none opacity-0 group-hover:opacity-100 transition"
+                >
+                  x
+                </button>
+              </div>
+            ))}
+            {avantPhotos.length === 0 && (
+              <span className="text-slate-600 text-xs">Aucune photo</span>
+            )}
+          </div>
+        </div>
+
+        {/* Apres */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-slate-300 text-xs font-medium">Apres</span>
+            <button
+              onClick={() => apresRef.current?.click()}
+              disabled={uploading === 'apres'}
+              className="text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 px-2 py-1 rounded transition disabled:opacity-50"
+            >
+              {uploading === 'apres' ? '...' : '+ Photo'}
+            </button>
+            <input
+              ref={apresRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={e => {
+                const f = e.target.files?.[0];
+                if (f) handleUpload('apres', f);
+                e.target.value = '';
+              }}
+            />
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {apresPhotos.map(p => (
+              <div key={p.id} className="relative group">
+                <img
+                  src={p.url}
+                  alt={p.filename}
+                  className="w-16 h-16 object-cover rounded border border-slate-600"
+                />
+                <button
+                  onClick={() => handleDelete(p.id)}
+                  className="absolute -top-1 -right-1 bg-red-600 text-white rounded-full w-4 h-4 text-[10px] leading-none opacity-0 group-hover:opacity-100 transition"
+                >
+                  x
+                </button>
+              </div>
+            ))}
+            {apresPhotos.length === 0 && (
+              <span className="text-slate-600 text-xs">Aucune photo</span>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Checklist Section ─── */
+function ChecklistSection({ quoteId, onChecklistChange }: {
+  quoteId: number;
+  onChecklistChange: (checked: string[]) => void;
+}) {
+  const [checked, setChecked] = useState<string[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch(`/api/travaux/checklist?quoteId=${quoteId}`);
+      if (res.ok) {
+        const json = await res.json();
+        const items = json.checklist ?? [];
+        setChecked(items);
+        onChecklistChange(items);
+      }
+      setLoaded(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quoteId]);
+
+  async function toggle(key: string) {
+    const next = checked.includes(key)
+      ? checked.filter(k => k !== key)
+      : [...checked, key];
+    setChecked(next);
+    onChecklistChange(next);
+
+    await fetch('/api/travaux/checklist', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quoteId, checklist: next }),
+    });
+  }
+
+  if (!loaded) return null;
+
+  return (
+    <div className="bg-slate-900/50 rounded-lg p-3 space-y-2">
+      <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Checklist</h4>
+      <div className="space-y-1">
+        {CHECKLIST_ITEMS.map(item => (
+          <label key={item.key} className="flex items-center gap-2 cursor-pointer group">
+            <input
+              type="checkbox"
+              checked={checked.includes(item.key)}
+              onChange={() => toggle(item.key)}
+              className="w-4 h-4 rounded border-slate-600 bg-slate-700 text-amber-500 focus:ring-amber-500/50"
+            />
+            <span className={`text-sm transition ${
+              checked.includes(item.key)
+                ? 'text-green-400 line-through'
+                : 'text-slate-300 group-hover:text-white'
+            }`}>
+              {item.label}
+            </span>
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Job Card ─── */
 function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [checkedItems, setCheckedItems] = useState<string[]>([]);
+
+  const canComplete = REQUIRED_FOR_COMPLETE.every(k => checkedItems.includes(k));
 
   async function handleComplete() {
     if (!confirm(`Marquer le travail de ${job.client_nom} comme complete?`)) return;
@@ -103,6 +338,7 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
 
   return (
     <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3 hover:border-slate-600 transition">
+      {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3 className="text-white font-semibold text-base">{job.client_nom}</h3>
@@ -127,6 +363,7 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
         </span>
       </div>
 
+      {/* Dates */}
       {job.jour1_date && (
         <div className="bg-slate-900/50 rounded-lg p-3 space-y-1">
           <div className="flex items-center gap-2 text-sm">
@@ -144,31 +381,67 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
         </div>
       )}
 
+      {/* Financials */}
       <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
         <span className="text-slate-400">Total: <span className="text-white font-medium">{formatMoney(Number(job.total))}</span></span>
         <span className="text-slate-400">Depot: <span className="text-emerald-400">{formatMoney(Number(job.depot_requis))}</span></span>
         <span className="text-slate-400">Solde: <span className="text-amber-400 font-medium">{formatMoney(balance)}</span></span>
       </div>
 
-      <div className="flex items-center justify-between pt-1">
-        {daysLabel && (
-          <span className={`text-sm font-medium ${days !== null && days <= 1 ? 'text-amber-400' : 'text-slate-400'}`}>
-            {daysLabel}
-          </span>
-        )}
-        {!daysLabel && <span />}
-        <button
-          onClick={handleComplete}
-          disabled={loading}
-          className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
-        >
-          {loading ? 'En cours...' : 'Marquer complete'}
-        </button>
+      {/* Expand/Collapse toggle */}
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="text-xs text-slate-500 hover:text-slate-300 transition w-full text-left"
+      >
+        {expanded ? '▾ Masquer details' : '▸ Photos, checklist & heures'}
+      </button>
+
+      {/* Expanded content */}
+      {expanded && (
+        <div className="space-y-3">
+          <PhotoSection quoteId={job.id} />
+          <ChecklistSection quoteId={job.id} onChecklistChange={setCheckedItems} />
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          {daysLabel && (
+            <span className={`text-sm font-medium ${days !== null && days <= 1 ? 'text-amber-400' : 'text-slate-400'}`}>
+              {daysLabel}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Link
+            href={`/dashboard/equipe?projet=${job.id}`}
+            className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium px-3 py-2 rounded-lg transition"
+          >
+            + Heures
+          </Link>
+          <button
+            onClick={handleComplete}
+            disabled={loading || !canComplete}
+            title={!canComplete ? 'Completez "Photos apres" et "Client satisfait" dans la checklist' : ''}
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+          >
+            {loading ? 'En cours...' : 'Marquer complete'}
+          </button>
+        </div>
       </div>
+
+      {/* Hint if button disabled */}
+      {expanded && !canComplete && (
+        <p className="text-xs text-slate-500 text-right">
+          Cochez &quot;Photos apres prises&quot; et &quot;Client satisfait&quot; pour completer
+        </p>
+      )}
     </div>
   );
 }
 
+/* ─── Section ─── */
 function Section({ title, jobs, onRefresh }: { title: string; jobs: Travail[]; onRefresh: () => void }) {
   if (jobs.length === 0) return null;
   return (
@@ -183,6 +456,7 @@ function Section({ title, jobs, onRefresh }: { title: string; jobs: Travail[]; o
   );
 }
 
+/* ─── Page ─── */
 function PageContent() {
   const [data, setData] = useState<Travail[]>([]);
 

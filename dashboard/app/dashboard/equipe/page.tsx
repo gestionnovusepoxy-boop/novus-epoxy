@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { formatMoney } from '@/lib/pricing';
 
 /* ─── Types ─── */
@@ -47,14 +48,16 @@ interface Quote {
 /* ─── Constants ─── */
 const ROLES = ['proprietaire', 'installateur', 'aide', 'sous-traitant'] as const;
 const ROLE_LABEL: Record<string, string> = {
-  proprietaire: 'Propriétaire', installateur: 'Installateur',
+  proprietaire: 'Proprietaire', installateur: 'Installateur',
   aide: 'Aide', 'sous-traitant': 'Sous-traitant',
 };
 const TYPES = ['travail', 'deplacement', 'preparation', 'nettoyage'] as const;
 const TYPE_LABEL: Record<string, string> = {
-  travail: 'Travail', deplacement: 'Déplacement',
-  preparation: 'Préparation', nettoyage: 'Nettoyage',
+  travail: 'Travail', deplacement: 'Deplacement',
+  preparation: 'Preparation', nettoyage: 'Nettoyage',
 };
+
+const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
 function getWeekRange(): [string, string] {
   const now = new Date();
@@ -74,12 +77,61 @@ function getMonthRange(): [string, string] {
   return [first.toISOString().slice(0, 10), last.toISOString().slice(0, 10)];
 }
 
+/** Get Monday-Saturday dates for the week containing dateFrom */
+function getWeekDates(dateFrom: string): string[] {
+  if (!dateFrom) return [];
+  const d = new Date(dateFrom + 'T12:00:00');
+  const day = d.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const mon = new Date(d);
+  mon.setDate(d.getDate() - diff);
+  const dates: string[] = [];
+  for (let i = 0; i < 6; i++) {
+    const dd = new Date(mon);
+    dd.setDate(mon.getDate() + i);
+    dates.push(dd.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+function exportCSV(entries: TimeEntry[], dateFrom: string, dateTo: string) {
+  const header = 'Employe,Date,Projet,Heures,Type,Taux,Montant';
+  const rows = entries.map(e => {
+    const projet = e.projet_nom ? `${e.projet_nom} #${e.quote_id}` : '';
+    return [
+      `"${e.employee_nom}"`,
+      e.date_travail,
+      `"${projet}"`,
+      e.heures ?? 0,
+      TYPE_LABEL[e.type] || e.type,
+      e.taux_horaire,
+      parseFloat(String(e.montant ?? 0)).toFixed(2),
+    ].join(',');
+  });
+
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `heures_${dateFrom}_${dateTo}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function EquipePage() {
   const [tab, setTab] = useState<'employes' | 'heures'>('employes');
+  const searchParams = useSearchParams();
+  const projetParam = searchParams.get('projet');
+
+  // If ?projet= is in URL, auto-switch to heures tab
+  useEffect(() => {
+    if (projetParam) setTab('heures');
+  }, [projetParam]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-white">Équipe & Heures</h1>
+      <h1 className="text-2xl font-bold text-white">Equipe & Heures</h1>
 
       {/* Tabs */}
       <div className="flex gap-2">
@@ -91,7 +143,7 @@ export default function EquipePage() {
               : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
           }`}
         >
-          Employés
+          Sous-traitants
         </button>
         <button
           onClick={() => setTab('heures')}
@@ -101,17 +153,17 @@ export default function EquipePage() {
               : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
           }`}
         >
-          Heures & Salaires
+          Heures & Montants
         </button>
       </div>
 
-      {tab === 'employes' ? <EmployesTab /> : <HeuresTab />}
+      {tab === 'employes' ? <EmployesTab /> : <HeuresTab preselectedProjet={projetParam} />}
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════
-   TAB 1: EMPLOYÉS
+   TAB 1: EMPLOYES
    ═══════════════════════════════════════════════════ */
 function EmployesTab() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -178,7 +230,7 @@ function EmployesTab() {
         onClick={() => setShowForm(!showForm)}
         className="bg-amber-500 text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-400 transition"
       >
-        {showForm ? 'Annuler' : '+ Ajouter employé'}
+        {showForm ? 'Annuler' : '+ Ajouter employe'}
       </button>
 
       {showForm && (
@@ -191,7 +243,7 @@ function EmployesTab() {
             className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm"
           />
           <input
-            placeholder="Téléphone"
+            placeholder="Telephone"
             value={form.telephone}
             onChange={e => setForm({ ...form, telephone: e.target.value })}
             className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm"
@@ -225,8 +277,8 @@ function EmployesTab() {
             <thead className="bg-slate-700/50 text-slate-400 text-xs uppercase">
               <tr>
                 <th className="px-4 py-3">Nom</th>
-                <th className="px-4 py-3 hidden sm:table-cell">Téléphone</th>
-                <th className="px-4 py-3">Rôle</th>
+                <th className="px-4 py-3 hidden sm:table-cell">Telephone</th>
+                <th className="px-4 py-3">Role</th>
                 <th className="px-4 py-3">Taux/h</th>
                 <th className="px-4 py-3">Statut</th>
                 <th className="px-4 py-3">Actions</th>
@@ -274,13 +326,13 @@ function EmployesTab() {
                       onClick={() => toggleActif(emp)}
                       className="text-xs text-slate-400 hover:text-white transition"
                     >
-                      {emp.actif ? 'Désactiver' : 'Activer'}
+                      {emp.actif ? 'Desactiver' : 'Activer'}
                     </button>
                   </td>
                 </tr>
               ))}
               {employees.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">Aucun employé</td></tr>
+                <tr><td colSpan={6} className="px-4 py-6 text-center text-slate-500">Aucun employe</td></tr>
               )}
             </tbody>
           </table>
@@ -293,14 +345,14 @@ function EmployesTab() {
 /* ═══════════════════════════════════════════════════
    TAB 2: HEURES & SALAIRES
    ═══════════════════════════════════════════════════ */
-function HeuresTab() {
+function HeuresTab({ preselectedProjet }: { preselectedProjet: string | null }) {
   const [entries, setEntries] = useState<TimeEntry[]>([]);
   const [summary, setSummary] = useState<Summary[]>([]);
   const [totals, setTotals] = useState({ heures: 0, montant: 0 });
   const [loading, setLoading] = useState(true);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [quotes, setQuotes] = useState<Quote[]>([]);
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] = useState(!!preselectedProjet);
 
   // Date range
   const [rangeType, setRangeType] = useState<'semaine' | 'mois' | 'custom'>('semaine');
@@ -311,7 +363,7 @@ function HeuresTab() {
 
   // Form
   const [form, setForm] = useState({
-    employee_id: '', quote_id: '', date_travail: new Date().toISOString().slice(0, 10),
+    employee_id: '', quote_id: preselectedProjet || '', date_travail: new Date().toISOString().slice(0, 10),
     heure_debut: '', heure_fin: '', heures: '', type: 'travail', notes: '',
   });
 
@@ -389,14 +441,32 @@ function HeuresTab() {
   }
 
   async function handleDelete(id: number) {
-    if (!confirm('Supprimer cette entrée?')) return;
+    if (!confirm('Supprimer cette entree?')) return;
     await fetch(`/api/equipe/heures?id=${id}`, { method: 'DELETE' });
     loadEntries();
   }
 
+  /* Weekly calendar data */
+  const weekDates = useMemo(() => getWeekDates(dateFrom), [dateFrom]);
+
+  const calendarData = useMemo(() => {
+    // Map: employeeName -> { [date]: totalHours }
+    const map: Record<string, Record<string, number>> = {};
+    for (const entry of entries) {
+      const name = entry.employee_nom;
+      if (!map[name]) map[name] = {};
+      const date = entry.date_travail;
+      if (!map[name][date]) map[name][date] = 0;
+      map[name][date] += parseFloat(String(entry.heures ?? 0));
+    }
+    return map;
+  }, [entries]);
+
+  const employeeNames = useMemo(() => Object.keys(calendarData).sort(), [calendarData]);
+
   return (
     <div className="space-y-4">
-      {/* Date range filter */}
+      {/* Date range filter + Export */}
       <div className="flex flex-wrap gap-2 items-center">
         <button
           onClick={() => setRangeType('semaine')}
@@ -420,7 +490,7 @@ function HeuresTab() {
             rangeType === 'custom' ? 'bg-amber-500 text-black' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
           }`}
         >
-          Personnalisé
+          Personnalise
         </button>
         {rangeType === 'custom' && (
           <>
@@ -442,13 +512,23 @@ function HeuresTab() {
         {dateFrom && dateTo && (
           <span className="text-slate-500 text-xs ml-2">{dateFrom} — {dateTo}</span>
         )}
+
+        {/* Export CSV */}
+        {entries.length > 0 && (
+          <button
+            onClick={() => exportCSV(entries, dateFrom, dateTo)}
+            className="ml-auto bg-slate-700 hover:bg-slate-600 text-slate-300 px-3 py-1.5 rounded-lg text-xs font-medium transition"
+          >
+            Exporter CSV
+          </button>
+        )}
       </div>
 
       <button
         onClick={() => setShowForm(!showForm)}
         className="bg-amber-500 text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-amber-400 transition"
       >
-        {showForm ? 'Annuler' : '+ Ajouter entrée'}
+        {showForm ? 'Annuler' : '+ Ajouter entree'}
       </button>
 
       {showForm && (
@@ -459,7 +539,7 @@ function HeuresTab() {
             onChange={e => setForm({ ...form, employee_id: e.target.value })}
             className="bg-slate-700 text-white rounded-lg px-3 py-2 text-sm"
           >
-            <option value="">— Employé —</option>
+            <option value="">— Employe —</option>
             {employees.map(emp => (
               <option key={emp.id} value={emp.id}>{emp.nom}</option>
             ))}
@@ -487,7 +567,7 @@ function HeuresTab() {
           <div className="flex gap-2">
             <input
               type="time"
-              placeholder="Début"
+              placeholder="Debut"
               value={form.heure_debut}
               onChange={e => {
                 const v = e.target.value;
@@ -549,7 +629,7 @@ function HeuresTab() {
             <table className="w-full text-sm text-left">
               <thead className="bg-slate-700/50 text-slate-400 text-xs uppercase">
                 <tr>
-                  <th className="px-4 py-3">Employé</th>
+                  <th className="px-4 py-3">Employe</th>
                   <th className="px-4 py-3">Date</th>
                   <th className="px-4 py-3 hidden sm:table-cell">Projet</th>
                   <th className="px-4 py-3">Heures</th>
@@ -594,7 +674,7 @@ function HeuresTab() {
                   </tr>
                 ))}
                 {entries.length === 0 && (
-                  <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">Aucune entrée pour cette période</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-6 text-center text-slate-500">Aucune entree pour cette periode</td></tr>
                 )}
               </tbody>
             </table>
@@ -605,15 +685,33 @@ function HeuresTab() {
       {/* Summary */}
       {summary.length > 0 && (
         <div className="bg-slate-800 rounded-xl p-4 space-y-3">
-          <h3 className="text-white font-semibold text-sm">Résumé par employé</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-white font-semibold text-sm">Resume par sous-traitant</h3>
+            <button
+              onClick={() => {
+                const today = new Date();
+                const day = today.getDay();
+                const sunStart = new Date(today);
+                sunStart.setDate(today.getDate() - day - 7); // last Sunday
+                const satEnd = new Date(today);
+                satEnd.setDate(today.getDate() - day - 1); // last Saturday
+                setCustomFrom(sunStart.toISOString().slice(0, 10));
+                setCustomTo(satEnd.toISOString().slice(0, 10));
+                setRangeType('custom');
+              }}
+              className="bg-green-600 hover:bg-green-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium transition"
+            >
+              Paiement semaine (dim-sam)
+            </button>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="text-slate-400 text-xs uppercase">
                 <tr>
-                  <th className="px-4 py-2">Employé</th>
+                  <th className="px-4 py-2">Employe</th>
                   <th className="px-4 py-2">Taux/h</th>
                   <th className="px-4 py-2">Total heures</th>
-                  <th className="px-4 py-2">Salaire</th>
+                  <th className="px-4 py-2">Montant</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700">
@@ -634,6 +732,62 @@ function HeuresTab() {
                   <td className="px-4 py-2 text-amber-400 font-bold">{formatMoney(totals.montant)}</td>
                 </tr>
               </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Weekly Calendar View */}
+      {weekDates.length > 0 && employeeNames.length > 0 && (
+        <div className="bg-slate-800 rounded-xl p-4 space-y-3">
+          <h3 className="text-white font-semibold text-sm">Vue calendrier hebdomadaire</h3>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm text-left">
+              <thead className="text-slate-400 text-xs uppercase">
+                <tr>
+                  <th className="px-3 py-2">Employe</th>
+                  {weekDates.map((date, i) => (
+                    <th key={date} className="px-3 py-2 text-center">
+                      <div>{DAY_LABELS[i]}</div>
+                      <div className="text-[10px] text-slate-500 font-normal">{date.slice(5)}</div>
+                    </th>
+                  ))}
+                  <th className="px-3 py-2 text-center">Total</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700">
+                {employeeNames.map(name => {
+                  const dayMap = calendarData[name] || {};
+                  let weekTotal = 0;
+                  return (
+                    <tr key={name}>
+                      <td className="px-3 py-2 text-white font-medium whitespace-nowrap">{name}</td>
+                      {weekDates.map(date => {
+                        const h = Math.round((dayMap[date] || 0) * 100) / 100;
+                        weekTotal += h;
+                        // Color intensity based on hours
+                        let bg = '';
+                        if (h > 0 && h < 4) bg = 'bg-amber-500/20';
+                        else if (h >= 4 && h < 8) bg = 'bg-amber-500/40';
+                        else if (h >= 8) bg = 'bg-amber-500/60';
+
+                        return (
+                          <td key={date} className={`px-3 py-2 text-center ${bg} rounded`}>
+                            {h > 0 ? (
+                              <span className="text-white font-medium text-xs">{h}h</span>
+                            ) : (
+                              <span className="text-slate-600 text-xs">—</span>
+                            )}
+                          </td>
+                        );
+                      })}
+                      <td className="px-3 py-2 text-center">
+                        <span className="text-amber-400 font-bold text-xs">{Math.round(weekTotal * 100) / 100}h</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </table>
           </div>
         </div>
