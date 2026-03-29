@@ -899,9 +899,27 @@ export async function POST(req: NextRequest) {
   const isGroup = message.chat.type === 'group' || message.chat.type === 'supergroup';
   const isAdmin = adminIds.includes(chatId) || adminIds.includes(senderId);
 
-  // GROUP MESSAGE: respond to "Aria ..." or auto-detect leads
+  // GROUP MESSAGE: respond to "Aria ...", auto-detect leads, or process CSV files
   if (isGroup) {
-    const text = (message.text ?? message.caption ?? '').trim();
+    // Handle CSV/TXT document uploads — download and extract leads
+    let docText = '';
+    if (message.document) {
+      const doc = message.document;
+      const fname = (doc.file_name || '').toLowerCase();
+      if (fname.endsWith('.csv') || fname.endsWith('.txt') || fname.endsWith('.tsv')) {
+        try {
+          const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${doc.file_id}`);
+          const fileData = await fileRes.json();
+          if (fileData.result?.file_path) {
+            const dlRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${fileData.result.file_path}`);
+            docText = await dlRes.text();
+            await sendTelegram(chatId, `🤖 <b>Aria:</b> Fichier ${doc.file_name} recu (${docText.split('\n').length} lignes). Extraction des leads en cours...`);
+          }
+        } catch { /* skip */ }
+      }
+    }
+
+    const text = (docText || message.text ?? message.caption ?? '').trim();
     if (!text || text.length < 3) return NextResponse.json({ ok: true });
 
     // If message starts with "Aria" — respond as Aria in the group
