@@ -15,7 +15,9 @@ interface CheckResult {
 
 async function notifyTelegram(message: string) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  // Send to group if available, otherwise DM admins
+  const groupId = process.env.TELEGRAM_GROUP_CHAT_ID;
+  const chatIds = groupId ? [groupId] : (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
   if (!botToken || chatIds.length === 0) return;
   await Promise.all(chatIds.map(id =>
     fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
