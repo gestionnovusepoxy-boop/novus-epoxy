@@ -20,6 +20,12 @@ interface ActivityData {
   health?:  Record<string, 'green' | 'yellow' | 'red'>;
 }
 
+interface AgentLiveStatus {
+  status: 'running' | 'veille' | 'erreur';
+  detail: string;
+  lastCheck?: string;
+}
+
 interface Props {
   authorName: string;
   initialActivity: ActivityData;
@@ -577,20 +583,27 @@ function AgentCard({
   isActive,
   isStreaming,
   isEnabled,
+  liveStatus,
   onChat,
   onToggle,
+  onTest,
+  onRestart,
 }: {
   agent: (typeof AGENTS)[number];
   activity: ActivityData;
   isActive: boolean;
   isStreaming: boolean;
   isEnabled: boolean;
+  liveStatus?: AgentLiveStatus;
   onChat: (id: AgentId) => void;
   onToggle: (id: AgentId) => void;
+  onTest: (id: AgentId) => void;
+  onRestart: (id: AgentId) => void;
 }) {
   const conseil = getConseil(agent.id as AgentId, activity);
   const metrics = getMetrics(agent.id as AgentId, activity);
   const [showActions, setShowActions] = useState(false);
+  const [actionFeedback, setActionFeedback] = useState<string | null>(null);
   const dropRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -601,30 +614,42 @@ function AgentCard({
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  // Status indicator — uses real health checks from API
+  // Clear feedback after 4s
+  useEffect(() => {
+    if (!actionFeedback) return;
+    const t = setTimeout(() => setActionFeedback(null), 4000);
+    return () => clearTimeout(t);
+  }, [actionFeedback]);
+
+  // Status indicator — uses live status from /api/agents/status if available, falls back to health
+  const resolvedStatus = liveStatus?.status;
   const agentHealth = activity.health?.[agent.id as string] ?? 'green';
   let statusDot: string;
   let statusText: string;
   let statusTextColor: string;
   if (!isEnabled) {
     statusDot = 'bg-red-500';
-    statusText = 'DÉSACTIVÉ';
+    statusText = 'DESACTIVE';
     statusTextColor = 'text-red-400';
   } else if (isStreaming) {
     statusDot = 'bg-green-400 animate-ping';
     statusText = 'ACTIF';
     statusTextColor = 'text-green-400';
-  } else if (agentHealth === 'red') {
+  } else if (resolvedStatus === 'erreur' || (!resolvedStatus && agentHealth === 'red')) {
     statusDot = 'bg-red-500 animate-pulse';
-    statusText = 'ERREUR';
+    statusText = 'Erreur';
     statusTextColor = 'text-red-400';
-  } else if (agentHealth === 'yellow') {
-    statusDot = 'bg-yellow-400 animate-pulse';
-    statusText = 'ATTENTION';
+  } else if (resolvedStatus === 'veille' || (!resolvedStatus && agentHealth === 'yellow')) {
+    statusDot = 'bg-yellow-400';
+    statusText = 'En veille';
     statusTextColor = 'text-yellow-400';
+  } else if (resolvedStatus === 'running') {
+    statusDot = 'bg-emerald-400 animate-[pulse_2s_ease-in-out_infinite]';
+    statusText = 'Actif';
+    statusTextColor = 'text-emerald-400';
   } else {
     statusDot = 'bg-emerald-400';
-    statusText = 'OPÉRATIONNEL';
+    statusText = 'Actif';
     statusTextColor = 'text-emerald-400';
   }
 
@@ -683,6 +708,17 @@ function AgentCard({
         <p className="text-slate-300 text-xs leading-relaxed">{conseil}</p>
       </div>
 
+      {/* Live status detail */}
+      {liveStatus && (
+        <p className={`text-[10px] mb-2 text-center ${
+          liveStatus.status === 'erreur' ? 'text-red-400' :
+          liveStatus.status === 'veille' ? 'text-yellow-400' :
+          'text-slate-500'
+        }`}>
+          {liveStatus.detail}
+        </p>
+      )}
+
       {/* Last activity */}
       {(() => {
         const lastAction = (() => {
@@ -694,9 +730,16 @@ function AgentCard({
           }
         })();
         return lastAction ? (
-          <p className="text-[10px] text-slate-600 mb-2 text-center">Dernière activité: {lastAction}</p>
+          <p className="text-[10px] text-slate-600 mb-2 text-center">Derniere activite: {lastAction}</p>
         ) : null;
       })()}
+
+      {/* Action feedback */}
+      {actionFeedback && (
+        <div className="bg-slate-800/80 border border-slate-700 rounded-lg px-3 py-1.5 mb-2 text-center">
+          <p className="text-xs text-slate-300">{actionFeedback}</p>
+        </div>
+      )}
 
       {/* Buttons */}
       <div className="flex gap-2 mt-auto">
@@ -707,10 +750,24 @@ function AgentCard({
         >
           <span>💬</span> Chat
         </button>
+        <button
+          onClick={() => { onTest(agent.id as AgentId); setActionFeedback('Verification...'); }}
+          title="Tester"
+          className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition"
+        >
+          🧪
+        </button>
+        <button
+          onClick={() => { onRestart(agent.id as AgentId); setActionFeedback('Redemarrage...'); }}
+          title="Redemarrer"
+          className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition"
+        >
+          🔄
+        </button>
         <div className="relative" ref={dropRef}>
           <button
             onClick={() => setShowActions(v => !v)}
-            className="flex items-center gap-1 px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition"
+            className="flex items-center gap-1 px-2.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs font-medium transition"
           >
             ⚡ <span className="text-slate-500">▾</span>
           </button>
@@ -891,6 +948,8 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
       return saved ? new Set(JSON.parse(saved) as string[]) : new Set();
     } catch { return new Set(); }
   });
+  const [liveStatuses, setLiveStatuses] = useState<Record<string, AgentLiveStatus>>({});
+  const [statusLoading, setStatusLoading] = useState(false);
   const [now, setNow] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -918,6 +977,52 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
       if (res.ok) setActivity(await res.json() as ActivityData);
     } catch { /* noop */ }
   }, []);
+
+  // Fetch live statuses for all agents
+  const refreshStatuses = useCallback(async () => {
+    setStatusLoading(true);
+    try {
+      const res = await fetch('/api/agents/status');
+      if (res.ok) {
+        const data = await res.json() as Record<string, AgentLiveStatus>;
+        setLiveStatuses(data);
+      }
+    } catch { /* noop */ }
+    setStatusLoading(false);
+  }, []);
+
+  // Test a single agent
+  const handleTestAgent = useCallback(async (id: AgentId) => {
+    try {
+      const res = await fetch(`/api/agents/status?agent=${id}`);
+      if (res.ok) {
+        const data = await res.json() as Record<string, AgentLiveStatus>;
+        setLiveStatuses(prev => ({ ...prev, ...data }));
+      }
+    } catch { /* noop */ }
+  }, []);
+
+  // Restart/trigger a single agent
+  const handleRestartAgent = useCallback(async (id: AgentId) => {
+    try {
+      const res = await fetch('/api/agents/restart', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId: id }),
+      });
+      if (res.ok) {
+        // After restart, re-check the agent status
+        setTimeout(() => { void handleTestAgent(id); }, 2000);
+      }
+    } catch { /* noop */ }
+  }, [handleTestAgent]);
+
+  // Auto-refresh statuses every 60 seconds
+  useEffect(() => {
+    void refreshStatuses();
+    const interval = setInterval(() => { void refreshStatuses(); }, 60000);
+    return () => clearInterval(interval);
+  }, [refreshStatuses]);
 
   // Close panel on ESC
   useEffect(() => {
@@ -964,25 +1069,61 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
   const timeline = getTimelineEvents(activity);
   const activeAgentData = AGENTS.find(a => a.id === activeAgent);
 
+  // Compute live status summary
+  const statusEntries = Object.values(liveStatuses);
+  const runningCount = statusEntries.filter(s => s.status === 'running').length;
+  const veilleCount = statusEntries.filter(s => s.status === 'veille').length;
+  const erreurCount = statusEntries.filter(s => s.status === 'erreur').length;
+  const totalChecked = statusEntries.length;
+
   return (
     <div className="min-h-screen bg-slate-950 text-white">
       {/* Header */}
       <div className="sticky top-0 z-10 border-b border-slate-800 bg-slate-950/95 backdrop-blur px-6 py-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-2">
           <div>
             <h1 className="text-xl font-bold flex items-center gap-2">
               🚀 <span>Mission Control</span>
               <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-normal">{AGENTS.length - disabledAgents.size} AGENTS ACTIFS</span>
             </h1>
-            <p className="text-slate-500 text-xs mt-0.5">Quartier général IA — Novus Epoxy</p>
+            <p className="text-slate-500 text-xs mt-0.5">Quartier general IA — Novus Epoxy</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Live status summary bar */}
+            {totalChecked > 0 && (
+              <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 rounded-lg px-3 py-1.5">
+                <span className="text-slate-400 text-xs">Tous les systemes:</span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400" />
+                  <span className="text-emerald-400 text-xs font-semibold">{runningCount}</span>
+                </span>
+                {veilleCount > 0 && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-yellow-400" />
+                    <span className="text-yellow-400 text-xs font-semibold">{veilleCount}</span>
+                  </span>
+                )}
+                {erreurCount > 0 && (
+                  <span className="flex items-center gap-1">
+                    <span className="w-2 h-2 rounded-full bg-red-500" />
+                    <span className="text-red-400 text-xs font-semibold">{erreurCount}</span>
+                  </span>
+                )}
+                <span className="text-slate-600 text-xs">/ {totalChecked}</span>
+              </div>
+            )}
             <span className="text-slate-400 text-sm font-mono">{now}</span>
             <button
-              onClick={() => void refreshActivity()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs transition"
+              onClick={() => { void refreshActivity(); void refreshStatuses(); }}
+              disabled={statusLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-xs transition disabled:opacity-50"
             >
-              🔄 Refresh
+              {statusLoading ? (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : '🔄'} Tout verifier
             </button>
           </div>
         </div>
@@ -1015,8 +1156,11 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
               isActive={activeAgents.has(agent.id)}
               isStreaming={loadingAgents.has(agent.id)}
               isEnabled={!disabledAgents.has(agent.id)}
+              liveStatus={liveStatuses[agent.id]}
               onChat={handleOpenChat}
               onToggle={handleToggleAgent}
+              onTest={handleTestAgent}
+              onRestart={handleRestartAgent}
             />
           ))}
         </div>
