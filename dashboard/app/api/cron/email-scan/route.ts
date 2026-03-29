@@ -359,6 +359,23 @@ Reponds en JSON strict (sans markdown):
 
   // 8. Update crm_leads statut + temperature + last_agent_reply_at
   const temperature = parsed.priority === 'haute' ? 'chaud' : parsed.priority === 'basse' ? 'froid' : 'tiede';
+
+  // Detect complaints/frustration — alert admins immediately
+  const frustrationWords = ['rembourse', 'avocat', 'plainte', 'inacceptable', 'jamais revenu', 'arnaque', 'scam', 'poursuivre', 'bbb', 'opc', 'pas content', 'decu', 'horrible', 'worst', 'refund'];
+  const msgLower = bodyText.toLowerCase();
+  const isComplaint = frustrationWords.some(w => msgLower.includes(w));
+  if (isComplaint) {
+    for (const chatId of ADMIN_CHAT_IDS()) {
+      await sendTelegram(chatId,
+        `\u{1F6A8}\u{1F6A8}\u{1F6A8} <b>PLAINTE CLIENT DETECTEE</b>\n\n` +
+        `\u{1F464} ${leadNom} (${fromEmail})\n` +
+        `\u{1F4DD} ${subject}\n\n` +
+        `\u{1F4AC} ${bodyText.slice(0, 500)}\n\n` +
+        `\u{26A0}\u{FE0F} <b>REPONDRE IMMEDIATEMENT — ne pas laisser Aria gerer!</b>`
+      );
+    }
+  }
+
   await query(
     `UPDATE crm_leads SET statut = 'interesse', temperature = $1, last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $2`,
     [temperature, leadId]

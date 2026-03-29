@@ -9,28 +9,7 @@ import { PollingProvider, usePolling } from '@/components/polling-provider';
 import { fetchStats, fetchSubmissions, type StatsResponse, type Submission } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
-
-const STATUT_LABEL: Record<string, string> = {
-  brouillon: 'Brouillon',
-  en_attente: 'En attente',
-  approuve: 'Approuvé',
-  envoye: 'Envoyé',
-  depot_paye: 'Dépôt payé',
-  planifie: 'Planifié',
-  complete: 'Complété',
-  refuse: 'Refusé',
-};
-
-const STATUT_COLOR: Record<string, string> = {
-  brouillon: 'bg-slate-600',
-  en_attente: 'bg-amber-600',
-  approuve: 'bg-blue-600',
-  envoye: 'bg-cyan-600',
-  depot_paye: 'bg-emerald-600',
-  planifie: 'bg-violet-600',
-  complete: 'bg-green-600',
-  refuse: 'bg-red-600',
-};
+import { PipelineDonut, TopPagesBar } from '@/components/tremor-charts';
 
 function RefreshBadge() {
   const { lastRefresh, isRefreshing } = usePolling();
@@ -139,41 +118,13 @@ function DashboardContent() {
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <ConversionsChart data={stats.serie_leads} />
-
-              {/* Pipeline devis */}
-              <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-white font-semibold">Pipeline devis</h3>
-                  <Link href="/dashboard/devis" className="text-amber-400 hover:text-amber-300 text-xs transition">
-                    Voir tout →
-                  </Link>
-                </div>
-                {stats.pipeline.length === 0 ? (
-                  <p className="text-slate-500 text-sm">Aucun devis</p>
-                ) : (
-                  <div className="space-y-3">
-                    {stats.pipeline.map(p => {
-                      const total = stats.pipeline.reduce((sum, x) => sum + x.count, 0);
-                      const pct = total > 0 ? Math.round(p.count / total * 100) : 0;
-                      return (
-                        <div key={p.statut}>
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-sm text-slate-300">{STATUT_LABEL[p.statut] ?? p.statut}</span>
-                            <span className="text-sm font-medium text-white">{p.count}</span>
-                          </div>
-                          <div className="h-2 bg-slate-700 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${STATUT_COLOR[p.statut] ?? 'bg-slate-500'}`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+              <PipelineDonut pipeline={stats.pipeline} />
             </div>
+
+            {/* Top pages */}
+            {stats.top_pages && stats.top_pages.length > 0 && (
+              <TopPagesBar pages={stats.top_pages} />
+            )}
 
             {/* Bottom row: prochains RDV + nouvelles soumissions */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

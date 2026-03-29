@@ -27,6 +27,16 @@ export async function sendSMS(to: string, body: string, fromOverride?: string, _
   const cleaned = to.replace(/[^0-9+]/g, '');
   const phone = cleaned.startsWith('+') ? cleaned : cleaned.startsWith('1') ? `+${cleaned}` : `+1${cleaned}`;
 
+  // SMS opt-out check
+  try {
+    const { query } = await import('@/lib/db');
+    const optout = await query(`SELECT 1 FROM kv_store WHERE key = $1`, ['sms_optout_' + phone]);
+    if (optout.length > 0) {
+      console.log(`[SMS] BLOQUE — ${to} est desabonne (opt-out)`);
+      return false;
+    }
+  } catch { /* DB check failed — proceed with send */ }
+
   try {
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
       method: 'POST',
