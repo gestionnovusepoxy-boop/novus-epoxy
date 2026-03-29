@@ -6,6 +6,7 @@ import { timingSafeEqual } from 'crypto';
 import { google } from 'googleapis';
 import { sendEmail } from '@/lib/send-email';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
+import { autoHeal } from '@/lib/auto-heal';
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -691,6 +692,9 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ ok: true });
+
+  // Auto-heal: check & repair all systems every 5 min
+  autoHeal().catch(() => {});
 
   // Handle callback_query (inline button presses)
   if (body.callback_query) {

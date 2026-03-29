@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { autoHeal } from '@/lib/auto-heal';
 
 // Gmail Pub/Sub push notification handler
 // Google sends a POST with a Pub/Sub message when new emails arrive.
@@ -24,6 +25,9 @@ export async function POST(req: NextRequest) {
     const historyId = decoded.historyId;
 
     console.log(`[Gmail Webhook] Push notification for ${emailAddress}, historyId: ${historyId}`);
+
+    // Auto-heal: check & repair all systems every 5 min
+    autoHeal().catch(() => {});
 
     // Check cooldown — skip if last scan was less than 2 min ago
     const lastScanRows = await query(`SELECT value FROM kv_store WHERE key = 'last_email_scan'`);

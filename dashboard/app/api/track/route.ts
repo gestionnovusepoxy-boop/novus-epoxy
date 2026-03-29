@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query as db } from '@/lib/db';
+import { autoHeal } from '@/lib/auto-heal';
 
 // Endpoint public — appelé par tracker.js depuis novusepoxy.ca
 export async function POST(req: NextRequest) {
+  autoHeal().catch(() => {}); // Self-healing on every page view
   const body = await req.json().catch(() => null);
   if (!body?.type) return new NextResponse(null, { status: 400 });
 
