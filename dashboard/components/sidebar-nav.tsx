@@ -49,8 +49,15 @@ const SECTIONS: NavSection[] = [
     ],
   },
   {
+    title: 'Équipe',
+    links: [
+      { href: '/dashboard/equipe', label: 'Équipe & Heures', icon: '👷' },
+    ],
+  },
+  {
     title: 'Outils',
     links: [
+      { href: '/dashboard/campagnes', label: 'Campagnes', icon: '\u{1F4E2}' },
       { href: '/dashboard/stats',  label: 'Statistiques', icon: '\u{1F4C8}' },
       { href: '/dashboard/portfolio', label: 'Portfolio', icon: '\u{1F4F8}' },
     ],

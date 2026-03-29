@@ -156,16 +156,11 @@ HANDOFF HUMAIN:
 - Reponds avec: <HANDOFF>raison courte</HANDOFF> a la fin de ton message
 - Ex: "Je vais transferer ta question a notre equipe, quelqu'un va te repondre rapidement! <HANDOFF>Question technique sur preparation plancher abime</HANDOFF>"
 
-PROMO AVRIL — RABAIS 20% (IMPORTANT):
-- On a presentement un rabais de 20% pour les projets du mois d'avril.
-- Mentionne-le UNE SEULE FOIS, juste avant de confirmer le resume du projet (avant de demander "Est-ce que tout est exact?").
-- Ex: "En passant, on a un rabais de 20% pour les projets d'avril — ca s'applique automatiquement a ton devis!"
-- Si le client demande des details sur le rabais: "C'est notre promo d'avril, valable pour les travaux planifies ce mois-ci."
-- Ne le mentionne PAS au debut de la conversation — seulement quand tu as les infos du projet.
+{{PROMO_ACTIVE}}
 
 GESTION DES OBJECTIONS (closer instinct):
-- "C'est trop cher" / "C'est pas dans mon budget": "Je comprends! Garde en tete que notre epoxy dure 15-20 ans sans entretien. Et avec le rabais d'avril, c'est le meilleur moment! Veux-tu quand meme recevoir la soumission pour voir exactement les chiffres?"
-- "Je vais y penser" / "Je suis pas certain": "Pas de probleme! Je vais te preparer la soumission et tu peux prendre le temps qu'il te faut. Les prix du rabais d'avril sont valides jusqu'a la fin du mois."
+- "C'est trop cher" / "C'est pas dans mon budget": "Je comprends! Garde en tete que notre epoxy dure 15-20 ans sans entretien.{{PROMO_OBJECTION_PRIX}} Veux-tu quand meme recevoir la soumission pour voir exactement les chiffres?"
+- "Je vais y penser" / "Je suis pas certain": "Pas de probleme! Je vais te preparer la soumission et tu peux prendre le temps qu'il te faut.{{PROMO_OBJECTION_PENSER}}"
 - "Je regarde plusieurs compagnies": "C'est sage de comparer! Ce qu'on offre: planchers garantis, equipe locale quebecoise, materiaux Torginol haut de gamme. La soumission est gratuite — ca te donne une base de comparaison."
 - "Ca prend combien de temps": "En general, c'est 1-2 jours selon la superficie. On travaille vite et propre — le plancher est pret a utiliser apres 24h."
 - Si le client est hors sujet ou froid: Ramene avec "En attendant, veux-tu qu'on te prepare une soumission gratuite? Zero engagement!"
@@ -284,16 +279,36 @@ async function createQuoteFromConversation(conversationId: number, data: {
 }): Promise<{ quoteId: number; total: number; depot: number } | null> {
   if (!(data.type_service in SERVICES)) return null;
 
-  const calc = calculateQuote(data.type_service as ServiceType, data.superficie);
+  // Check for active promotions and apply discount automatically
+  let rabaisPct = 0;
+  try {
+    const promoRows = await query(
+      `SELECT rabais_pct, services FROM promotions
+       WHERE actif = true AND date_debut <= CURRENT_DATE AND date_fin >= CURRENT_DATE
+       ORDER BY rabais_pct DESC LIMIT 1`
+    );
+    if (promoRows.length > 0) {
+      const promo = promoRows[0];
+      const services = promo.services as string[];
+      // Apply if no specific services or if service matches
+      if (!services || services.length === 0 || services.includes(data.type_service)) {
+        rabaisPct = Number(promo.rabais_pct);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to check active promos for quote:', err);
+  }
+
+  const calc = calculateQuote(data.type_service as ServiceType, data.superficie, rabaisPct);
 
   const rows = await query(
-    `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, couleur_flake, prix_pied_carre, sous_total, tps, tvq, total, depot_requis, statut)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'brouillon')
+    `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, couleur_flake, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis, statut)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'brouillon')
      RETURNING id`,
     [
       data.nom, data.email, data.tel ?? null, data.adresse ?? null,
       data.type_service, data.superficie, data.etat_plancher ?? null, data.couleur_flake ?? null,
-      calc.prix_pied_carre, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
+      calc.prix_pied_carre, calc.rabais_pct, calc.rabais_montant, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
     ]
   );
 
@@ -404,6 +419,46 @@ async function getClientContext(conversationId: number, visitorId: string): Prom
   return parts.length > 0 ? `\n\nCONTEXTE CLIENT:\n${parts.join('\n')}` : '';
 }
 
+// Fetch active promotions and build prompt text
+async function getActivePromosText(): Promise<{ promoBlock: string; objectionPrix: string; objectionPenser: string }> {
+  try {
+    const rows = await query(
+      `SELECT nom, description, rabais_pct, date_debut, date_fin, services
+       FROM promotions
+       WHERE actif = true AND date_debut <= CURRENT_DATE AND date_fin >= CURRENT_DATE
+       ORDER BY rabais_pct DESC`
+    );
+
+    if (rows.length === 0) {
+      return {
+        promoBlock: '',
+        objectionPrix: '',
+        objectionPenser: '',
+      };
+    }
+
+    const promo = rows[0];
+    const pct = promo.rabais_pct;
+    const nom = promo.nom as string;
+    const dateFin = new Date(promo.date_fin as string).toLocaleDateString('fr-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    const promoBlock = `PROMO EN COURS — ${nom} (IMPORTANT):
+- On a presentement un rabais de ${pct}%${(promo.services as string[])?.length ? ' sur certains services' : ' sur tous nos services'}.
+- Mentionne-le UNE SEULE FOIS, juste avant de confirmer le resume du projet (avant de demander "Est-ce que tout est exact?").
+- Ex: "En passant, on a un rabais de ${pct}% en ce moment — ca s'applique automatiquement a ton devis!"
+- Si le client demande des details sur le rabais: "C'est notre promo actuelle, valable jusqu'au ${dateFin}."
+- Ne le mentionne PAS au debut de la conversation — seulement quand tu as les infos du projet.`;
+
+    const objectionPrix = ` Et avec notre rabais de ${pct}%, c'est le meilleur moment!`;
+    const objectionPenser = ` Les prix avec le rabais de ${pct}% sont valides jusqu'au ${dateFin}.`;
+
+    return { promoBlock, objectionPrix, objectionPenser };
+  } catch (err) {
+    console.error('Failed to fetch active promos:', err);
+    return { promoBlock: '', objectionPrix: '', objectionPenser: '' };
+  }
+}
+
 // Sanitize user input to prevent prompt injection via control tags
 function sanitizeUserInput(msg: string): string {
   return msg
@@ -432,10 +487,11 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
   // Save user message (original for display)
   await saveMessage(conversationId, 'user', userMessage);
 
-  // Load conversation history and client context in parallel
-  const [history, clientContext] = await Promise.all([
+  // Load conversation history, client context, and active promos in parallel
+  const [history, clientContext, promosText] = await Promise.all([
     loadHistory(conversationId),
     getClientContext(conversationId, ctx.visitorId),
+    getActivePromosText(),
   ]);
 
   // Call Claude API
@@ -451,7 +507,12 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
     content: m.role === 'user' ? sanitizeUserInput(m.content) : m.content,
   }));
 
-  const systemPrompt = SYSTEM_PROMPT.replaceAll('{VISITOR_ID}', ctx.visitorId) + clientContext;
+  const systemPrompt = SYSTEM_PROMPT
+    .replaceAll('{VISITOR_ID}', ctx.visitorId)
+    .replace('{{PROMO_ACTIVE}}', promosText.promoBlock)
+    .replace('{{PROMO_OBJECTION_PRIX}}', promosText.objectionPrix)
+    .replace('{{PROMO_OBJECTION_PENSER}}', promosText.objectionPenser)
+    + clientContext;
 
   const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',

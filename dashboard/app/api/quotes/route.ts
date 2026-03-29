@@ -57,7 +57,28 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Type de service invalide' }, { status: 400 });
   }
 
-  const rabaisPct = Math.min(100, Math.max(0, parseFloat(rabais_pct ?? 0) || 0));
+  let rabaisPct = Math.min(100, Math.max(0, parseFloat(rabais_pct ?? 0) || 0));
+
+  // If no manual discount, check for active promotions
+  if (rabaisPct === 0) {
+    try {
+      const promoRows = await query(
+        `SELECT rabais_pct, services FROM promotions
+         WHERE actif = true AND date_debut <= CURRENT_DATE AND date_fin >= CURRENT_DATE
+         ORDER BY rabais_pct DESC LIMIT 1`
+      );
+      if (promoRows.length > 0) {
+        const promo = promoRows[0];
+        const services = promo.services as string[];
+        if (!services || services.length === 0 || services.includes(type_service)) {
+          rabaisPct = Number(promo.rabais_pct);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to check active promos for quote:', err);
+    }
+  }
+
   const calc = calculateQuote(type_service as ServiceType, parseFloat(superficie), rabaisPct);
 
   const rows = await query(

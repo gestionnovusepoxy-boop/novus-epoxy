@@ -11,6 +11,13 @@ import { formatDate } from '@/lib/utils';
 import Link from 'next/link';
 import { PipelineDonut, TopPagesBar } from '@/components/tremor-charts';
 
+interface ReviewStats {
+  total_sms_sent: number;
+  total_emails_sent: number;
+  last_request_date: string | null;
+  google_review_url: string;
+}
+
 function RefreshBadge() {
   const { lastRefresh, isRefreshing } = usePolling();
   return (
@@ -23,6 +30,7 @@ function RefreshBadge() {
 function DashboardContent() {
   const [stats, setStats]               = useState<StatsResponse | null>(null);
   const [soumissions, setSoumissions]   = useState<Submission[]>([]);
+  const [reviewStats, setReviewStats]   = useState<ReviewStats | null>(null);
   const [periode, setPeriode]           = useState<'7d' | '30d' | '90d'>('30d');
 
   const loadData = useCallback(async () => {
@@ -32,6 +40,11 @@ function DashboardContent() {
     ]);
     setStats(s);
     setSoumissions(sub.data);
+    // Fetch review stats (non-blocking)
+    fetch('/api/reviews/stats')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) setReviewStats(data); })
+      .catch(() => {});
   }, [periode]);
 
   return (
@@ -124,6 +137,41 @@ function DashboardContent() {
             {/* Top pages */}
             {stats.top_pages && stats.top_pages.length > 0 && (
               <TopPagesBar pages={stats.top_pages} />
+            )}
+
+            {/* Reviews card */}
+            {reviewStats && (
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-white font-semibold">Avis Google</h3>
+                  <a
+                    href={reviewStats.google_review_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-400 hover:text-amber-300 text-sm transition"
+                  >
+                    Voir les avis →
+                  </a>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-2xl font-bold text-white">{reviewStats.total_sms_sent}</p>
+                    <p className="text-slate-400 text-xs mt-1">SMS envoyes</p>
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">{reviewStats.total_emails_sent}</p>
+                    <p className="text-slate-400 text-xs mt-1">Emails envoyes</p>
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-white">
+                      {reviewStats.last_request_date
+                        ? formatDate(reviewStats.last_request_date)
+                        : 'Aucune'}
+                    </p>
+                    <p className="text-slate-400 text-xs mt-1">Derniere demande</p>
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Bottom row: prochains RDV + nouvelles soumissions */}
