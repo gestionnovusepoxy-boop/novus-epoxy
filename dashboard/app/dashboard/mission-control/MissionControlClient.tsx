@@ -8,7 +8,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 interface ActivityData {
   marcel?:  { messages: number; label: string };
   hunter?:  { chauds: number; tiedes: number; froids: number; nouveaux: number; total_leads: number; prospects_envoyes: number; prospects_semaine: number; last_action: string | null };
-  aria?:    { emails_today: number; total_envoyes: number; ouverts: number; cliques: number; semaine: number; last_action: string | null };
+  aria?:    { emails_today: number; total_envoyes: number; ouverts: number; cliques: number; semaine: number; last_action: string | null; leads_importes_today: number; closer_today: number; suivis_semaine: number; reponses_semaine: number; offres_today: number };
   rex?:     { devis_today: number; en_attente: number; envoyes: number; total: number };
   iris?:    { confirmes: string; pipeline: string; actifs: number };
   sage?:    { total_photos: number; total_videos: number; featured: number; total_items: number; last_scan: string | null };
@@ -77,8 +77,8 @@ const AGENTS = [
     ],
   },
   {
-    id: 'aria', name: 'Aria', emoji: '📧', role: 'Email Agent',
-    desc: 'Gmail, leads qui répondent, follow-ups intelligents',
+    id: 'aria', name: 'Aria', emoji: '📧', role: 'Closer Automatique',
+    desc: 'Import leads, offres, closer, suivis 48h/5j, détection réponses',
     color: 'blue',
     ring: 'ring-blue-500/40', bg: 'bg-blue-600', text: 'text-blue-400',
     border: 'border-blue-500/20', glow: 'shadow-blue-500/10',
@@ -231,8 +231,12 @@ function getConseil(id: AgentId, activity: ActivityData): string {
     case 'aria': {
       const a = activity.aria;
       if (!a) return 'Vérifie ta boîte Gmail';
-      if (a.emails_today > 0) return `${a.emails_today} email${a.emails_today > 1 ? 's' : ''} aujourd'hui · ${a.total_envoyes} total envoyés`;
-      if (a.semaine > 0) return `${a.semaine} emails cette semaine · ${a.ouverts} ouverts`;
+      const parts = [];
+      if (a.leads_importes_today > 0) parts.push(`${a.leads_importes_today} leads importés`);
+      if (a.offres_today > 0) parts.push(`${a.offres_today} offres envoyées`);
+      if (a.closer_today > 0) parts.push(`${a.closer_today} réponses closer`);
+      if (parts.length > 0) return parts.join(' · ');
+      if (a.semaine > 0) return `${a.semaine} emails cette semaine · ${a.reponses_semaine} réponses`;
       return a.last_action ? `Dernière activité ${a.last_action}` : 'Aucun email récent';
     }
     case 'rex': {
@@ -306,14 +310,13 @@ function getMetrics(id: AgentId, activity: ActivityData): { label: string; value
     }
     case 'aria': {
       const a = activity.aria;
-      const tauxOuverture = (a?.total_envoyes ?? 0) > 0
-        ? `${Math.round(((a?.ouverts ?? 0) / a!.total_envoyes) * 100)}%`
-        : '—';
       return [
-        { label: 'Emails envoyés', value: String(a?.total_envoyes ?? 0) },
-        { label: "Aujourd'hui", value: String(a?.emails_today ?? 0) },
-        { label: 'Taux ouverture', value: tauxOuverture },
-        { label: 'Cliqués', value: String(a?.cliques ?? 0) },
+        { label: 'Leads importés (auj)', value: String(a?.leads_importes_today ?? 0) },
+        { label: 'Offres envoyées (auj)', value: String(a?.offres_today ?? 0) },
+        { label: 'Closer réponses (auj)', value: String(a?.closer_today ?? 0) },
+        { label: 'Suivis cette semaine', value: String(a?.suivis_semaine ?? 0) },
+        { label: 'Réponses détectées', value: String(a?.reponses_semaine ?? 0) },
+        { label: 'Emails total', value: String(a?.total_envoyes ?? 0) },
       ];
     }
     case 'rex': return [
@@ -394,8 +397,12 @@ function getTimelineEvents(activity: ActivityData): { emoji: string; text: strin
     events.push({ emoji: '⏳', text: `${activity.nova!.en_attente} devis en attente d'approbation`, agent: 'Nova' });
   if ((activity.nova?.today ?? 0) > 0)
     events.push({ emoji: '💬', text: `${activity.nova!.today} conversations chatbot aujourd'hui`, agent: 'Nova' });
-  if ((activity.aria?.emails_today ?? 0) > 0)
-    events.push({ emoji: '📧', text: `${activity.aria!.emails_today} emails aujourd'hui · ${activity.aria!.total_envoyes} total`, agent: 'Aria' });
+  if ((activity.aria?.leads_importes_today ?? 0) > 0)
+    events.push({ emoji: '📥', text: `${activity.aria!.leads_importes_today} leads importés aujourd'hui`, agent: 'Aria' });
+  if ((activity.aria?.offres_today ?? 0) > 0)
+    events.push({ emoji: '📧', text: `${activity.aria!.offres_today} offres envoyées · ${activity.aria!.closer_today} réponses closer`, agent: 'Aria' });
+  if ((activity.aria?.reponses_semaine ?? 0) > 0)
+    events.push({ emoji: '🔥', text: `${activity.aria!.reponses_semaine} leads ont répondu cette semaine`, agent: 'Aria' });
   if ((activity.rex?.en_attente ?? 0) > 0)
     events.push({ emoji: '📱', text: `${activity.rex!.en_attente} devis en attente de réponse`, agent: 'Rex' });
   if ((activity.iris?.actifs ?? 0) > 0)

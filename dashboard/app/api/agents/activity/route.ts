@@ -45,8 +45,14 @@ export async function GET() {
       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as semaine,
       MAX(created_at) as last_action
       FROM email_logs`),
-    // Aria: dernière action
-    query(`SELECT created_at FROM email_logs ORDER BY created_at DESC LIMIT 1`),
+    // Aria: dernière action + closer/import stats
+    query(`SELECT
+      (SELECT created_at FROM email_logs ORDER BY created_at DESC LIMIT 1) as last_email,
+      (SELECT COUNT(*) FROM crm_leads WHERE created_at::date = CURRENT_DATE) as leads_importes_today,
+      (SELECT COUNT(*) FROM crm_leads WHERE last_agent_reply_at IS NOT NULL AND last_agent_reply_at::date = CURRENT_DATE) as closer_today,
+      (SELECT COUNT(*) FROM crm_leads WHERE prospect_relance_1_at IS NOT NULL AND prospect_relance_1_at >= NOW() - INTERVAL '7 days') as suivis_semaine,
+      (SELECT COUNT(*) FROM crm_leads WHERE statut = 'interesse' AND updated_at >= NOW() - INTERVAL '7 days') as reponses_semaine,
+      (SELECT COUNT(*) FROM crm_leads WHERE prospect_sent_at IS NOT NULL AND prospect_sent_at::date = CURRENT_DATE) as offres_today`),
     // Rex: devis en attente + envoyés
     query(`SELECT
       COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as devis_today,
@@ -134,7 +140,8 @@ export async function GET() {
   };
 
   // Health checks for live status
-  const ariaLastDate = ariaLastAction[0]?.created_at as string | undefined;
+  const ariaExtra = ariaLastAction[0] as Record<string, string | number>;
+  const ariaLastDate = ariaExtra?.last_email as string | undefined;
   const hunterLastDate = hc.last_action as string | undefined;
   const sageLastDate = sageLastScan[0]?.created_at as string | undefined;
 
@@ -188,6 +195,11 @@ export async function GET() {
       cliques: Number(a.cliques ?? 0),
       semaine: Number(a.semaine ?? 0),
       last_action: timeAgo(ariaLastDate),
+      leads_importes_today: Number(ariaExtra?.leads_importes_today ?? 0),
+      closer_today: Number(ariaExtra?.closer_today ?? 0),
+      suivis_semaine: Number(ariaExtra?.suivis_semaine ?? 0),
+      reponses_semaine: Number(ariaExtra?.reponses_semaine ?? 0),
+      offres_today: Number(ariaExtra?.offres_today ?? 0),
     },
     rex: {
       devis_today: Number(r.devis_today ?? 0),
