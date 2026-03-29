@@ -275,16 +275,16 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
               </select>
             </div>
             <div>
+              <label className="text-slate-500 text-xs mb-1 block">Couleur de flake</label>
+              <input value={editForm.couleur_flake} onChange={e => setEditForm(f => ({ ...f, couleur_flake: e.target.value }))} placeholder="Ex: Blizzard, Sand Dollar..." className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
               <label className="text-slate-500 text-xs mb-1 block">Superficie (pi²)</label>
               <input value={editForm.superficie} onChange={e => setEditForm(f => ({ ...f, superficie: e.target.value }))} type="number" className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
             </div>
             <div>
               <label className="text-slate-500 text-xs mb-1 block">Rabais %</label>
               <input value={editForm.rabais_pct} onChange={e => setEditForm(f => ({ ...f, rabais_pct: e.target.value }))} type="number" className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
-            </div>
-            <div className="col-span-2">
-              <label className="text-slate-500 text-xs mb-1 block">Couleur de flake</label>
-              <input value={editForm.couleur_flake} onChange={e => setEditForm(f => ({ ...f, couleur_flake: e.target.value }))} placeholder="Ex: Blizzard, Sand Dollar, Opal..." className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
             </div>
             <div className="col-span-2">
               <label className="text-slate-500 text-xs mb-1 block">Description des travaux</label>
