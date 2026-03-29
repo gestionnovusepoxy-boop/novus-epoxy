@@ -460,23 +460,8 @@ Reponds en JSON strict (sans markdown):
         }
       } catch { /* quote creation failed — still notify */ }
     }
-  } else {
-    // 11. Notify admins with priority + summary
-    const emoji = parsed.priority === 'haute' ? '🔥' : parsed.priority === 'basse' ? '🔵' : '🟡';
-    for (const chatId of ADMIN_CHAT_IDS()) {
-      await sendTelegram(chatId, [
-        `${emoji} <b>Email lead CRM</b>`,
-        ``,
-        `👤 ${leadNom} (${fromEmail})`,
-        `🏷 ${parsed.type}`,
-        `💬 ${parsed.intent}`,
-        parsed.service_detecte && parsed.service_detecte !== 'null' ? `🔧 Service: ${parsed.service_detecte}` : '',
-        parsed.superficie_detectee && parsed.superficie_detectee !== 'null' ? `📐 Superficie: ${parsed.superficie_detectee} pi²` : '',
-        ``,
-        `https://novus-epoxy.vercel.app/dashboard/crm`,
-      ].filter(Boolean).join('\n'));
-    }
   }
+  // Closer notification above is sufficient — no duplicate "Email lead CRM" message
 }
 
 // POST handler — allows external triggers (e.g., cron-job.org, Gmail push)
