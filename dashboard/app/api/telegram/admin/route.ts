@@ -945,13 +945,14 @@ export async function POST(req: NextRequest) {
       const doc = message.document;
       const fname = (doc.file_name || '').toLowerCase();
       if (fname.endsWith('.csv') || fname.endsWith('.txt') || fname.endsWith('.tsv')) {
+        // Immediate confirmation
+        await sendTelegram(chatId, `🤖 <b>Aria:</b> Bien recu! Je commence l'importation de ${doc.file_name} maintenant...`);
         try {
           const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${doc.file_id}`);
           const fileData = await fileRes.json();
           if (fileData.result?.file_path) {
             const dlRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${fileData.result.file_path}`);
             docText = await dlRes.text();
-            await sendTelegram(chatId, `🤖 <b>Aria:</b> Fichier ${doc.file_name} recu (${docText.split('\n').length} lignes). Extraction des leads en cours...`);
           }
         } catch { /* skip */ }
       }
@@ -1084,13 +1085,17 @@ export async function POST(req: NextRequest) {
                 }
               }
 
-              // Notify in the GROUP so everyone sees
+              // Notify in the GROUP so everyone sees — detailed report
+              const hotCount = leads.filter(l => scoreTemp(l) === 'chaud').length;
+              const warmCount = leads.filter(l => scoreTemp(l) === 'tiede').length;
+              const coldCount = leads.filter(l => scoreTemp(l) === 'froid').length;
               await sendTelegram(chatId,
-                `🤖 <b>Aria — Leads importes!</b>\n\n` +
-                `📊 ${imported} nouveaux leads ajoutes au CRM\n` +
+                `🤖 <b>Aria — Importation terminee!</b>\n\n` +
+                `📊 <b>${imported}</b> nouveaux leads ajoutes au CRM\n` +
                 (skipped > 0 ? `⏭️ ${skipped} doublons ignores\n` : '') +
-                `📧 Offres de service personnalisees envoyees par email\n` +
-                `🚫 Aucun SMS envoye\n\n` +
+                `\n🔥 Chauds: ${hotCount} | 🟡 Tiedes: ${warmCount} | 🔵 Froids: ${coldCount}\n\n` +
+                `📧 Offres de service envoyees par email automatiquement\n` +
+                `⏰ Suivi automatique dans 48h si pas de reponse\n\n` +
                 `🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`
               );
             }
@@ -1196,7 +1201,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    await sendTelegram(chatId, `Fichier recu: ${doc.file_name}\nImportation en cours...`);
+    await sendTelegram(chatId, `🤖 <b>Aria:</b> Bien recu! Je commence l'importation de ${doc.file_name} maintenant...`);
 
     const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${doc.file_id}`);
     const fileData = await fileRes.json();
