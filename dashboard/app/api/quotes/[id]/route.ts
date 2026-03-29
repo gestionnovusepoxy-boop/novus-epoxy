@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { calculateQuote, type ServiceType, SERVICES } from '@/lib/pricing';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -19,13 +20,39 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const allowed = ['statut', 'client_nom', 'client_email', 'client_tel', 'client_adresse', 'type_service', 'superficie', 'etat_plancher', 'notes', 'contrat_signature_nom'];
+  const allowed = ['statut', 'client_nom', 'client_email', 'client_tel', 'client_adresse', 'type_service', 'superficie', 'etat_plancher', 'notes', 'contrat_signature_nom', 'rabais_pct'];
 
   const sets: string[] = [];
   const values: unknown[] = [];
   let i = 1;
 
-  for (const key of allowed) {
+  // If type_service or superficie or rabais_pct changed, recalculate prices
+  const needsRecalc = body.type_service !== undefined || body.superficie !== undefined || body.rabais_pct !== undefined;
+  if (needsRecalc) {
+    // Get current quote to fill in missing values
+    const current = await query('SELECT * FROM quotes WHERE id = $1', [parseInt(id)]);
+    if (!current[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
+
+    const service = (body.type_service ?? current[0].type_service) as ServiceType;
+    const superficie = parseFloat(body.superficie ?? current[0].superficie);
+    const rabais = parseFloat(body.rabais_pct ?? current[0].rabais_pct ?? 0);
+
+    if (service in SERVICES && superficie > 0) {
+      const calc = calculateQuote(service, superficie, rabais);
+      body.prix_pied_carre = calc.prix_pied_carre;
+      body.sous_total = calc.sous_total;
+      body.tps = calc.tps;
+      body.tvq = calc.tvq;
+      body.total = calc.total;
+      body.depot_requis = calc.depot_requis;
+      body.rabais_pct = calc.rabais_pct;
+      body.rabais_montant = calc.rabais_montant;
+    }
+  }
+
+  const allFields = [...allowed, 'prix_pied_carre', 'sous_total', 'tps', 'tvq', 'total', 'depot_requis', 'rabais_montant'];
+
+  for (const key of allFields) {
     if (key in body) {
       sets.push(`${key} = $${i++}`);
       values.push(body[key]);

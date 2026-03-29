@@ -122,6 +122,54 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
   }
 
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ client_nom: '', client_email: '', client_tel: '', client_adresse: '', type_service: '', superficie: '', notes: '', rabais_pct: '' });
+  const [saving, setSaving] = useState(false);
+
+  function startEdit() {
+    if (!quote) return;
+    setEditForm({
+      client_nom: quote.client_nom ?? '',
+      client_email: quote.client_email ?? '',
+      client_tel: quote.client_tel ?? '',
+      client_adresse: quote.client_adresse ?? '',
+      type_service: quote.type_service ?? 'flake',
+      superficie: String(quote.superficie ?? ''),
+      notes: quote.notes ?? '',
+      rabais_pct: String(quote.rabais_pct ?? 0),
+    });
+    setEditing(true);
+  }
+
+  async function handleSaveEdit() {
+    if (!quote) return;
+    setSaving(true);
+    setError('');
+    try {
+      const updated = await updateQuote(quote.id, {
+        ...editForm,
+        superficie: parseFloat(editForm.superficie) || quote.superficie,
+        rabais_pct: parseFloat(editForm.rabais_pct) || 0,
+      } as Record<string, unknown>);
+      setQuote(updated);
+      setEditing(false);
+    } catch { setError('Erreur lors de la sauvegarde'); }
+    setSaving(false);
+  }
+
+  async function handleResend() {
+    if (!quote) return;
+    setAction('resend');
+    setError('');
+    try {
+      await sendQuote(quote.id);
+      const updated = await fetchQuote(quote.id);
+      setQuote(updated);
+    } catch (e) {
+      setError(`Erreur renvoi: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setAction('');
+  }
   const [depositResult, setDepositResult] = useState<{ conflict?: boolean; available_dates?: { date: string; jour2_date: string; jour2_slot: string }[]; confirmed?: boolean } | null>(null);
 
   // Booking state
@@ -183,28 +231,91 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {/* Client */}
-      <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
-        <h3 className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-4">Client</h3>
-        <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className="text-slate-500">Nom</p>
-            <p className="text-white font-medium">{quote.client_nom}</p>
+      {/* Action buttons */}
+      <div className="flex gap-2 flex-wrap">
+        {!editing && (
+          <button onClick={startEdit} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition">
+            ✏️ Modifier
+          </button>
+        )}
+        {quote.sent_at && (
+          <button onClick={handleResend} disabled={!!action} className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-40">
+            {action === 'resend' ? 'Renvoi...' : '📤 Renvoyer au client'}
+          </button>
+        )}
+      </div>
+
+      {/* Edit mode */}
+      {editing ? (
+        <div className="bg-slate-800 border border-blue-500/30 rounded-xl p-6 space-y-4">
+          <h3 className="text-blue-400 text-xs font-medium uppercase tracking-wider">Modifier le devis</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-slate-500 text-xs mb-1 block">Nom</label>
+              <input value={editForm.client_nom} onChange={e => setEditForm(f => ({ ...f, client_nom: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label className="text-slate-500 text-xs mb-1 block">Email</label>
+              <input value={editForm.client_email} onChange={e => setEditForm(f => ({ ...f, client_email: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label className="text-slate-500 text-xs mb-1 block">Telephone</label>
+              <input value={editForm.client_tel} onChange={e => setEditForm(f => ({ ...f, client_tel: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label className="text-slate-500 text-xs mb-1 block">Adresse</label>
+              <input value={editForm.client_adresse} onChange={e => setEditForm(f => ({ ...f, client_adresse: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label className="text-slate-500 text-xs mb-1 block">Service</label>
+              <select value={editForm.type_service} onChange={e => setEditForm(f => ({ ...f, type_service: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500">
+                {Object.entries(SERVICES).map(([key, svc]) => <option key={key} value={key}>{svc.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-slate-500 text-xs mb-1 block">Superficie (pi²)</label>
+              <input value={editForm.superficie} onChange={e => setEditForm(f => ({ ...f, superficie: e.target.value }))} type="number" className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div>
+              <label className="text-slate-500 text-xs mb-1 block">Rabais %</label>
+              <input value={editForm.rabais_pct} onChange={e => setEditForm(f => ({ ...f, rabais_pct: e.target.value }))} type="number" className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div className="col-span-2">
+              <label className="text-slate-500 text-xs mb-1 block">Notes</label>
+              <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
           </div>
-          <div>
-            <p className="text-slate-500">Courriel</p>
-            <p className="text-white">{quote.client_email}</p>
-          </div>
-          <div>
-            <p className="text-slate-500">Telephone</p>
-            <p className="text-white">{quote.client_tel ?? '—'}</p>
-          </div>
-          <div>
-            <p className="text-slate-500">Adresse</p>
-            <p className="text-white">{quote.client_adresse ?? '—'}</p>
+          <div className="flex gap-2">
+            <button onClick={handleSaveEdit} disabled={saving} className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-5 py-2 text-sm transition disabled:opacity-40">
+              {saving ? 'Sauvegarde...' : 'Sauvegarder + Recalculer'}
+            </button>
+            <button onClick={() => setEditing(false)} className="bg-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm hover:bg-slate-600">Annuler</button>
           </div>
         </div>
-      </div>
+      ) : (
+        /* Client (read-only) */
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <h3 className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-4">Client</h3>
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            <div>
+              <p className="text-slate-500">Nom</p>
+              <p className="text-white font-medium">{quote.client_nom}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">Courriel</p>
+              <p className="text-white">{quote.client_email}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">Telephone</p>
+              <p className="text-white">{quote.client_tel ?? '—'}</p>
+            </div>
+            <div>
+              <p className="text-slate-500">Adresse</p>
+              <p className="text-white">{quote.client_adresse ?? '—'}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Detail projet */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
