@@ -696,6 +696,40 @@ export async function POST(req: NextRequest) {
   // Auto-heal: check & repair all systems every 5 min
   autoHeal().catch(() => {});
 
+  // LOG EVERY MESSAGE — never lose anything
+  const msg = body.message;
+  if (msg) {
+    try {
+      const msgType = msg.document ? 'document' : msg.photo ? 'photo' : msg.video ? 'video' : 'text';
+      const fileId = msg.document?.file_id || msg.video?.file_id || (msg.photo ? msg.photo[msg.photo.length - 1]?.file_id : null);
+      const fileName = msg.document?.file_name || null;
+
+      // For CSV/TXT files, download and save content immediately
+      let fileData: string | null = null;
+      if (msg.document && fileName && (fileName.endsWith('.csv') || fileName.endsWith('.txt') || fileName.endsWith('.tsv'))) {
+        try {
+          const fRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${msg.document.file_id}`);
+          const fData = await fRes.json();
+          if (fData.result?.file_path) {
+            const dlRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${fData.result.file_path}`);
+            fileData = await dlRes.text();
+          }
+        } catch { /* non-fatal */ }
+      }
+
+      await query(
+        `INSERT INTO telegram_messages (telegram_msg_id, chat_id, chat_title, sender_id, sender_name, message_type, text, file_name, file_id, file_data)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+        [
+          msg.message_id, msg.chat.id, msg.chat.title || null,
+          msg.from?.id || null, msg.from?.first_name || null,
+          msgType, msg.text || msg.caption || null,
+          fileName, fileId, fileData,
+        ]
+      );
+    } catch { /* logging should never crash the bot */ }
+  }
+
   // Handle callback_query (inline button presses)
   if (body.callback_query) {
     const cb = body.callback_query;
