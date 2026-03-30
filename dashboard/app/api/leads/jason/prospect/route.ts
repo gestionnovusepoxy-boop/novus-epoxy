@@ -227,7 +227,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    console.log(`[Prospect] Processing lead #${lead.id} ${lead.nom} (${lead.email}) — emailsSent=${emailsSent}`);
+    console.log(`[Prospect] Processing lead #${lead.id} ${lead.nom} email="${lead.email}" tel="${lead.telephone}" type="${typeof lead.email}" emailsSent=${emailsSent}`);
     const prenom = getPrenom(lead.nom);
     const project = lead.service || lead.notes?.split('—')[0] || '';
     const isCommercial = lead.type === 'commercial';
@@ -237,8 +237,10 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Send email with scheduled delivery (stagger 3 min apart)
-    if (lead.email) {
+    // 1. Send email with scheduled delivery (stagger 30sec apart)
+    const hasEmail = lead.email && String(lead.email).trim().length > 0;
+    console.log(`[Prospect] hasEmail=${hasEmail} for ${lead.nom}`);
+    if (hasEmail) {
       try {
         const subject = isCommercial
           ? `${prenom} — Partenariat planchers epoxy — Novus Epoxy`
