@@ -4,6 +4,8 @@ import { query } from '@/lib/db';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
 import { sendSMS } from '@/lib/sms';
 
+export const maxDuration = 60; // Allow up to 60s for large batches
+
 // Jason's Twilio number for prospection SMS
 const JASON_TWILIO = '+15817095940';
 
@@ -157,7 +159,7 @@ export async function POST(req: NextRequest) {
 
   const { leadIds } = (await req.json()) as { leadIds: number[] };
   if (!leadIds?.length) return NextResponse.json({ error: 'leadIds requis' }, { status: 400 });
-  if (leadIds.length > 50) return NextResponse.json({ error: 'Max 50 leads a la fois' }, { status: 400 });
+  if (leadIds.length > 1000) return NextResponse.json({ error: 'Max 1000 leads a la fois' }, { status: 400 });
 
   // Respect business hours: no outreach before 8h or after 21h Quebec time (EDT = UTC-4)
   const now = new Date();

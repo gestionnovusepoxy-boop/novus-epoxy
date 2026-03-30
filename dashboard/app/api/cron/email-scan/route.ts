@@ -4,6 +4,8 @@ import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { sendEmail } from '@/lib/send-email';
 
+export const maxDuration = 60; // Allow up to 60s for large CSV imports
+
 const CRON_SECRET = () => process.env.CRON_SECRET ?? '';
 const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
