@@ -643,10 +643,10 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
         </div>
         <div className="flex items-center gap-2">
           <Link
-            href={`/dashboard/equipe?projet=${job.id}`}
+            href={`/dashboard/devis/${job.id}`}
             className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium px-3 py-2 rounded-lg transition"
           >
-            + Heures
+            Modifier
           </Link>
           <button
             onClick={handleComplete}
