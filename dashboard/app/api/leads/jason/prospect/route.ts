@@ -227,6 +227,7 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
+    console.log(`[Prospect] Processing lead #${lead.id} ${lead.nom} (${lead.email}) — emailsSent=${emailsSent}`);
     const prenom = getPrenom(lead.nom);
     const project = lead.service || lead.notes?.split('—')[0] || '';
     const isCommercial = lead.type === 'commercial';
@@ -279,10 +280,12 @@ export async function POST(req: NextRequest) {
         emailsSent++;
         contacted = true;
       } catch (err) {
-        console.error(`[Jason Prospect] Email failed for ${lead.nom}:`, err);
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.error(`[Jason Prospect] Email failed for ${lead.nom} (${lead.email}):`, errMsg);
+        // Clean up the log entry so it can be retried
         await query(
-          `UPDATE email_logs SET statut = 'failed' WHERE destinataire = $1 AND statut = 'scheduled' AND created_at > NOW() - INTERVAL '1 minute'`,
-          [lead.email],
+          `DELETE FROM email_logs WHERE resend_id = $1`,
+          [`prospect-${lead.id}-${new Date().toISOString().split('T')[0]}`],
         ).catch(() => {});
       }
     }
