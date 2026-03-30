@@ -206,6 +206,54 @@ const TOOLS = [
       required: ['liste'],
     },
   },
+  {
+    name: 'enregistrer_heures',
+    description: 'Enregistre les heures travaillees pour un ou plusieurs employes sur un projet. Utilise quand Luca/Jason dit "3h chaque sur projet #17" ou "j\'ai fait 5h chez Bernadette".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        quote_id: { type: 'number', description: 'ID du projet (devis)' },
+        entrees: {
+          type: 'array',
+          description: 'Liste des entrees de temps',
+          items: {
+            type: 'object',
+            properties: {
+              nom_employe: { type: 'string', description: 'Nom de l\'employe (ex: Luca, Jason, Stephane)' },
+              heures: { type: 'number', description: 'Nombre d\'heures travaillees' },
+              type: { type: 'string', description: 'Type: travail, deplacement, preparation, nettoyage', default: 'travail' },
+              notes: { type: 'string', description: 'Notes optionnelles', default: '' },
+            },
+            required: ['nom_employe', 'heures'],
+          },
+        },
+        date: { type: 'string', description: 'Date au format YYYY-MM-DD (defaut: aujourd\'hui)', default: '' },
+      },
+      required: ['quote_id', 'entrees'],
+    },
+  },
+  {
+    name: 'voir_projet',
+    description: 'Affiche le resume complet d\'un projet: client, heures, depenses, photos, profit. Utilise quand on demande "montre-moi le projet #17" ou "combien on a fait sur tel projet".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        quote_id: { type: 'number', description: 'ID du projet (devis)' },
+      },
+      required: ['quote_id'],
+    },
+  },
+  {
+    name: 'liste_projets',
+    description: 'Liste les projets actifs (devis avec statut planifie, depot_paye, contrat_signe, complete). Montre le client, service, et statut.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        statut: { type: 'string', description: 'Filtrer par statut (optionnel)', default: '' },
+      },
+      required: [],
+    },
+  },
 ];
 
 // Execute tool calls
@@ -625,6 +673,112 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
     }
 
 
+    case 'enregistrer_heures': {
+      const quoteId = Number(input.quote_id);
+      const entrees = input.entrees as { nom_employe: string; heures: number; type?: string; notes?: string }[];
+      const dateTravail = (input.date as string) || new Date().toISOString().slice(0, 10);
+
+      // Verify project exists
+      const proj = await query(`SELECT id, client_nom FROM quotes WHERE id = $1`, [quoteId]);
+      if (proj.length === 0) return JSON.stringify({ error: `Projet #${quoteId} introuvable` });
+
+      const results: string[] = [];
+      for (const e of entrees) {
+        // Find or create employee
+        let empRows = await query(
+          `SELECT id, nom FROM employees WHERE LOWER(nom) LIKE $1 AND actif = true LIMIT 1`,
+          [`%${e.nom_employe.toLowerCase()}%`]
+        );
+        if (empRows.length === 0) {
+          empRows = await query(
+            `INSERT INTO employees (nom, role, taux_horaire) VALUES ($1, 'sous-traitant', 0) RETURNING id, nom`,
+            [e.nom_employe]
+          );
+        }
+        const empId = (empRows[0] as { id: number }).id;
+        const empNom = (empRows[0] as { nom: string }).nom;
+
+        await query(
+          `INSERT INTO time_entries (employee_id, quote_id, date_travail, heures, type, notes)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [empId, quoteId, dateTravail, e.heures, e.type || 'travail', e.notes || null]
+        );
+        results.push(`${empNom}: ${e.heures}h`);
+      }
+
+      const clientNom = (proj[0] as { client_nom: string }).client_nom;
+      return JSON.stringify({
+        ok: true,
+        projet: `#${quoteId} — ${clientNom}`,
+        date: dateTravail,
+        entrees: results,
+        message: `${results.length} entree(s) de temps enregistree(s) pour le projet #${quoteId}`,
+      });
+    }
+
+    case 'voir_projet': {
+      const quoteId = Number(input.quote_id);
+      const proj = await query(
+        `SELECT id, client_nom, client_tel, client_adresse, type_service, superficie, total, depot_requis, statut, created_at
+         FROM quotes WHERE id = $1`, [quoteId]
+      );
+      if (proj.length === 0) return JSON.stringify({ error: `Projet #${quoteId} introuvable` });
+      const q = proj[0] as Record<string, unknown>;
+
+      // Hours
+      const hours = await query(
+        `SELECT e.nom, t.heures, t.date_travail, t.type, t.notes
+         FROM time_entries t JOIN employees e ON e.id = t.employee_id
+         WHERE t.quote_id = $1 ORDER BY t.date_travail`, [quoteId]
+      );
+      const totalHeures = hours.reduce((sum: number, h: Record<string, unknown>) => sum + Number(h.heures || 0), 0);
+
+      // Expenses
+      const expenses = await query(
+        `SELECT id, fournisseur, montant_ttc, categorie, date_depense FROM expenses WHERE quote_id = $1 ORDER BY date_depense`, [quoteId]
+      );
+      const totalDepenses = expenses.reduce((sum: number, e: Record<string, unknown>) => sum + Number(e.montant_ttc || 0), 0);
+
+      // Photos
+      const photos = await query(
+        `SELECT type, url, created_at FROM job_photos WHERE quote_id = $1 ORDER BY type, created_at`, [quoteId]
+      );
+      const photosAvant = photos.filter((p: Record<string, unknown>) => p.type === 'avant').length;
+      const photosApres = photos.filter((p: Record<string, unknown>) => p.type === 'apres').length;
+
+      // Booking
+      const booking = await query(
+        `SELECT b.jour1_date, b.jour2_date, b.statut FROM bookings b WHERE b.quote_id = $1`, [quoteId]
+      ).catch(() => []);
+
+      const revenue = Number(q.total || 0);
+      const profit = revenue - totalDepenses;
+
+      return JSON.stringify({
+        projet: { id: quoteId, client: q.client_nom, adresse: q.client_adresse, service: q.type_service, superficie: q.superficie, total: revenue, depot: q.depot_requis, statut: q.statut },
+        heures: { total: totalHeures, detail: hours },
+        depenses: { total: totalDepenses, count: expenses.length, detail: expenses },
+        photos: { avant: photosAvant, apres: photosApres },
+        booking: booking.length > 0 ? booking[0] : null,
+        profit: { revenus: revenue, depenses: totalDepenses, net: profit },
+      });
+    }
+
+    case 'liste_projets': {
+      const statut = input.statut as string;
+      const validStatuts = ['brouillon', 'en_attente', 'approuve', 'envoye', 'contrat_signe', 'depot_paye', 'planifie', 'complete', 'refuse'];
+      const rows = statut && validStatuts.includes(statut)
+        ? await query(
+            `SELECT id, client_nom, type_service, superficie, total, statut, created_at FROM quotes WHERE statut = $1 ORDER BY created_at DESC LIMIT 20`,
+            [statut]
+          )
+        : await query(
+            `SELECT id, client_nom, type_service, superficie, total, statut, created_at FROM quotes WHERE statut IN ('contrat_signe', 'depot_paye', 'planifie', 'complete') ORDER BY created_at DESC LIMIT 20`,
+            []
+          );
+      return JSON.stringify({ projets: rows, total: rows.length });
+    }
+
     default:
       return JSON.stringify({ error: `Outil inconnu: ${name}` });
   }
@@ -644,7 +798,11 @@ TU PEUX:
 - Calculer des prix rapidement
 - Lire et resumer les emails recus (Gmail)
 - Ajouter des photos au portfolio (envoie une photo avec caption "portfolio")
-- Scanner des recus/factures (envoie une photo du recu)
+- Scanner des recus/factures (envoie une photo du recu, ajoute "projet #17" pour lier au projet)
+- Ajouter photos avant/apres a un projet (envoie photo avec caption "projet #17 avant" ou "projet #17 apres")
+- Enregistrer les heures des employes sur un projet (outil enregistrer_heures)
+- Voir le resume complet d'un projet: heures, depenses, photos, profit (outil voir_projet)
+- Lister les projets actifs (outil liste_projets)
 - Importer une liste de leads en bulk dans la banque CRM (outil importer_leads_liste)
 - Analyser et classer les leads/soumissions recents (chaud/tiede/froid, urgence, action suggeree)
 - Repondre aux questions sur les clients et leur suivi
@@ -1317,15 +1475,17 @@ export async function POST(req: NextRequest) {
 
 C'est une entreprise de planchers epoxy (Novus Epoxy). Determine ce que c'est:
 - "recu" si c'est une facture, recu, ticket de caisse, bon de commande, releve
-- "portfolio" si c'est un plancher epoxy, un chantier, un balcon, un escalier, un garage, un travail de construction/renovation
+- "chantier" si la caption mentionne un numero de projet (ex: "projet #17", "#5") ET c'est une photo de chantier/travaux (avant ou apres)
+- "portfolio" si c'est un plancher epoxy, un chantier, un balcon, un escalier, un garage, un travail fini — SANS numero de projet
 - "autre" si c'est autre chose (screenshot, meme, photo perso, etc)
 
 Reponds en JSON strict:
 {
-  "type": "recu" ou "portfolio" ou "autre",
+  "type": "recu" ou "portfolio" ou "chantier" ou "autre",
   "titre": "titre descriptif court",
   "description": "description 1-2 phrases",
-  "type_service": "flake" ou "metallique" ou "couleur_unie" ou "commercial" ou "quartz" (seulement si portfolio),
+  "photo_type": "avant" ou "apres" (seulement si chantier — avant=en cours/pas commence, apres=fini/resultat),
+  "type_service": "flake" ou "metallique" ou "couleur_unie" ou "commercial" ou "quartz" (seulement si portfolio ou chantier),
   "fournisseur": "nom du fournisseur" (seulement si recu),
   "montant_ttc": nombre (seulement si recu),
   "montant_ht": nombre (seulement si recu),
@@ -1401,7 +1561,56 @@ Reponds en JSON strict:
       return NextResponse.json({ ok: true });
     }
 
-    // --- AUTRE (pas recu, pas portfolio) ---
+    // --- CHANTIER (photo avant/apres liee a un projet) ---
+    if (classified.type === 'chantier') {
+      try {
+        // Extract project ID from caption
+        const projetMatch = (caption || '').match(/(?:projet\s*#?\s*|#)(\d+)/i);
+        if (!projetMatch) {
+          await sendTelegram(chatId, `Photo de chantier detectee mais pas de numero de projet.\nRenvoie avec caption "projet #17 avant" ou "projet #17 apres".`);
+          return NextResponse.json({ ok: true });
+        }
+        const jobQuoteId = parseInt(projetMatch[1]);
+        const proj = await query(`SELECT id, client_nom FROM quotes WHERE id = $1`, [jobQuoteId]);
+        if (proj.length === 0) {
+          await sendTelegram(chatId, `Projet #${jobQuoteId} introuvable. Verifie le numero.`);
+          return NextResponse.json({ ok: true });
+        }
+
+        const { put } = await import('@vercel/blob');
+        const photoType = classified.photo_type === 'apres' ? 'apres' : 'avant';
+        const slug = `job-photos/projet-${jobQuoteId}-${photoType}-${Date.now()}.jpg`;
+        const blob = await put(slug, imageBuffer, { access: 'public', contentType: 'image/jpeg' });
+
+        await query(
+          `INSERT INTO job_photos (quote_id, type, url, filename) VALUES ($1, $2, $3, $4)`,
+          [jobQuoteId, photoType, blob.url, slug]
+        );
+
+        const clientNom = (proj[0] as { client_nom: string }).client_nom;
+        const photoCount = await query(
+          `SELECT type, COUNT(*)::int as count FROM job_photos WHERE quote_id = $1 GROUP BY type`, [jobQuoteId]
+        );
+        const counts = photoCount.reduce((acc: Record<string, number>, r: Record<string, unknown>) => {
+          acc[r.type as string] = r.count as number; return acc;
+        }, {} as Record<string, number>);
+
+        await sendTelegram(chatId, [
+          `Photo ${photoType.toUpperCase()} ajoutee au projet #${jobQuoteId}!`,
+          `Client: ${clientNom}`,
+          ``,
+          `Photos du projet: ${counts['avant'] || 0} avant / ${counts['apres'] || 0} apres`,
+          ``,
+          blob.url,
+        ].join('\n'));
+      } catch (err) {
+        console.error('Job photo save error:', err);
+        await sendTelegram(chatId, `Erreur: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // --- AUTRE (pas recu, pas portfolio, pas chantier) ---
     if (classified.type === 'autre') {
       await sendTelegram(chatId, `J'ai vu ta photo mais je ne sais pas quoi en faire.\n\n"${classified.description || classified.titre || 'Image non reconnue'}"\n\nSi c'est un recu, renvoie avec caption "recu".\nSi c'est un projet, renvoie avec caption "portfolio".`);
       return NextResponse.json({ ok: true });
@@ -1449,9 +1658,19 @@ Reponds en JSON strict:
       const tvq = Number(parsed.tvq ?? 0);
       const ttc = Number(parsed.montant_ttc ?? 0) || Math.round((ht + tps + tvq) * 100) / 100;
 
+      // Extract project ID from caption: "projet #17", "projet 17", "#17"
+      let expQuoteId: number | null = null;
+      const projetMatch = (caption || '').match(/(?:projet\s*#?\s*|#)(\d+)/i);
+      if (projetMatch) {
+        expQuoteId = parseInt(projetMatch[1]);
+        // Verify project exists
+        const proj = await query(`SELECT id, client_nom FROM quotes WHERE id = $1`, [expQuoteId]);
+        if (proj.length === 0) { expQuoteId = null; }
+      }
+
       const rows = await query(
-        `INSERT INTO expenses (date_depense, fournisseur, description, categorie, montant_ht, tps, tvq, montant_ttc, methode, reference)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+        `INSERT INTO expenses (date_depense, fournisseur, description, categorie, montant_ht, tps, tvq, montant_ttc, methode, reference, quote_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
         [
           parsed.date_depense || new Date().toISOString().slice(0, 10),
           (parsed.fournisseur || 'Inconnu').slice(0, 120),
@@ -1460,6 +1679,7 @@ Reponds en JSON strict:
           ht, tps, tvq, ttc,
           methode,
           parsed.reference || null,
+          expQuoteId,
         ]
       );
 
