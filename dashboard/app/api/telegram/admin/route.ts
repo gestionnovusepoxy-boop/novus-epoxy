@@ -1187,6 +1187,106 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
+    // Check if message is about HOURS for a project
+    // Patterns: "3h luca, 3h jason projet #17", "projet #5 2h stephane", "3h chaque projet #17"
+    const projetMatch = text.match(/(?:projet\s*#?\s*|#)(\d+)/i);
+    const heurePatterns = text.match(/(\d+(?:[.,]\d+)?)\s*h(?:eure)?s?\s+(?:pour\s+|de\s+)?([a-zéèêëàâùûôïî]+)/gi) || [];
+    const chaqueMatch = text.match(/(\d+(?:[.,]\d+)?)\s*h(?:eure)?s?\s+chaque/i);
+    const isHoursMessage = projetMatch && (heurePatterns.length > 0 || chaqueMatch);
+
+    if (isHoursMessage) {
+      try {
+        const quoteId = parseInt(projetMatch[1]);
+        const proj = await query(`SELECT id, client_nom FROM quotes WHERE id = $1`, [quoteId]);
+        if (proj.length === 0) {
+          await sendTelegram(chatId, `Projet #${quoteId} introuvable.`);
+          return NextResponse.json({ ok: true });
+        }
+        const clientNom = (proj[0] as { client_nom: string }).client_nom;
+        const dateTravail = new Date().toISOString().slice(0, 10);
+        const registered: string[] = [];
+
+        if (chaqueMatch) {
+          // "3h chaque projet #17" — apply to all active employees
+          const h = parseFloat(chaqueMatch[1].replace(',', '.'));
+          const activeEmps = await query(`SELECT id, nom FROM employees WHERE actif = true`);
+          for (const emp of activeEmps) {
+            await query(
+              `INSERT INTO time_entries (employee_id, quote_id, date_travail, heures, type) VALUES ($1,$2,$3,$4,'travail')`,
+              [(emp as { id: number }).id, quoteId, dateTravail, h]
+            );
+            registered.push(`${(emp as { nom: string }).nom}: ${h}h`);
+          }
+        } else {
+          // Parse individual: "3h luca, 2h jason"
+          for (const match of heurePatterns) {
+            const m = match.match(/(\d+(?:[.,]\d+)?)\s*h(?:eure)?s?\s+(?:pour\s+|de\s+)?([a-zéèêëàâùûôïî]+)/i);
+            if (!m) continue;
+            const h = parseFloat(m[1].replace(',', '.'));
+            const nom = m[2];
+            let empRows = await query(
+              `SELECT id, nom FROM employees WHERE LOWER(nom) LIKE $1 AND actif = true LIMIT 1`,
+              [`%${nom.toLowerCase()}%`]
+            );
+            if (empRows.length === 0) {
+              empRows = await query(
+                `INSERT INTO employees (nom, role, taux_horaire) VALUES ($1, 'sous-traitant', 0) RETURNING id, nom`,
+                [nom.charAt(0).toUpperCase() + nom.slice(1)]
+              );
+            }
+            await query(
+              `INSERT INTO time_entries (employee_id, quote_id, date_travail, heures, type) VALUES ($1,$2,$3,$4,'travail')`,
+              [(empRows[0] as { id: number }).id, quoteId, dateTravail, h]
+            );
+            registered.push(`${(empRows[0] as { nom: string }).nom}: ${h}h`);
+          }
+        }
+
+        if (registered.length > 0) {
+          // Get project totals
+          const projetTotaux = await query(
+            `SELECT e.nom, SUM(t.heures)::numeric as total FROM time_entries t JOIN employees e ON e.id = t.employee_id WHERE t.quote_id = $1 GROUP BY e.nom ORDER BY e.nom`,
+            [quoteId]
+          );
+          const projetTotal = projetTotaux.reduce((s: number, r: Record<string, unknown>) => s + Number(r.total || 0), 0);
+
+          // Get week totals
+          const now2 = new Date();
+          const day2 = now2.getDay();
+          const diff2 = day2 === 0 ? 6 : day2 - 1;
+          const mon = new Date(now2); mon.setDate(now2.getDate() - diff2);
+          const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+          const semaineTotaux = await query(
+            `SELECT e.nom, SUM(t.heures)::numeric as total FROM time_entries t JOIN employees e ON e.id = t.employee_id WHERE t.date_travail >= $1 AND t.date_travail <= $2 GROUP BY e.nom ORDER BY e.nom`,
+            [mon.toISOString().slice(0, 10), sun.toISOString().slice(0, 10)]
+          );
+          const semaineTotal = semaineTotaux.reduce((s: number, r: Record<string, unknown>) => s + Number(r.total || 0), 0);
+
+          const lines = [
+            `✅ <b>Heures enregistrees — Projet #${quoteId}</b>`,
+            `📋 ${clientNom}`,
+            `📅 ${dateTravail}`,
+            ``,
+            `<b>Aujourd'hui:</b>`,
+            ...registered.map(r => `  • ${r}`),
+            ``,
+            `<b>Total projet #${quoteId}:</b>`,
+            ...projetTotaux.map((r: Record<string, unknown>) => `  • ${r.nom}: ${r.total}h`),
+            `  → <b>${projetTotal}h total</b>`,
+            ``,
+            `<b>Semaine (${mon.toISOString().slice(5, 10)} au ${sun.toISOString().slice(5, 10)}):</b>`,
+            ...semaineTotaux.map((r: Record<string, unknown>) => `  • ${r.nom}: ${r.total}h`),
+            `  → <b>${semaineTotal}h total</b>`,
+          ];
+          await sendTelegram(chatId, lines.join('\n'));
+        }
+      } catch (err) {
+        console.error('Group hours error:', err);
+        await sendTelegram(chatId, `Erreur heures: ${err instanceof Error ? err.message : 'erreur'}`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     // Check if message looks like leads (has phone numbers or multiple names)
     if (text.length < 10) return NextResponse.json({ ok: true });
     const hasPhones = (text.match(/\d{3}[\s.\-]?\d{3}[\s.\-]?\d{4}/g) || []).length >= 1;
