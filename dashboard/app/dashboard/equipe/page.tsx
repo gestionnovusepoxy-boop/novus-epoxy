@@ -452,15 +452,20 @@ function HeuresTab({ preselectedProjet }: { preselectedProjet: string | null }) 
   const calendarData = useMemo(() => {
     // Map: employeeName -> { [date]: totalHours }
     const map: Record<string, Record<string, number>> = {};
+    // Include all active employees so they appear even with 0 hours
+    for (const emp of employees) {
+      map[emp.nom] = {};
+    }
     for (const entry of entries) {
       const name = entry.employee_nom;
       if (!map[name]) map[name] = {};
-      const date = entry.date_travail;
+      // Normalize date: "2026-03-30T00:00:00.000Z" → "2026-03-30"
+      const date = String(entry.date_travail).slice(0, 10);
       if (!map[name][date]) map[name][date] = 0;
       map[name][date] += parseFloat(String(entry.heures ?? 0));
     }
     return map;
-  }, [entries]);
+  }, [entries, employees]);
 
   const employeeNames = useMemo(() => Object.keys(calendarData).sort(), [calendarData]);
 
@@ -642,7 +647,7 @@ function HeuresTab({ preselectedProjet }: { preselectedProjet: string | null }) 
                 {entries.map(entry => (
                   <tr key={entry.id}>
                     <td className="px-4 py-3 text-white font-medium">{entry.employee_nom}</td>
-                    <td className="px-4 py-3 text-slate-300">{entry.date_travail}</td>
+                    <td className="px-4 py-3 text-slate-300">{String(entry.date_travail).slice(0, 10)}</td>
                     <td className="px-4 py-3 text-slate-300 hidden sm:table-cell">
                       {entry.projet_nom ? `${entry.projet_nom} #${entry.quote_id}` : '—'}
                     </td>
