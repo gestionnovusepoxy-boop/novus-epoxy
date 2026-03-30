@@ -333,7 +333,16 @@ function HoursSection({ quoteId }: { quoteId: number }) {
     })();
   }, [quoteId]);
 
-  // Group by employee
+  // Group by date, then by employee
+  const byDate: Record<string, Record<string, number>> = {};
+  for (const h of hours) {
+    const date = String(h.date_travail).slice(0, 10);
+    if (!byDate[date]) byDate[date] = {};
+    byDate[date][h.employee_nom] = (byDate[date][h.employee_nom] || 0) + Number(h.heures || 0);
+  }
+  const sortedDates = Object.keys(byDate).sort();
+
+  // Total by employee
   const byEmployee: Record<string, number> = {};
   for (const h of hours) {
     byEmployee[h.employee_nom] = (byEmployee[h.employee_nom] || 0) + Number(h.heures || 0);
@@ -341,17 +350,30 @@ function HoursSection({ quoteId }: { quoteId: number }) {
 
   return (
     <div className="bg-slate-900/50 rounded-lg p-3 space-y-2">
-      <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Heures du projet</h4>
-      {Object.keys(byEmployee).length > 0 ? (
-        <div className="space-y-1">
-          {Object.entries(byEmployee).map(([nom, h]) => (
-            <div key={nom} className="flex items-center justify-between text-sm">
-              <span className="text-slate-300">{nom}</span>
-              <span className="text-white font-medium">{h}h</span>
-            </div>
-          ))}
-          <div className="flex items-center justify-between text-sm border-t border-slate-700 pt-1 mt-1">
-            <span className="text-slate-400 font-medium">Total</span>
+      <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+        Heures du projet — {sortedDates.length} jour{sortedDates.length !== 1 ? 's' : ''} travaille{sortedDates.length !== 1 ? 's' : ''}
+      </h4>
+      {sortedDates.length > 0 ? (
+        <div className="space-y-2">
+          {sortedDates.map((date, i) => {
+            const dayTotal = Object.values(byDate[date]).reduce((s, h) => s + h, 0);
+            return (
+              <div key={date} className="space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-slate-500 font-medium">Jour {i + 1} — {formatDateFr(date)}</span>
+                  <span className="text-xs text-slate-400">{dayTotal}h</span>
+                </div>
+                {Object.entries(byDate[date]).map(([nom, h]) => (
+                  <div key={nom} className="flex items-center justify-between text-sm pl-2">
+                    <span className="text-slate-300">{nom}</span>
+                    <span className="text-white text-xs">{h}h</span>
+                  </div>
+                ))}
+              </div>
+            );
+          })}
+          <div className="flex items-center justify-between text-sm border-t border-slate-700 pt-1.5 mt-1">
+            <span className="text-slate-400 font-medium">Total projet</span>
             <span className="text-amber-400 font-bold">{totalHeures}h</span>
           </div>
         </div>
