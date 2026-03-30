@@ -593,12 +593,16 @@ export async function GET(req: NextRequest) {
       });
     } catch { /* ignore */ }
 
-    // Skip our own emails — BUT allow admin + jason for lead imports
+    // Skip our own outbound emails (prospect offers, system emails)
     const isJasonShop = fromEmail.toLowerCase().includes('jason@novusepoxy') || fromHeader.toLowerCase().includes('jason@novusepoxy');
     const isAdmin = fromEmail.toLowerCase().includes('gestionnovusepoxy');
     console.log(`[Email Scan] Processing: from=${fromEmail} isJasonShop=${isJasonShop} isAdmin=${isAdmin} subject=${subject.slice(0, 50)}`);
-    // Allow admin and jason through for lead imports, skip other internal emails
-    if (!isJasonShop && !isAdmin && fromEmail.includes('novusepoxy')) continue;
+
+    // Skip ALL emails FROM jason@novusepoxy.shop — these are our own prospect emails (BCC copies)
+    if (isJasonShop) continue;
+
+    // Allow admin emails through for lead imports, skip other internal emails
+    if (!isAdmin && fromEmail.includes('novusepoxy')) continue;
 
     // === LEAD IMPORT VIA EMAIL ===
     // When Jason or admin sends a list of leads by email, auto-import into CRM + prospect
@@ -1126,7 +1130,7 @@ export async function GET(req: NextRequest) {
     // Only send Telegram alert if we haven't sent one in the last 30 minutes (prevent spam)
     const lastAlertRows = await query(`SELECT value FROM kv_store WHERE key = 'last_email_scan_error'`).catch(() => []);
     const lastAlert = lastAlertRows?.[0]?.value as string | undefined;
-    const shouldAlert = !lastAlert || (Date.now() - new Date(lastAlert).getTime() > 30 * 60 * 1000);
+    const shouldAlert = !lastAlert || (Date.now() - new Date(lastAlert).getTime() > 6 * 60 * 60 * 1000); // 6h cooldown
 
     if (shouldAlert) {
       await query(
