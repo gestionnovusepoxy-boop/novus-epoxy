@@ -231,9 +231,10 @@ export async function POST(req: NextRequest) {
 
     // 1. Send email
     if (lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
+      const nomComplet = lead.nom.trim().slice(0, 40);
       const subject = isCommercial
-        ? `${prenom} — Partenariat planchers epoxy — Novus Epoxy`
-        : `${prenom} — Votre projet en epoxy avec Novus Epoxy`;
+        ? `${nomComplet} — Partenariat planchers epoxy`
+        : `${nomComplet} — Votre projet en epoxy`;
 
       const html = isCommercial
         ? buildCommercialHtml(prenom, photos)
