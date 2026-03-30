@@ -1129,8 +1129,14 @@ export async function POST(req: NextRequest) {
   const isGroup = message.chat.type === 'group' || message.chat.type === 'supergroup';
   const isAdmin = adminIds.includes(chatId) || adminIds.includes(senderId);
 
-  // GROUP MESSAGE: respond to "Aria ...", auto-detect leads, or process CSV files
+  // GROUP MESSAGE: respond to "Aria ...", auto-detect leads, hours, or process CSV files
+  // Photos and videos in group fall through to the shared handlers below
   if (isGroup) {
+    // Photos and videos in group → fall through to shared photo/video handlers below
+    if (message.photo || message.video) {
+      // Don't return — let it fall through to the photo/video handling code below
+    } else {
+
     // Handle CSV/TXT document uploads — download and extract leads
     let docText = '';
     if (message.document) {
@@ -1414,7 +1420,8 @@ export async function POST(req: NextRequest) {
       }
     }
     return NextResponse.json({ ok: true });
-  }
+  } // end else (not photo/video in group)
+  } // end isGroup
 
   // PRIVATE MESSAGE: Check if sender is an admin
   if (adminIds.length > 0 && !isAdmin) {
