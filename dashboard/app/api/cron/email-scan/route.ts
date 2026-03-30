@@ -591,15 +591,17 @@ export async function GET(req: NextRequest) {
       });
     } catch { /* ignore */ }
 
-    // Skip our own emails — BUT allow jason@novusepoxy.shop (lead imports)
+    // Skip our own emails — BUT allow admin + jason for lead imports
     const isJasonShop = fromEmail.toLowerCase().includes('jason@novusepoxy') || fromHeader.toLowerCase().includes('jason@novusepoxy');
-    console.log(`[Email Scan] Processing: from=${fromEmail} isJasonShop=${isJasonShop} subject=${subject.slice(0, 50)}`);
-    if (!isJasonShop && (fromEmail.includes('novusepoxy') || fromEmail.includes('gestionnovusepoxy'))) continue;
+    const isAdmin = fromEmail.toLowerCase().includes('gestionnovusepoxy');
+    console.log(`[Email Scan] Processing: from=${fromEmail} isJasonShop=${isJasonShop} isAdmin=${isAdmin} subject=${subject.slice(0, 50)}`);
+    // Allow admin and jason through for lead imports, skip other internal emails
+    if (!isJasonShop && !isAdmin && fromEmail.includes('novusepoxy')) continue;
 
-    // === JASON LEAD IMPORT VIA EMAIL ===
-    // When Jason sends a list of leads by email, auto-import into CRM + prospect
-    // Detect by sender (jason@novusepoxy.shop) OR by subject containing "ARIA" + "LEAD"
-    const isLeadEmail = isJasonShop || (subject.toUpperCase().includes('ARIA') && subject.toUpperCase().includes('LEAD'));
+    // === LEAD IMPORT VIA EMAIL ===
+    // When Jason or admin sends a list of leads by email, auto-import into CRM + prospect
+    // Detect by sender (jason@novusepoxy.shop, gestionnovusepoxy) OR by subject containing "ARIA" + "LEAD"
+    const isLeadEmail = isJasonShop || isAdmin || (subject.toUpperCase().includes('ARIA') && subject.toUpperCase().includes('LEAD'));
     if (isLeadEmail) {
       // Get body text
       let jasonBody = '';
