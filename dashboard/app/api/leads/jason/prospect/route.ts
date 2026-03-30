@@ -237,58 +237,27 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Send email with scheduled delivery (stagger 30sec apart)
-    const hasEmail = lead.email && String(lead.email).trim().length > 0;
-    console.log(`[Prospect] hasEmail=${hasEmail} for ${lead.nom}`);
-    if (hasEmail) {
+    // 1. Send email — simple and reliable
+    if (lead.email && String(lead.email).includes('@')) {
+      const subject = isCommercial
+        ? `${prenom} — Partenariat planchers epoxy — Novus Epoxy`
+        : `${prenom} — Votre projet en epoxy avec Novus Epoxy`;
+
+      const html = isCommercial
+        ? buildCommercialHtml(prenom, photos)
+        : buildResidentialHtml(prenom, project, photos);
+
       try {
-        const subject = isCommercial
-          ? `${prenom} — Partenariat planchers epoxy — Novus Epoxy`
-          : `${prenom} — Votre projet en epoxy avec Novus Epoxy`;
-
-        const html = isCommercial
-          ? buildCommercialHtml(prenom, photos)
-          : buildResidentialHtml(prenom, project, photos);
-
-        // Idempotency key: lead ID + today's date — prevents ANY duplicate
-        const today = new Date().toISOString().split('T')[0];
-        const idempotencyKey = `prospect-${lead.id}-${today}`;
-
-        // Schedule delivery: stagger 30sec apart to avoid bulk detection
-        // 100 emails = ~50 min spread, 1000 = ~8h (fits in 1 business day)
-        const delayMs = emailsSent * 30 * 1000; // 0, 30s, 60s, 90s...
-        const scheduledAt = new Date(Date.now() + delayMs + 60000).toISOString(); // +1min buffer
-
-        // LOG FIRST to prevent duplicates on retry/timeout
+        const result = await sendProspectEmail({ to: lead.email, subject, html });
         await query(
-          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'scheduled')`,
-          [idempotencyKey, lead.email, subject],
-        );
-        alreadySentEmails.add(lead.email.toLowerCase());
-
-        const result = await sendProspectEmail({
-          to: lead.email,
-          subject,
-          html,
-          idempotencyKey,
-          scheduledAt,
-        });
-
-        // Update log with real resend ID
-        await query(
-          `UPDATE email_logs SET resend_id = $1, statut = 'sent' WHERE resend_id = $2`,
-          [result.id, idempotencyKey],
+          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'sent')`,
+          [result.id, lead.email, subject],
         ).catch(() => {});
+        alreadySentEmails.add(lead.email.toLowerCase());
         emailsSent++;
         contacted = true;
       } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        console.error(`[Jason Prospect] Email failed for ${lead.nom} (${lead.email}):`, errMsg);
-        // Clean up the log entry so it can be retried
-        await query(
-          `DELETE FROM email_logs WHERE resend_id = $1`,
-          [`prospect-${lead.id}-${new Date().toISOString().split('T')[0]}`],
-        ).catch(() => {});
+        console.error(`[Prospect] FAIL ${lead.email}:`, err instanceof Error ? err.message : err);
       }
     }
 
