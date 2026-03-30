@@ -707,12 +707,46 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       }
 
       const clientNom = (proj[0] as { client_nom: string }).client_nom;
+
+      // Total heures sur le projet (all time)
+      const projetTotaux = await query(
+        `SELECT e.nom, SUM(t.heures) as total_heures
+         FROM time_entries t JOIN employees e ON e.id = t.employee_id
+         WHERE t.quote_id = $1 GROUP BY e.nom ORDER BY e.nom`,
+        [quoteId]
+      );
+      const projetTotal = projetTotaux.reduce((s: number, r: Record<string, unknown>) => s + Number(r.total_heures || 0), 0);
+
+      // Total heures cette semaine (lun-dim) par employe
+      const now = new Date();
+      const day = now.getDay();
+      const diff = day === 0 ? 6 : day - 1;
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - diff);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      const monStr = monday.toISOString().slice(0, 10);
+      const sunStr = sunday.toISOString().slice(0, 10);
+
+      const semaineTotaux = await query(
+        `SELECT e.nom, SUM(t.heures) as total_heures
+         FROM time_entries t JOIN employees e ON e.id = t.employee_id
+         WHERE t.date_travail >= $1 AND t.date_travail <= $2
+         GROUP BY e.nom ORDER BY e.nom`,
+        [monStr, sunStr]
+      );
+      const semaineTotal = semaineTotaux.reduce((s: number, r: Record<string, unknown>) => s + Number(r.total_heures || 0), 0);
+
       return JSON.stringify({
         ok: true,
         projet: `#${quoteId} — ${clientNom}`,
         date: dateTravail,
         entrees: results,
-        message: `${results.length} entree(s) de temps enregistree(s) pour le projet #${quoteId}`,
+        projet_totaux: projetTotaux.map((r: Record<string, unknown>) => `${r.nom}: ${r.total_heures}h`),
+        projet_total_heures: projetTotal,
+        semaine_totaux: semaineTotaux.map((r: Record<string, unknown>) => `${r.nom}: ${r.total_heures}h`),
+        semaine_total_heures: semaineTotal,
+        semaine: `${monStr} au ${sunStr}`,
       });
     }
 
