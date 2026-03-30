@@ -161,6 +161,11 @@ export async function POST(req: NextRequest) {
   if (!leadIds?.length) return NextResponse.json({ error: 'leadIds requis' }, { status: 400 });
   if (leadIds.length > 1000) return NextResponse.json({ error: 'Max 1000 leads a la fois' }, { status: 400 });
 
+  // Rate limit: max 20 emails per batch to avoid Gmail Promotions tab
+  const MAX_BATCH = 20;
+  const batchIds = leadIds.slice(0, MAX_BATCH);
+  const queued = leadIds.length > MAX_BATCH ? leadIds.length - MAX_BATCH : 0;
+
   // Respect business hours: no outreach before 8h or after 21h Quebec time (EDT = UTC-4)
   const now = new Date();
   const utcHour = now.getUTCHours();
@@ -170,10 +175,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Hors heures d'envoi (8h-21h). Il est ${quebecHour}h au Quebec.`, queued: leadIds.length }, { status: 200 });
   }
 
-  const placeholders = leadIds.map((_, i) => `$${i + 1}`).join(',');
+  const placeholders = batchIds.map((_, i) => `$${i + 1}`).join(',');
   const leads = await query(
     `SELECT id, nom, telephone, email, service, ville, notes, type, prospect_sent_at FROM crm_leads WHERE id IN (${placeholders})`,
-    leadIds,
+    batchIds,
   );
 
   const portfolio = await loadPortfolio();
@@ -258,5 +263,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ ok: true, emails: emailsSent, sms: smsSent, skipped, total: leads.length });
+  return NextResponse.json({ ok: true, emails: emailsSent, sms: smsSent, skipped, total: leads.length, queued, max_batch: MAX_BATCH });
 }
