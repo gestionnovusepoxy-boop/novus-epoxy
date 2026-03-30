@@ -85,17 +85,16 @@ export async function autoHeal(): Promise<void> {
         const whRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
         const whData = await whRes.json();
         const expectedUrl = 'https://novus-epoxy.vercel.app/api/telegram/admin';
-        const hasError = whData.result?.last_error_message;
         const wrongUrl = whData.result?.url !== expectedUrl;
-
-        if (hasError || wrongUrl) {
+        // Only repair if URL is wrong — old errors in last_error_message stay until next successful delivery
+        if (wrongUrl) {
           const secret = process.env.TELEGRAM_WEBHOOK_SECRET ?? '';
           await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ url: expectedUrl, secret_token: secret }),
           });
-          repairs.push('Telegram webhook repare' + (hasError ? ` (erreur: ${hasError})` : ' (mauvaise URL)'));
+          repairs.push('Telegram webhook repare (mauvaise URL)');
         }
       }
     } catch { /* non-fatal */ }
