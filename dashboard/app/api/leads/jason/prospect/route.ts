@@ -157,29 +157,50 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // SAFETY LOCK: All prospect emails STOPPED
-  const paused = true;
-  if (paused) {
-    return NextResponse.json({ ok: true, emails: 0, skipped: 0, paused: true, message: 'Envoi pause' });
-  }
-
   const { leadIds } = (await req.json()) as { leadIds: number[] };
   if (!leadIds?.length) return NextResponse.json({ error: 'leadIds requis' }, { status: 400 });
-  if (leadIds.length > 1000) return NextResponse.json({ error: 'Max 1000 leads a la fois' }, { status: 400 });
 
-  // Rate limit: max 20 emails per batch to avoid Gmail Promotions tab
-  const MAX_BATCH = 20;
-  const batchIds = leadIds.slice(0, MAX_BATCH);
-  const queued = leadIds.length > MAX_BATCH ? leadIds.length - MAX_BATCH : 0;
+  // === RATE LIMITING: max 8 emails per 10 min window ===
+  const MAX_BATCH = 8;
+  const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
 
-  // Respect business hours: no outreach before 8h or after 21h Quebec time (EDT = UTC-4)
+  // Check last send time
+  const lastSendRows = await query(`SELECT value FROM kv_store WHERE key = 'last_prospect_batch_at'`).catch(() => []);
+  const lastSendTime = lastSendRows?.[0]?.value ? new Date(lastSendRows[0].value as string).getTime() : 0;
+  const timeSinceLast = Date.now() - lastSendTime;
+  if (timeSinceLast < COOLDOWN_MS) {
+    const waitMin = Math.ceil((COOLDOWN_MS - timeSinceLast) / 60000);
+    return NextResponse.json({ ok: true, emails: 0, skipped: 0, queued: leadIds.length, wait_minutes: waitMin, message: `Cooldown actif — prochain envoi dans ${waitMin} min` });
+  }
+
+  // Respect business hours: no outreach before 8h or after 18h Quebec time
   const now = new Date();
   const utcHour = now.getUTCHours();
-  const quebecOffset = -4; // EDT (March-November)
+  const quebecOffset = -4; // EDT
   const quebecHour = (utcHour + quebecOffset + 24) % 24;
-  if (quebecHour < 8 || quebecHour >= 21) {
-    return NextResponse.json({ error: `Hors heures d'envoi (8h-21h). Il est ${quebecHour}h au Quebec.`, queued: leadIds.length }, { status: 200 });
+  if (quebecHour < 8 || quebecHour >= 18) {
+    return NextResponse.json({ ok: true, emails: 0, queued: leadIds.length, message: `Hors heures (8h-18h). Il est ${quebecHour}h.` });
   }
+
+  // === DEDUP: load ALL emails ever sent ===
+  const alreadySentEmails = new Set<string>();
+  const existingEmails = await query(
+    `SELECT DISTINCT LOWER(destinataire) as email FROM email_logs`
+  );
+  for (const r of existingEmails) {
+    alreadySentEmails.add((r.email as string).toLowerCase());
+  }
+  // Also check all leads with prospect_sent_at
+  const alreadyContacted = await query(
+    `SELECT DISTINCT LOWER(email) as email FROM crm_leads WHERE prospect_sent_at IS NOT NULL AND email IS NOT NULL`
+  );
+  for (const r of alreadyContacted) {
+    alreadySentEmails.add((r.email as string).toLowerCase());
+  }
+
+  // Take only MAX_BATCH leads, skip the rest for next batch
+  const batchIds = leadIds.slice(0, MAX_BATCH * 3); // fetch more to account for skips
+  const queued = Math.max(0, leadIds.length - batchIds.length);
 
   const placeholders = batchIds.map((_, i) => `$${i + 1}`).join(',');
   const leads = await query(
@@ -189,32 +210,25 @@ export async function POST(req: NextRequest) {
 
   const portfolio = await loadPortfolio();
   let emailsSent = 0;
-  let smsSent = 0;
+  const smsSent = 0;
   let skipped = 0;
 
   interface LeadRow { id: number; nom: string; telephone: string | null; email: string | null; service: string; ville: string; notes: string; type: string; prospect_sent_at: string | null }
 
-  // Track emails already sent in this batch AND already in DB to prevent duplicates
-  const alreadySentEmails = new Set<string>();
-  const existingEmails = await query(
-    `SELECT DISTINCT LOWER(destinataire) as email FROM email_logs WHERE created_at > NOW() - INTERVAL '30 days'`
-  );
-  for (const r of existingEmails) {
-    alreadySentEmails.add((r.email as string).toLowerCase());
-  }
-
   for (const _lead of leads) {
     const lead = _lead as unknown as LeadRow;
 
-    // Skip already contacted
+    // Stop at MAX_BATCH emails actually sent
+    if (emailsSent >= MAX_BATCH) { skipped++; continue; }
+
+    // Skip already contacted (by lead flag)
     if (lead.prospect_sent_at) { skipped++; continue; }
 
-    // Skip leads with no contact method
-    if (!lead.email && !lead.telephone?.trim()) { skipped++; continue; }
+    // Skip leads with no email
+    if (!lead.email) { skipped++; continue; }
 
-    // Skip if we already sent to this email address (dedup by email)
-    if (lead.email && alreadySentEmails.has(lead.email.toLowerCase())) {
-      // Still mark the lead as sent so it doesn't get retried
+    // DEDUP: skip if email address already received ANY email from us
+    if (alreadySentEmails.has(lead.email.toLowerCase())) {
       await query(
         `UPDATE crm_leads SET prospect_sent_at = NOW(), statut = CASE WHEN statut = 'nouveau' THEN 'offre_envoyee' ELSE statut END, updated_at = NOW() WHERE id = $1`,
         [lead.id],
@@ -232,7 +246,7 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Send email from jason@novusepoxy.shop (if lead has email)
+    // 1. Send email (if lead has email)
     if (lead.email) {
       try {
         const subject = isCommercial
@@ -243,17 +257,29 @@ export async function POST(req: NextRequest) {
           ? buildCommercialHtml(prenom, photos)
           : buildResidentialHtml(prenom, project, photos);
 
+        // LOG FIRST to prevent duplicates on retry/timeout
+        await query(
+          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'sending')`,
+          [`pending-${lead.id}`, lead.email, subject],
+        );
+        alreadySentEmails.add(lead.email.toLowerCase());
+
         const result = await sendProspectEmail({ to: lead.email, subject, html });
 
+        // Update log with real resend ID
         await query(
-          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'sent')`,
-          [result.id, lead.email, subject],
+          `UPDATE email_logs SET resend_id = $1, statut = 'sent' WHERE resend_id = $2`,
+          [result.id, `pending-${lead.id}`],
         ).catch(() => {});
         emailsSent++;
         contacted = true;
-        alreadySentEmails.add(lead.email.toLowerCase());
       } catch (err) {
         console.error(`[Jason Prospect] Email failed for ${lead.nom}:`, err);
+        // Mark as failed so we don't retry
+        await query(
+          `UPDATE email_logs SET statut = 'failed' WHERE resend_id = $1`,
+          [`pending-${lead.id}`],
+        ).catch(() => {});
       }
     }
 
@@ -267,6 +293,14 @@ export async function POST(req: NextRequest) {
         [lead.id],
       ).catch(err => console.error(`[Jason Prospect] Status update failed for ${lead.id}:`, err));
     }
+  }
+
+  // Record batch timestamp for cooldown
+  if (emailsSent > 0) {
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ('last_prospect_batch_at', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+      [new Date().toISOString()],
+    ).catch(() => {});
   }
 
   return NextResponse.json({ ok: true, emails: emailsSent, sms: smsSent, skipped, total: leads.length, queued, max_batch: MAX_BATCH });
