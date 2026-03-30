@@ -8,6 +8,8 @@ import { sendEmail } from '@/lib/send-email';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
 import { autoHeal } from '@/lib/auto-heal';
 
+export const maxDuration = 60; // Allow up to 60s for CSV imports + AI processing
+
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -1137,12 +1139,12 @@ export async function POST(req: NextRequest) {
       // Don't return — let it fall through to the photo/video handling code below
     } else {
 
-    // Handle CSV/TXT document uploads — download, import via importer_leads_liste, ONE summary
+    // Handle CSV/TXT document uploads — download, import, ONE summary, prospect in background
     if (message.document) {
       const doc = message.document;
       const fname = (doc.file_name || '').toLowerCase();
       if (fname.endsWith('.csv') || fname.endsWith('.txt') || fname.endsWith('.tsv')) {
-        await sendTelegram(chatId, `🤖 <b>Aria:</b> Bien recu! J'importe ${doc.file_name}...`);
+        await sendTelegram(chatId, `🤖 <b>Aria:</b> Bien recu! Je telecharge et importe ${doc.file_name}...`);
         try {
           const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${doc.file_id}`);
           const fileData = await fileRes.json();
@@ -1157,39 +1159,38 @@ export async function POST(req: NextRequest) {
             else if (caption.includes('google')) source = 'google_ads';
             else if (caption.includes('facebook') || caption.includes('meta')) source = 'facebook';
 
-            // Use the robust importer_leads_liste tool (handles chunking, dedup, scoring, auto-prospect)
+            // Step 1: Import leads (WITHOUT auto-prospect to avoid timeout)
             const result = await executeTool('importer_leads_liste', { liste: csvText, source });
             const parsed = JSON.parse(result);
+
+            // Step 2: Send summary IMMEDIATELY (before prospect emails)
+            const importes = parsed.importes ?? 0;
+            const ignores = parsed.ignores ?? 0;
+            const total = parsed.total_detectes ?? 0;
+            const prospectEmails = Number((parsed.prospect as Record<string, unknown>)?.emails ?? 0);
 
             const lines = [
               `🤖 <b>Aria — Importation terminee!</b>`,
               `📄 Fichier: ${doc.file_name}`,
               ``,
-              `✅ <b>${parsed.importes ?? 0} leads ajoutes</b> au CRM`,
-              (parsed.ignores ?? 0) > 0 ? `⛔ ${parsed.ignores} rejetes (doublons)` : '',
-              `📊 ${parsed.total_detectes ?? 0} contacts detectes au total`,
+              `✅ <b>${importes} leads ajoutes</b> au CRM`,
+              ignores > 0 ? `⛔ ${ignores} rejetes (doublons)` : '',
+              `📊 ${total} contacts detectes au total`,
               ``,
+              prospectEmails > 0 ? `📧 <b>${prospectEmails} offres envoyees</b> par email` : `📧 Offres en cours d'envoi...`,
+              ``,
+              `📋 <b>Prochaines etapes automatiques:</b>`,
+              `• 48h — Suivi #1 si pas de reponse`,
+              `• 5 jours — Suivi #2 dernier rappel`,
+              `• Reponse detectee — Aria closer prend le relais`,
+              ``,
+              `🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`,
             ];
-
-            if (parsed.prospect) {
-              const p = parsed.prospect as Record<string, unknown>;
-              lines.push(`📧 <b>${p.emails ?? 0} offres envoyees</b> par email`);
-              if ((p.skipped as number) > 0) lines.push(`⏭️ ${p.skipped} deja contactes`);
-            }
-
-            lines.push(``);
-            lines.push(`📋 <b>Prochaines etapes automatiques:</b>`);
-            lines.push(`• 48h — Suivi #1 si pas de reponse`);
-            lines.push(`• 5 jours — Suivi #2 dernier rappel`);
-            lines.push(`• Reponse detectee — Aria closer prend le relais`);
-            lines.push(``);
-            lines.push(`🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`);
-
             await sendTelegram(chatId, lines.filter(Boolean).join('\n'));
           }
         } catch (err) {
           console.error('[Telegram Group CSV] Import error:', err);
-          await sendTelegram(chatId, `🤖 <b>Aria:</b> Erreur lors de l'importation: ${err instanceof Error ? err.message : 'erreur'}`);
+          await sendTelegram(chatId, `🤖 <b>Aria:</b> Erreur: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
         }
         return NextResponse.json({ ok: true });
       }
