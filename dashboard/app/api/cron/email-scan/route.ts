@@ -613,7 +613,7 @@ export async function GET(req: NextRequest) {
         jasonBody = Buffer.from(fullMsg.data.payload.body.data, 'base64url').toString('utf-8');
       }
 
-      // Check for CSV/TXT attachment
+      // Check for ALL CSV/TXT attachments (multiple files supported)
       let attachedText = '';
       for (const part of jParts) {
         if (
@@ -628,10 +628,10 @@ export async function GET(req: NextRequest) {
               id: part.body.attachmentId,
             });
             if (att.data.data) {
-              attachedText = Buffer.from(att.data.data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+              const text = Buffer.from(att.data.data.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('utf-8');
+              attachedText += (attachedText ? '\n' : '') + text;
             }
           } catch { /* skip */ }
-          break;
         }
       }
 
