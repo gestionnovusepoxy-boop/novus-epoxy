@@ -160,18 +160,8 @@ export async function POST(req: NextRequest) {
   const { leadIds } = (await req.json()) as { leadIds: number[] };
   if (!leadIds?.length) return NextResponse.json({ error: 'leadIds requis' }, { status: 400 });
 
-  // === RATE LIMITING: max 8 emails per 10 min window ===
-  const MAX_BATCH = 8;
-  const COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
-
-  // Check last send time
-  const lastSendRows = await query(`SELECT value FROM kv_store WHERE key = 'last_prospect_batch_at'`).catch(() => []);
-  const lastSendTime = lastSendRows?.[0]?.value ? new Date(lastSendRows[0].value as string).getTime() : 0;
-  const timeSinceLast = Date.now() - lastSendTime;
-  if (timeSinceLast < COOLDOWN_MS) {
-    const waitMin = Math.ceil((COOLDOWN_MS - timeSinceLast) / 60000);
-    return NextResponse.json({ ok: true, emails: 0, skipped: 0, queued: leadIds.length, wait_minutes: waitMin, message: `Cooldown actif — prochain envoi dans ${waitMin} min` });
-  }
+  // === RATE LIMITING: max 100 per call, staggered via Resend scheduled_at ===
+  const MAX_BATCH = 100; // API calls are instant (just scheduling), Resend delivers spaced out
 
   // Respect business hours: no outreach before 8h or after 18h Quebec time
   const now = new Date();
@@ -261,8 +251,9 @@ export async function POST(req: NextRequest) {
         const today = new Date().toISOString().split('T')[0];
         const idempotencyKey = `prospect-${lead.id}-${today}`;
 
-        // Schedule delivery: stagger 3 min apart to avoid bulk detection
-        const delayMs = emailsSent * 3 * 60 * 1000; // 0, 3min, 6min, 9min...
+        // Schedule delivery: stagger 30sec apart to avoid bulk detection
+        // 100 emails = ~50 min spread, 1000 = ~8h (fits in 1 business day)
+        const delayMs = emailsSent * 30 * 1000; // 0, 30s, 60s, 90s...
         const scheduledAt = new Date(Date.now() + delayMs + 60000).toISOString(); // +1min buffer
 
         // LOG FIRST to prevent duplicates on retry/timeout
@@ -306,14 +297,6 @@ export async function POST(req: NextRequest) {
         [lead.id],
       ).catch(err => console.error(`[Jason Prospect] Status update failed for ${lead.id}:`, err));
     }
-  }
-
-  // Record batch timestamp for cooldown
-  if (emailsSent > 0) {
-    await query(
-      `INSERT INTO kv_store (key, value) VALUES ('last_prospect_batch_at', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
-      [new Date().toISOString()],
-    ).catch(() => {});
   }
 
   return NextResponse.json({ ok: true, emails: emailsSent, sms: smsSent, skipped, total: leads.length, queued, max_batch: MAX_BATCH });
