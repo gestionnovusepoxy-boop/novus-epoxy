@@ -246,7 +246,7 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Send email (if lead has email)
+    // 1. Send email with scheduled delivery (stagger 3 min apart)
     if (lead.email) {
       try {
         const subject = isCommercial
@@ -257,28 +257,41 @@ export async function POST(req: NextRequest) {
           ? buildCommercialHtml(prenom, photos)
           : buildResidentialHtml(prenom, project, photos);
 
+        // Idempotency key: lead ID + today's date — prevents ANY duplicate
+        const today = new Date().toISOString().split('T')[0];
+        const idempotencyKey = `prospect-${lead.id}-${today}`;
+
+        // Schedule delivery: stagger 3 min apart to avoid bulk detection
+        const delayMs = emailsSent * 3 * 60 * 1000; // 0, 3min, 6min, 9min...
+        const scheduledAt = new Date(Date.now() + delayMs + 60000).toISOString(); // +1min buffer
+
         // LOG FIRST to prevent duplicates on retry/timeout
         await query(
-          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'sending')`,
-          [`pending-${lead.id}`, lead.email, subject],
+          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'scheduled')`,
+          [idempotencyKey, lead.email, subject],
         );
         alreadySentEmails.add(lead.email.toLowerCase());
 
-        const result = await sendProspectEmail({ to: lead.email, subject, html });
+        const result = await sendProspectEmail({
+          to: lead.email,
+          subject,
+          html,
+          idempotencyKey,
+          scheduledAt,
+        });
 
         // Update log with real resend ID
         await query(
           `UPDATE email_logs SET resend_id = $1, statut = 'sent' WHERE resend_id = $2`,
-          [result.id, `pending-${lead.id}`],
+          [result.id, idempotencyKey],
         ).catch(() => {});
         emailsSent++;
         contacted = true;
       } catch (err) {
         console.error(`[Jason Prospect] Email failed for ${lead.nom}:`, err);
-        // Mark as failed so we don't retry
         await query(
-          `UPDATE email_logs SET statut = 'failed' WHERE resend_id = $1`,
-          [`pending-${lead.id}`],
+          `UPDATE email_logs SET statut = 'failed' WHERE destinataire = $1 AND statut = 'scheduled' AND created_at > NOW() - INTERVAL '1 minute'`,
+          [lead.email],
         ).catch(() => {});
       }
     }
