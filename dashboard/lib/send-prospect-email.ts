@@ -1,6 +1,6 @@
 /**
  * Sends prospect/outreach emails via Resend API.
- * Display name: "Jason - Novus Epoxy"
+ * Display name: "Novus Epoxy"
  * Reply-To: gestionnovusepoxy@gmail.com (Aria catches replies)
  *
  * Uses Resend instead of Gmail API to avoid Gmail rate limits/blocks.
@@ -27,7 +27,7 @@ export async function sendProspectEmail({
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Jason - Novus Epoxy <jason@novusepoxy.shop>',
+      from: 'Novus Epoxy <jason@novusepoxy.shop>',
       to,
       subject,
       html,
