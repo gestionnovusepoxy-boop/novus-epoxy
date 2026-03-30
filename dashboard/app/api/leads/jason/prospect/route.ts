@@ -207,27 +207,19 @@ export async function POST(req: NextRequest) {
 
   for (const _lead of leads) {
     const lead = _lead as unknown as LeadRow;
-
-    // Stop at MAX_BATCH emails actually sent
     if (emailsSent >= MAX_BATCH) { skipped++; continue; }
-
-    // Skip already contacted (by lead flag)
     if (lead.prospect_sent_at) { skipped++; continue; }
 
-    // Skip leads with no email
-    if (!lead.email) { skipped++; continue; }
+    // === ATOMIC LOCK: claim this lead in DB FIRST, before any send ===
+    // If another process already claimed it, UPDATE returns 0 rows → skip
+    const claimed = await query(
+      `UPDATE crm_leads SET prospect_sent_at = NOW(), statut = 'offre_envoyee', updated_at = NOW()
+       WHERE id = $1 AND prospect_sent_at IS NULL
+       RETURNING id`,
+      [lead.id],
+    );
+    if (claimed.length === 0) { skipped++; continue; } // Already claimed by another process
 
-    // DEDUP: skip if email address already received ANY email from us
-    if (alreadySentEmails.has(lead.email.toLowerCase())) {
-      await query(
-        `UPDATE crm_leads SET prospect_sent_at = NOW(), statut = CASE WHEN statut = 'nouveau' THEN 'offre_envoyee' ELSE statut END, updated_at = NOW() WHERE id = $1`,
-        [lead.id],
-      ).catch(() => {});
-      skipped++;
-      continue;
-    }
-
-    console.log(`[Prospect] Processing lead #${lead.id} ${lead.nom} email="${lead.email}" tel="${lead.telephone}" type="${typeof lead.email}" emailsSent=${emailsSent}`);
     const prenom = getPrenom(lead.nom);
     const project = lead.service || lead.notes?.split('—')[0] || '';
     const isCommercial = lead.type === 'commercial';
@@ -237,8 +229,8 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Send email — simple and reliable
-    if (lead.email && String(lead.email).includes('@')) {
+    // 1. Send email
+    if (lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
       const subject = isCommercial
         ? `${prenom} — Partenariat planchers epoxy — Novus Epoxy`
         : `${prenom} — Votre projet en epoxy avec Novus Epoxy`;
@@ -273,13 +265,7 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 3. Update lead status ONLY if at least one contact method succeeded
-    if (contacted) {
-      await query(
-        `UPDATE crm_leads SET prospect_sent_at = NOW(), statut = CASE WHEN statut = 'nouveau' THEN 'offre_envoyee' ELSE statut END, updated_at = NOW() WHERE id = $1`,
-        [lead.id],
-      ).catch(err => console.error(`[Jason Prospect] Status update failed for ${lead.id}:`, err));
-    }
+    // Status already set by atomic lock above — no need to update again
   }
 
   return NextResponse.json({ ok: true, emails: emailsSent, sms: smsSent, skipped, total: leads.length, queued, max_batch: MAX_BATCH });
