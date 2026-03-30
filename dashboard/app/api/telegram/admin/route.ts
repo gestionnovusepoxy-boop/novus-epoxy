@@ -1137,26 +1137,65 @@ export async function POST(req: NextRequest) {
       // Don't return — let it fall through to the photo/video handling code below
     } else {
 
-    // Handle CSV/TXT document uploads — download and extract leads
-    let docText = '';
+    // Handle CSV/TXT document uploads — download, import via importer_leads_liste, ONE summary
     if (message.document) {
       const doc = message.document;
       const fname = (doc.file_name || '').toLowerCase();
       if (fname.endsWith('.csv') || fname.endsWith('.txt') || fname.endsWith('.tsv')) {
-        // Immediate confirmation
-        await sendTelegram(chatId, `🤖 <b>Aria:</b> Bien recu! Je commence l'importation de ${doc.file_name} maintenant...`);
+        await sendTelegram(chatId, `🤖 <b>Aria:</b> Bien recu! J'importe ${doc.file_name}...`);
         try {
           const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${doc.file_id}`);
           const fileData = await fileRes.json();
           if (fileData.result?.file_path) {
             const dlRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${fileData.result.file_path}`);
-            docText = await dlRes.text();
+            const csvText = await dlRes.text();
+
+            // Detect source from caption
+            const caption = (message.caption ?? '').toLowerCase();
+            let source = 'jason';
+            if (caption.includes('champlain') || caption.includes('champfield')) source = 'champfield';
+            else if (caption.includes('google')) source = 'google_ads';
+            else if (caption.includes('facebook') || caption.includes('meta')) source = 'facebook';
+
+            // Use the robust importer_leads_liste tool (handles chunking, dedup, scoring, auto-prospect)
+            const result = await executeTool('importer_leads_liste', { liste: csvText, source });
+            const parsed = JSON.parse(result);
+
+            const lines = [
+              `🤖 <b>Aria — Importation terminee!</b>`,
+              `📄 Fichier: ${doc.file_name}`,
+              ``,
+              `✅ <b>${parsed.importes ?? 0} leads ajoutes</b> au CRM`,
+              (parsed.ignores ?? 0) > 0 ? `⛔ ${parsed.ignores} rejetes (doublons)` : '',
+              `📊 ${parsed.total_detectes ?? 0} contacts detectes au total`,
+              ``,
+            ];
+
+            if (parsed.prospect) {
+              const p = parsed.prospect as Record<string, unknown>;
+              lines.push(`📧 <b>${p.emails ?? 0} offres envoyees</b> par email`);
+              if ((p.skipped as number) > 0) lines.push(`⏭️ ${p.skipped} deja contactes`);
+            }
+
+            lines.push(``);
+            lines.push(`📋 <b>Prochaines etapes automatiques:</b>`);
+            lines.push(`• 48h — Suivi #1 si pas de reponse`);
+            lines.push(`• 5 jours — Suivi #2 dernier rappel`);
+            lines.push(`• Reponse detectee — Aria closer prend le relais`);
+            lines.push(``);
+            lines.push(`🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`);
+
+            await sendTelegram(chatId, lines.filter(Boolean).join('\n'));
           }
-        } catch { /* skip */ }
+        } catch (err) {
+          console.error('[Telegram Group CSV] Import error:', err);
+          await sendTelegram(chatId, `🤖 <b>Aria:</b> Erreur lors de l'importation: ${err instanceof Error ? err.message : 'erreur'}`);
+        }
+        return NextResponse.json({ ok: true });
       }
     }
 
-    const text = (docText || (message.text ?? message.caption ?? '')).trim();
+    const text = ((message.text ?? message.caption ?? '') as string).trim();
     if (!text || text.length < 3) return NextResponse.json({ ok: true });
 
     // If message starts with "Aria" — respond as Aria in the group
@@ -1293,11 +1332,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true });
     }
 
-    // Check if message looks like leads (has phone numbers or multiple names)
-    if (text.length < 10) return NextResponse.json({ ok: true });
-    const hasPhones = (text.match(/\d{3}[\s.\-]?\d{3}[\s.\-]?\d{4}/g) || []).length >= 1;
-    const hasMultipleLines = text.split('\n').filter((l: string) => l.trim().length > 3).length >= 2;
-    const looksLikeLeads = hasPhones || hasMultipleLines;
+    // Check if message looks like a BULK lead list (multiple contacts)
+    // Must have 3+ lines with phone numbers to avoid false positives on normal conversation
+    if (text.length < 30) return NextResponse.json({ ok: true });
+    const phoneMatches = (text.match(/\d{3}[\s.\-]?\d{3}[\s.\-]?\d{4}/g) || []);
+    const hasMultiplePhones = phoneMatches.length >= 2;
+    const hasMultipleLines = text.split('\n').filter((l: string) => l.trim().length > 5).length >= 3;
+    const looksLikeLeads = hasMultiplePhones && hasMultipleLines;
 
     if (looksLikeLeads) {
       // Parse leads with Claude Haiku

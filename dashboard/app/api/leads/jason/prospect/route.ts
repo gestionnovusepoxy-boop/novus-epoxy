@@ -183,6 +183,15 @@ export async function POST(req: NextRequest) {
 
   interface LeadRow { id: number; nom: string; telephone: string | null; email: string | null; service: string; ville: string; notes: string; type: string; prospect_sent_at: string | null }
 
+  // Track emails already sent in this batch AND already in DB to prevent duplicates
+  const alreadySentEmails = new Set<string>();
+  const existingEmails = await query(
+    `SELECT DISTINCT LOWER(destinataire) as email FROM email_logs WHERE created_at > NOW() - INTERVAL '30 days'`
+  );
+  for (const r of existingEmails) {
+    alreadySentEmails.add((r.email as string).toLowerCase());
+  }
+
   for (const _lead of leads) {
     const lead = _lead as unknown as LeadRow;
 
@@ -191,6 +200,17 @@ export async function POST(req: NextRequest) {
 
     // Skip leads with no contact method
     if (!lead.email && !lead.telephone?.trim()) { skipped++; continue; }
+
+    // Skip if we already sent to this email address (dedup by email)
+    if (lead.email && alreadySentEmails.has(lead.email.toLowerCase())) {
+      // Still mark the lead as sent so it doesn't get retried
+      await query(
+        `UPDATE crm_leads SET prospect_sent_at = NOW(), statut = CASE WHEN statut = 'nouveau' THEN 'offre_envoyee' ELSE statut END, updated_at = NOW() WHERE id = $1`,
+        [lead.id],
+      ).catch(() => {});
+      skipped++;
+      continue;
+    }
 
     const prenom = getPrenom(lead.nom);
     const project = lead.service || lead.notes?.split('—')[0] || '';
@@ -220,6 +240,7 @@ export async function POST(req: NextRequest) {
         ).catch(() => {});
         emailsSent++;
         contacted = true;
+        alreadySentEmails.add(lead.email.toLowerCase());
       } catch (err) {
         console.error(`[Jason Prospect] Email failed for ${lead.nom}:`, err);
       }
