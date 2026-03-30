@@ -157,10 +157,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // SAFETY LOCK: All prospect emails paused until Luca re-enables
-  // eslint-disable-next-line no-constant-condition
-  if (true) {
-    return NextResponse.json({ ok: true, emails: 0, skipped: 0, paused: true, message: 'Envoi pause — verification anti-doublon en cours' });
+  // SAFETY LOCK: All prospect emails STOPPED
+  const paused = true;
+  if (paused) {
+    return NextResponse.json({ ok: true, emails: 0, skipped: 0, paused: true, message: 'Envoi pause' });
   }
 
   const { leadIds } = (await req.json()) as { leadIds: number[] };
