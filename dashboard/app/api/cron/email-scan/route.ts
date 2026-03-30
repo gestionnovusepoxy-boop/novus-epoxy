@@ -742,7 +742,7 @@ export async function GET(req: NextRequest) {
                   }
                 }
 
-                // Auto-prospect
+                // Auto-prospect: send offers to all imported leads
                 let prospectResult = null;
                 if (insertedIds.length > 0) {
                   try {
@@ -756,14 +756,22 @@ export async function GET(req: NextRequest) {
                   } catch { /* */ }
                 }
 
-                // Notify Telegram
+                // Count temperatures
+                const tempCounts = { chaud: 0, tiede: 0, froid: 0 };
+                for (const lead of leads) {
+                  const t = scoreTemp(lead);
+                  tempCounts[t]++;
+                }
+
+                // Notify Telegram with detailed report
                 for (const chatId of ADMIN_CHAT_IDS()) {
                   await sendTelegram(chatId,
-                    `📥 <b>Leads importes par email (Jason)</b>\n\n` +
-                    `📊 ${imported} leads importes dans le CRM\n` +
+                    `📥 <b>Aria — CSV traite</b>\n\n` +
+                    `📊 <b>${imported}</b> leads importes dans le CRM\n` +
                     (skipped > 0 ? `⏭️ ${skipped} doublons ignores\n` : '') +
+                    `🔥 ${tempCounts.chaud} chauds | 🟡 ${tempCounts.tiede} tiedes | 🔵 ${tempCounts.froid} froids\n` +
                     `📧 Source: ${fromEmail}\n` +
-                    (prospectResult ? `🚀 Auto-prospect: ${(prospectResult as Record<string, unknown>).sent ?? 0} emails envoyes\n` : '') +
+                    (prospectResult ? `\n🚀 <b>${(prospectResult as Record<string, unknown>).sent ?? 0} offres envoyees</b>\n` : '') +
                     `\n🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`,
                   );
                 }
