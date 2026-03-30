@@ -314,6 +314,54 @@ function ChecklistSection({ quoteId, onChecklistChange }: {
   );
 }
 
+/* ─── Hours Section ─── */
+interface HourEntry { employee_nom: string; heures: number; type: string; date_travail: string }
+
+function HoursSection({ quoteId }: { quoteId: number }) {
+  const [hours, setHours] = useState<HourEntry[]>([]);
+  const [totalHeures, setTotalHeures] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch(`/api/equipe/heures?quote_id=${quoteId}`);
+      if (res.ok) {
+        const json = await res.json();
+        const entries = (json.data ?? []) as HourEntry[];
+        setHours(entries);
+        setTotalHeures(entries.reduce((sum, e) => sum + Number(e.heures || 0), 0));
+      }
+    })();
+  }, [quoteId]);
+
+  // Group by employee
+  const byEmployee: Record<string, number> = {};
+  for (const h of hours) {
+    byEmployee[h.employee_nom] = (byEmployee[h.employee_nom] || 0) + Number(h.heures || 0);
+  }
+
+  return (
+    <div className="bg-slate-900/50 rounded-lg p-3 space-y-2">
+      <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Heures du projet</h4>
+      {Object.keys(byEmployee).length > 0 ? (
+        <div className="space-y-1">
+          {Object.entries(byEmployee).map(([nom, h]) => (
+            <div key={nom} className="flex items-center justify-between text-sm">
+              <span className="text-slate-300">{nom}</span>
+              <span className="text-white font-medium">{h}h</span>
+            </div>
+          ))}
+          <div className="flex items-center justify-between text-sm border-t border-slate-700 pt-1 mt-1">
+            <span className="text-slate-400 font-medium">Total</span>
+            <span className="text-amber-400 font-bold">{totalHeures}h</span>
+          </div>
+        </div>
+      ) : (
+        <p className="text-slate-600 text-xs">Aucune heure enregistree</p>
+      )}
+    </div>
+  );
+}
+
 /* ─── Job Card ─── */
 function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -449,6 +497,7 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
       {expanded && (
         <div className="space-y-3">
           <PhotoSection quoteId={job.id} onPhotosChange={handlePhotosChange} />
+          <HoursSection quoteId={job.id} />
           <ChecklistSection quoteId={job.id} onChecklistChange={setCheckedItems} />
         </div>
       )}
