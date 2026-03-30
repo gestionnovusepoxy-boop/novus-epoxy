@@ -212,9 +212,9 @@ MISSION: Analyser l'email, identifier l'intention, generer une reponse qui maxim
 TYPES DE LEADS:
 - CLIENT_RESIDENTIEL: garage, sous-sol, balcon, escalier, condo
 - CLIENT_COMMERCIAL: restaurant, entrepot, commerce, bureau, industriel
-- SOUS_TRAITANT: entrepreneur, renovateur, peintre qui veut travailler avec nous
+- SOUS_TRAITANT: entrepreneur, renovateur, peintre, contracteur general qui veut travailler avec nous OU nous engager pour un projet
 - QUESTION_GENERALE: curieux, veut en savoir plus sur les services
-- CONCURRENT: competitor fishing pour info
+- CONCURRENT: UNIQUEMENT une entreprise d'epoxy qui pose des planchers epoxy elle-meme et espionne nos prix. ATTENTION: les entreprises de construction, renovation, general contractor sont des CLIENTS POTENTIELS, PAS des concurrents! Un plombier, electricien, constructeur, entrepreneur general = CLIENT ou SOUS_TRAITANT
 - NON_INTERESSE: se desabonne ou mauvais destinataire
 - SPAM
 
@@ -311,6 +311,12 @@ Reponds en JSON strict (sans markdown):
   if (parsed.type === 'CONCURRENT') {
     await query(`UPDATE crm_leads SET statut = 'contacte', notes = COALESCE(notes, '') || E'\n[Concurrent detecte]', updated_at = NOW() WHERE id = $1`, [leadId]);
     await query(`UPDATE email_logs SET statut = 'skipped' WHERE resend_id = $1`, [`lead-${msgId}`]);
+    // Always notify admins even for concurrent detection
+    for (const chatId of ADMIN_CHAT_IDS()) {
+      await sendTelegram(chatId,
+        `⚠️ <b>Concurrent detecte: ${leadNom}</b>\n\n📧 ${fromEmail}\n📝 ${subject}\n💬 "${parsed.intent}"\n\n<i>Aria n'a pas repondu. Verifie si c'est vraiment un concurrent.</i>`
+      );
+    }
     return;
   }
 
@@ -1061,18 +1067,24 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === IMPORTANT / NEEDS ATTENTION: Alert admin ===
-    if (analysis.needs_attention && analysis.type !== 'spam') {
-      for (const chatId of ADMIN_CHAT_IDS()) {
-        await sendTelegram(chatId,
-          `📬 <b>Email necessite ton attention</b>\n\n` +
-          `De: ${fromHeader}\n` +
-          `Sujet: ${subject}\n\n` +
-          `📋 ${analysis.summary}\n\n` +
-          (analysis.reply_suggestion ? `💡 Suggestion: ${analysis.reply_suggestion}` : ''),
-        );
+    // === NOTIFY ADMIN FOR ALL NON-SPAM EMAILS ===
+    // Aria resumes TOUS les emails importants sur Telegram
+    if (analysis.type !== 'spam') {
+      const emoji = analysis.needs_attention ? '🔴' : analysis.type === 'important' ? '🟠' : '📬';
+      const label = analysis.needs_attention ? 'ACTION REQUISE' : analysis.type === 'facture' ? '' : analysis.type === 'client' ? '' : `Email ${analysis.type}`;
+      // Skip notification for facture and client — they already have their own notifications above
+      if (analysis.type !== 'facture' && analysis.type !== 'client') {
+        for (const chatId of ADMIN_CHAT_IDS()) {
+          await sendTelegram(chatId,
+            `${emoji} <b>${label || 'Nouveau email'}</b>\n\n` +
+            `De: ${fromHeader}\n` +
+            `Sujet: ${subject}\n\n` +
+            `📋 ${analysis.summary}\n\n` +
+            (analysis.reply_suggestion ? `💡 Suggestion: ${analysis.reply_suggestion}` : ''),
+          );
+        }
+        alertsSent++;
       }
-      alertsSent++;
     }
 
     // Mark as read
