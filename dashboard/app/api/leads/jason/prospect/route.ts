@@ -159,11 +159,13 @@ export async function POST(req: NextRequest) {
   if (!leadIds?.length) return NextResponse.json({ error: 'leadIds requis' }, { status: 400 });
   if (leadIds.length > 50) return NextResponse.json({ error: 'Max 50 leads a la fois' }, { status: 400 });
 
-  // Respect business hours: no outreach before 8h or after 21h Quebec time
-  const quebecHour = new Date().toLocaleString('en-US', { timeZone: 'America/Toronto', hour: 'numeric', hour12: false });
-  const hour = parseInt(quebecHour, 10);
-  if (hour < 8 || hour >= 21) {
-    return NextResponse.json({ error: 'Hors heures d\'envoi (8h-21h). Les offres seront envoyees demain matin.', queued: leadIds.length }, { status: 200 });
+  // Respect business hours: no outreach before 8h or after 21h Quebec time (EDT = UTC-4)
+  const now = new Date();
+  const utcHour = now.getUTCHours();
+  const quebecOffset = -4; // EDT (March-November)
+  const quebecHour = (utcHour + quebecOffset + 24) % 24;
+  if (quebecHour < 8 || quebecHour >= 21) {
+    return NextResponse.json({ error: `Hors heures d'envoi (8h-21h). Il est ${quebecHour}h au Quebec.`, queued: leadIds.length }, { status: 200 });
   }
 
   const placeholders = leadIds.map((_, i) => `$${i + 1}`).join(',');
