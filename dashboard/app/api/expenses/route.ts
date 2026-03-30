@@ -11,12 +11,17 @@ export async function GET(req: NextRequest) {
   const limit     = Math.min(100, parseInt(searchParams.get('limit') ?? '25'));
   const categorie = searchParams.get('categorie') ?? '';
   const search    = searchParams.get('search') ?? '';
+  const quoteId   = searchParams.get('quote_id') ?? '';
   const offset    = (page - 1) * limit;
 
   let where = 'WHERE 1=1';
   const params: unknown[] = [];
   let i = 1;
 
+  if (quoteId) {
+    where += ` AND quote_id = $${i++}`;
+    params.push(parseInt(quoteId));
+  }
   if (categorie) {
     where += ` AND categorie = $${i++}`;
     params.push(categorie);

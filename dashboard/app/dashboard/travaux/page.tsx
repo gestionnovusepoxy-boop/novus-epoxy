@@ -384,6 +384,112 @@ function HoursSection({ quoteId }: { quoteId: number }) {
   );
 }
 
+/* ─── Expenses Section ─── */
+interface ExpenseEntry { id: number; fournisseur: string; montant_ttc: number; categorie: string; date_depense: string; description: string | null }
+
+function ExpensesSection({ quoteId }: { quoteId: number }) {
+  const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
+  const [totalDepenses, setTotalDepenses] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      const res = await fetch(`/api/expenses?quote_id=${quoteId}`);
+      if (res.ok) {
+        const json = await res.json();
+        const list = (json.data ?? json) as ExpenseEntry[];
+        setExpenses(Array.isArray(list) ? list : []);
+        setTotalDepenses((Array.isArray(list) ? list : []).reduce((sum, e) => sum + Number(e.montant_ttc || 0), 0));
+      }
+    })();
+  }, [quoteId]);
+
+  const CAT_LABEL: Record<string, string> = {
+    materiaux: 'Materiaux', sous_traitance: 'Sous-trait.', transport: 'Transport',
+    equipement: 'Equipement', marketing: 'Marketing', autre: 'Autre',
+  };
+
+  return (
+    <div className="bg-slate-900/50 rounded-lg p-3 space-y-2">
+      <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+        Depenses du projet — {expenses.length} facture{expenses.length !== 1 ? 's' : ''}
+      </h4>
+      {expenses.length > 0 ? (
+        <div className="space-y-1">
+          {expenses.map(e => (
+            <div key={e.id} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="text-slate-300 truncate">{e.fournisseur}</span>
+                <span className="text-slate-600 text-xs">{CAT_LABEL[e.categorie] || e.categorie}</span>
+              </div>
+              <span className="text-white font-medium whitespace-nowrap">{formatMoney(Number(e.montant_ttc))}</span>
+            </div>
+          ))}
+          <div className="flex items-center justify-between text-sm border-t border-slate-700 pt-1.5 mt-1">
+            <span className="text-slate-400 font-medium">Total depenses</span>
+            <span className="text-red-400 font-bold">{formatMoney(totalDepenses)}</span>
+          </div>
+        </div>
+      ) : (
+        <p className="text-slate-600 text-xs">Aucune depense enregistree</p>
+      )}
+    </div>
+  );
+}
+
+/* ─── Profit Section ─── */
+function ProfitSection({ quoteId, total }: { quoteId: number; total: number }) {
+  const [totalHeures, setTotalHeures] = useState(0);
+  const [totalSalaires, setTotalSalaires] = useState(0);
+  const [totalDepenses, setTotalDepenses] = useState(0);
+
+  useEffect(() => {
+    (async () => {
+      // Get hours + salaries
+      const hRes = await fetch(`/api/equipe/heures?quote_id=${quoteId}`);
+      if (hRes.ok) {
+        const json = await hRes.json();
+        setTotalHeures(json.totals?.heures ?? 0);
+        setTotalSalaires(json.totals?.montant ?? 0);
+      }
+      // Get expenses
+      const eRes = await fetch(`/api/depenses?quote_id=${quoteId}`);
+      if (eRes.ok) {
+        const json = await eRes.json();
+        const list = (json.data ?? json) as { montant_ttc: number }[];
+        setTotalDepenses((Array.isArray(list) ? list : []).reduce((sum, e) => sum + Number(e.montant_ttc || 0), 0));
+      }
+    })();
+  }, [quoteId]);
+
+  const totalCouts = totalSalaires + totalDepenses;
+  const profit = total - totalCouts;
+  const margin = total > 0 ? Math.round((profit / total) * 100) : 0;
+
+  return (
+    <div className={`rounded-lg p-3 space-y-1.5 ${profit >= 0 ? 'bg-green-950/30 border border-green-800/30' : 'bg-red-950/30 border border-red-800/30'}`}>
+      <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Profit du projet</h4>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-slate-400">Revenu</span>
+        <span className="text-white font-medium">{formatMoney(total)}</span>
+      </div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-slate-400">Main d&apos;oeuvre ({totalHeures}h)</span>
+        <span className="text-red-400">-{formatMoney(totalSalaires)}</span>
+      </div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-slate-400">Depenses materiaux</span>
+        <span className="text-red-400">-{formatMoney(totalDepenses)}</span>
+      </div>
+      <div className="flex items-center justify-between text-sm border-t border-slate-700 pt-1.5 mt-1">
+        <span className="text-white font-bold">Profit net</span>
+        <span className={`font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          {formatMoney(profit)} ({margin}%)
+        </span>
+      </div>
+    </div>
+  );
+}
+
 /* ─── Job Card ─── */
 function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -520,7 +626,9 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
         <div className="space-y-3">
           <PhotoSection quoteId={job.id} onPhotosChange={handlePhotosChange} />
           <HoursSection quoteId={job.id} />
+          <ExpensesSection quoteId={job.id} />
           <ChecklistSection quoteId={job.id} onChecklistChange={setCheckedItems} />
+          <ProfitSection quoteId={job.id} total={Number(job.total)} />
         </div>
       )}
 
