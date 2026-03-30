@@ -168,8 +168,8 @@ export async function POST(req: NextRequest) {
   const utcHour = now.getUTCHours();
   const quebecOffset = -4; // EDT
   const quebecHour = (utcHour + quebecOffset + 24) % 24;
-  if (quebecHour < 8 || quebecHour >= 18) {
-    return NextResponse.json({ ok: true, emails: 0, queued: leadIds.length, message: `Hors heures (8h-18h). Il est ${quebecHour}h.` });
+  if (quebecHour < 8 || quebecHour >= 20) {
+    return NextResponse.json({ ok: true, emails: 0, queued: leadIds.length, message: `Hors heures (8h-20h). Il est ${quebecHour}h.` });
   }
 
   // === DEDUP: load ALL emails ever sent ===
@@ -200,7 +200,7 @@ export async function POST(req: NextRequest) {
 
   const portfolio = await loadPortfolio();
   let emailsSent = 0;
-  const smsSent = 0;
+  let smsSent = 0;
   let skipped = 0;
 
   interface LeadRow { id: number; nom: string; telephone: string | null; email: string | null; service: string; ville: string; notes: string; type: string; prospect_sent_at: string | null }
@@ -287,8 +287,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. PAS de SMS pour les offres de service — email seulement
-    // Les SMS sont reserves pour les relances apres reponse du client
+    // 2. SMS only if lead has phone but NO email
+    if (!lead.email && lead.telephone?.trim() && !contacted) {
+      try {
+        const smsText = `Bonjour ${prenom}, c'est Novus Epoxy! On fait des planchers epoxy haut de gamme dans la region de Quebec. Soumission gratuite, licence RBQ. Appelez-nous au 581-307-2678 ou visitez novusepoxy.ca`;
+        await sendSMS(lead.telephone, smsText);
+        smsSent++;
+        contacted = true;
+      } catch (err) {
+        console.error(`[Jason Prospect] SMS failed for ${lead.nom}:`, err);
+      }
+    }
 
     // 3. Update lead status ONLY if at least one contact method succeeded
     if (contacted) {
