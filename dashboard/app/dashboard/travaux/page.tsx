@@ -452,7 +452,7 @@ function ProfitSection({ quoteId, total }: { quoteId: number; total: number }) {
         setTotalSalaires(json.totals?.montant ?? 0);
       }
       // Get expenses
-      const eRes = await fetch(`/api/depenses?quote_id=${quoteId}`);
+      const eRes = await fetch(`/api/expenses?quote_id=${quoteId}`);
       if (eRes.ok) {
         const json = await eRes.json();
         const list = (json.data ?? json) as { montant_ttc: number }[];
