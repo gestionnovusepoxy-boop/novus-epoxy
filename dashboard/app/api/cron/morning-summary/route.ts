@@ -75,6 +75,27 @@ export async function GET(req: NextRequest) {
     []
   );
 
+  // Auto-send offers to leads that were blocked by 21h cutoff
+  let pendingProspectSent = 0;
+  try {
+    const pendingProspects = await query(
+      `SELECT id FROM crm_leads WHERE prospect_sent_at IS NULL AND email IS NOT NULL AND email != '' AND statut = 'nouveau'`,
+    );
+    if (pendingProspects.length > 0) {
+      const ids = pendingProspects.map((r: Record<string, unknown>) => r.id as number);
+      const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+      const res = await fetch(`${base}/api/leads/jason/prospect`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ADMIN_API_KEY ?? '' },
+        body: JSON.stringify({ leadIds: ids }),
+      });
+      if (res.ok) {
+        const result = await res.json() as Record<string, unknown>;
+        pendingProspectSent = Number(result.sent ?? 0);
+      }
+    }
+  } catch { /* non-fatal */ }
+
   // CRM stats
   const crmChauds = await query(
     `SELECT COUNT(*)::int AS count FROM crm_leads WHERE temperature = 'chaud' AND statut NOT IN ('ferme', 'froid')`,
@@ -142,6 +163,9 @@ export async function GET(req: NextRequest) {
   lines.push(`📊 <b>CRM Leads</b>`);
   lines.push(`🔥 Chauds: ${crmChaudsCount} | 🟡 En conversation: ${crmConvCount} | 🔵 Froids aujourd'hui: ${crmFroidsCount}`);
   lines.push(`Devis crees (CRM): ${crmQuotesCount}`);
+  if (pendingProspectSent > 0) {
+    lines.push(`🚀 ${pendingProspectSent} offres envoyees ce matin (en attente depuis hier)`);
+  }
   lines.push('');
   lines.push(`💰 <b>Revenus ce mois:</b> ${formatMoney(monthDep + monthBal)}`);
   lines.push('');
