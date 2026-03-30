@@ -872,7 +872,7 @@ IMPORTANT:
 
 // POST — Telegram webhook for admin bot
 export async function POST(req: NextRequest) {
-  // Verify Telegram webhook secret token — mandatory
+  // Verify Telegram webhook secret token
   const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
   if (!telegramSecret) {
     return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
