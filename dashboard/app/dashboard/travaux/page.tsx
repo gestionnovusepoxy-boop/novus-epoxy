@@ -64,7 +64,11 @@ const REQUIRED_FOR_COMPLETE = ['photos_apres', 'client_satisfait'];
 
 /* ─── Helpers ─── */
 function formatDateFr(iso: string): string {
-  const d = new Date(iso + 'T12:00:00');
+  if (!iso) return '';
+  // Handle various date formats: "2026-03-30", "2026-03-30T...", etc.
+  const dateStr = String(iso).slice(0, 10);
+  const d = new Date(dateStr + 'T12:00:00');
+  if (isNaN(d.getTime())) return String(iso).slice(0, 10);
   return d.toLocaleDateString('fr-CA', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
@@ -74,14 +78,18 @@ function slotLabel(slot: string | null): string {
   return slot || '';
 }
 
-function daysUntil(dateStr: string): number {
+function daysUntil(dateStr: string): number | null {
+  if (!dateStr) return null;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const target = new Date(dateStr + 'T00:00:00');
+  const clean = String(dateStr).slice(0, 10);
+  const target = new Date(clean + 'T00:00:00');
+  if (isNaN(target.getTime())) return null;
   return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 }
 
 function isThisWeek(dateStr: string): boolean {
+  if (!dateStr) return false;
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const dayOfWeek = today.getDay();
@@ -90,12 +98,14 @@ function isThisWeek(dateStr: string): boolean {
   const endOfWeek = new Date(startOfWeek);
   endOfWeek.setDate(startOfWeek.getDate() + 6);
 
-  const target = new Date(dateStr + 'T00:00:00');
+  const clean = String(dateStr).slice(0, 10);
+  const target = new Date(clean + 'T00:00:00');
+  if (isNaN(target.getTime())) return false;
   return target >= startOfWeek && target <= endOfWeek;
 }
 
 /* ─── Photo Section ─── */
-function PhotoSection({ quoteId }: { quoteId: number }) {
+function PhotoSection({ quoteId, onPhotosChange }: { quoteId: number; onPhotosChange?: (counts: { avant: number; apres: number }) => void }) {
   const [photos, setPhotos] = useState<JobPhoto[]>([]);
   const [uploading, setUploading] = useState<'avant' | 'apres' | null>(null);
   const avantRef = useRef<HTMLInputElement>(null);
@@ -105,9 +115,14 @@ function PhotoSection({ quoteId }: { quoteId: number }) {
     const res = await fetch(`/api/travaux/photos?quoteId=${quoteId}`);
     if (res.ok) {
       const json = await res.json();
-      setPhotos(json.data ?? []);
+      const list = json.data ?? [];
+      setPhotos(list);
+      onPhotosChange?.({
+        avant: list.filter((p: JobPhoto) => p.type === 'avant').length,
+        apres: list.filter((p: JobPhoto) => p.type === 'apres').length,
+      });
     }
-  }, [quoteId]);
+  }, [quoteId, onPhotosChange]);
 
   useEffect(() => { loadPhotos(); }, [loadPhotos]);
 
@@ -304,8 +319,29 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
   const [loading, setLoading] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [checkedItems, setCheckedItems] = useState<string[]>([]);
+  const [photoCounts, setPhotoCounts] = useState({ avant: 0, apres: 0 });
 
-  const canComplete = REQUIRED_FOR_COMPLETE.every(k => checkedItems.includes(k));
+  const handlePhotosChange = useCallback((counts: { avant: number; apres: number }) => {
+    setPhotoCounts(counts);
+  }, []);
+
+  // Load photo counts on mount (even when collapsed)
+  useEffect(() => {
+    (async () => {
+      const res = await fetch(`/api/travaux/photos?quoteId=${job.id}`);
+      if (res.ok) {
+        const json = await res.json();
+        const list = json.data ?? [];
+        setPhotoCounts({
+          avant: list.filter((p: JobPhoto) => p.type === 'avant').length,
+          apres: list.filter((p: JobPhoto) => p.type === 'apres').length,
+        });
+      }
+    })();
+  }, [job.id]);
+
+  const hasPhotosApres = photoCounts.apres > 0;
+  const canComplete = REQUIRED_FOR_COMPLETE.every(k => checkedItems.includes(k)) && hasPhotosApres;
 
   async function handleComplete() {
     if (!confirm(`Marquer le travail de ${job.client_nom} comme complete?`)) return;
@@ -388,18 +424,31 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
         <span className="text-slate-400">Solde: <span className="text-amber-400 font-medium">{formatMoney(balance)}</span></span>
       </div>
 
-      {/* Expand/Collapse toggle */}
-      <button
-        onClick={() => setExpanded(!expanded)}
-        className="text-xs text-slate-500 hover:text-slate-300 transition w-full text-left"
-      >
-        {expanded ? '▾ Masquer details' : '▸ Photos, checklist & heures'}
-      </button>
+      {/* Photo counter + Expand/Collapse toggle */}
+      <div className="flex items-center justify-between">
+        <button
+          onClick={() => setExpanded(!expanded)}
+          className="text-xs text-slate-500 hover:text-slate-300 transition"
+        >
+          {expanded ? '▾ Masquer details' : '▸ Photos, checklist & heures'}
+        </button>
+        <div className="flex items-center gap-2 text-xs">
+          {photoCounts.avant > 0 && (
+            <span className="text-slate-400">{photoCounts.avant} avant</span>
+          )}
+          {photoCounts.apres > 0 && (
+            <span className="text-green-400">{photoCounts.apres} apres</span>
+          )}
+          {photoCounts.avant === 0 && photoCounts.apres === 0 && (
+            <span className="text-red-400/70">Aucune photo</span>
+          )}
+        </div>
+      </div>
 
       {/* Expanded content */}
       {expanded && (
         <div className="space-y-3">
-          <PhotoSection quoteId={job.id} />
+          <PhotoSection quoteId={job.id} onPhotosChange={handlePhotosChange} />
           <ChecklistSection quoteId={job.id} onChecklistChange={setCheckedItems} />
         </div>
       )}
@@ -423,7 +472,7 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
           <button
             onClick={handleComplete}
             disabled={loading || !canComplete}
-            title={!canComplete ? 'Completez "Photos apres" et "Client satisfait" dans la checklist' : ''}
+            title={!canComplete ? (!hasPhotosApres ? 'Ajoutez au moins 1 photo apres avant de completer' : 'Completez la checklist avant de completer') : ''}
             className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition"
           >
             {loading ? 'En cours...' : 'Marquer complete'}
@@ -432,9 +481,12 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
       </div>
 
       {/* Hint if button disabled */}
-      {expanded && !canComplete && (
+      {!canComplete && (
         <p className="text-xs text-slate-500 text-right">
-          Cochez &quot;Photos apres prises&quot; et &quot;Client satisfait&quot; pour completer
+          {!hasPhotosApres
+            ? <>Ajoutez des photos apres pour pouvoir completer</>
+            : <>Cochez &quot;Photos apres prises&quot; et &quot;Client satisfait&quot; pour completer</>
+          }
         </p>
       )}
     </div>
