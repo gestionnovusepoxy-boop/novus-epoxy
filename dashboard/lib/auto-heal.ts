@@ -85,8 +85,8 @@ export async function autoHeal(): Promise<void> {
         const whRes = await fetch(`https://api.telegram.org/bot${token}/getWebhookInfo`);
         const whData = await whRes.json();
         const expectedUrl = 'https://novus-epoxy.vercel.app/api/telegram/admin';
-        const wrongUrl = whData.result?.url !== expectedUrl;
-        // Only repair if URL is wrong — old errors in last_error_message stay until next successful delivery
+        const wrongUrl = !whData.result?.url || whData.result?.url !== expectedUrl;
+        // Only repair if URL is wrong or missing — ignore timeout/error messages (they resolve themselves)
         if (wrongUrl) {
           const secret = process.env.TELEGRAM_WEBHOOK_SECRET ?? '';
           await fetch(`https://api.telegram.org/bot${token}/setWebhook`, {

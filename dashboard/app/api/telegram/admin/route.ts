@@ -911,9 +911,11 @@ export async function POST(req: NextRequest) {
         } catch { /* non-fatal */ }
       }
 
-      await query(
+      const insertResult = await query(
         `INSERT INTO telegram_messages (telegram_msg_id, chat_id, chat_title, sender_id, sender_name, message_type, text, file_name, file_id, file_data)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+         ON CONFLICT (telegram_msg_id, chat_id) DO NOTHING
+         RETURNING id`,
         [
           msg.message_id, msg.chat.id, msg.chat.title || null,
           msg.from?.id || null, msg.from?.first_name || null,
@@ -921,6 +923,10 @@ export async function POST(req: NextRequest) {
           fileName, fileId, fileData,
         ]
       );
+      // If no row returned → duplicate message (Telegram retry), skip all processing
+      if (insertResult.length === 0) {
+        return NextResponse.json({ ok: true });
+      }
     } catch { /* logging should never crash the bot */ }
   }
 
