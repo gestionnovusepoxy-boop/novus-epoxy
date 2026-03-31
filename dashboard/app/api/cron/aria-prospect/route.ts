@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   const pending = await query(
     `SELECT id FROM crm_leads WHERE statut = 'nouveau' AND prospect_sent_at IS NULL AND (
       (email IS NOT NULL AND email != '') OR (telephone IS NOT NULL AND telephone != '')
-    ) ORDER BY id LIMIT 8`
+    ) ORDER BY id LIMIT 15`
   );
 
   if (pending.length === 0) {
