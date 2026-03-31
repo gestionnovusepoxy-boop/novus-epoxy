@@ -160,6 +160,10 @@ export async function POST(req: NextRequest) {
   const { leadIds } = (await req.json()) as { leadIds: number[] };
   if (!leadIds?.length) return NextResponse.json({ error: 'leadIds requis' }, { status: 400 });
 
+  // BLACKLIST: never contact owners
+  const BLACKLIST_PHONES = ['5813075983', '5813072678'];
+  const BLACKLIST_EMAILS = ['gestionnovusepoxy@gmail.com', 'lanthierj6@gmail.com', 'luca.hayes1994@gmail.com'];
+
   // === RATE LIMITING: max 100 per call, staggered via Resend scheduled_at ===
   const MAX_BATCH = 100; // API calls are instant (just scheduling), Resend delivers spaced out
 
@@ -209,6 +213,10 @@ export async function POST(req: NextRequest) {
     const lead = _lead as unknown as LeadRow;
     if (emailsSent >= MAX_BATCH) { skipped++; continue; }
     if (lead.prospect_sent_at) { skipped++; continue; }
+
+    // BLACKLIST check
+    const phone10 = (lead.telephone ?? '').replace(/\D/g, '').slice(-10);
+    if (BLACKLIST_PHONES.includes(phone10) || BLACKLIST_EMAILS.includes((lead.email ?? '').toLowerCase())) { skipped++; continue; }
 
     // === ATOMIC LOCK: claim this lead in DB FIRST, before any send ===
     // If another process already claimed it, UPDATE returns 0 rows → skip
