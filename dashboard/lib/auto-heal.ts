@@ -53,49 +53,8 @@ async function healWebhook(): Promise<string | null> {
   return null;
 }
 
-// ============================================================
-// CHECK 2: Prospect emails — resume pending sends (8h-20h)
-// ============================================================
-async function healProspects(): Promise<string | null> {
-  try {
-    const now = new Date();
-    const quebecHour = (now.getUTCHours() - 4 + 24) % 24;
-    if (quebecHour < 8 || quebecHour >= 20) return null;
-
-    // Check cooldown (max once per 10 min)
-    const last = await getCooldown('echo_prospect_last');
-    if (Date.now() - last < 10 * 60 * 1000) return null;
-
-    const pending = await query(
-      `SELECT COUNT(*)::int as c FROM crm_leads WHERE statut = 'nouveau' AND prospect_sent_at IS NULL AND email IS NOT NULL AND email != ''`
-    );
-    const count = (pending[0]?.c as number) || 0;
-    if (count === 0) return null;
-
-    // Send batch of 8
-    const leads = await query(
-      `SELECT id FROM crm_leads WHERE statut = 'nouveau' AND prospect_sent_at IS NULL AND email IS NOT NULL AND email != '' ORDER BY id LIMIT 8`
-    );
-    if (leads.length === 0) return null;
-
-    const ids = leads.map(r => (r as { id: number }).id);
-    const baseUrl = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
-    const res = await fetch(`${baseUrl}/api/leads/jason/prospect`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ADMIN_API_KEY ?? '' },
-      body: JSON.stringify({ leadIds: ids }),
-    });
-    const result = await res.json().catch(() => ({})) as Record<string, unknown>;
-    await setCooldown('echo_prospect_last');
-
-    const sent = Number(result.emails ?? 0);
-    const sms = Number(result.sms ?? 0);
-    if (sent > 0 || sms > 0) {
-      return `${sent} emails + ${sms} SMS envoyes (${count - sent} en attente)`;
-    }
-  } catch { /* non-fatal */ }
-  return null;
-}
+// CHECK 2: Prospect emails — Aria s'en occupe via le cron morning-summary
+// Echo ne touche PAS aux leads/emails. Il verifie juste que le systeme tourne.
 
 // ============================================================
 // CHECK 3: Gmail watch renewal
@@ -162,7 +121,6 @@ export async function autoHeal(): Promise<void> {
     // Run all checks
     const results = await Promise.allSettled([
       healWebhook(),
-      healProspects(),
       healGmailWatch(),
       healEmailScan(),
     ]);
