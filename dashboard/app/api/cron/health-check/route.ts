@@ -375,10 +375,8 @@ export async function GET(req: NextRequest) {
     await notifyTelegram(msg);
   } else if (autoFixes.length > 0) {
     await notifyTelegram(`🔧 *ECHO* — Auto-repare: ${autoFixes.map(f => f.name).join(', ')}. Tous les systemes OK.`);
-  } else {
-    // All good — short status report
-    await notifyTelegram(`✅ *ECHO* — Tous les systemes OK. Score: ${checks.length}/${checks.length}`);
   }
+  // Si tout va bien → pas de message (Echo ne parle que quand y'a un problème)
 
   return NextResponse.json({
     ok: failures.length === 0,

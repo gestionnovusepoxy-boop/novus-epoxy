@@ -135,7 +135,7 @@ export async function GET(req: NextRequest) {
   const crmFroidsCount = (crmFroidsToday[0] as { count: number }).count;
 
   const lines = [
-    `☀️ <b>Résumé du matin — Novus Epoxy</b>`,
+    `☀️ <b>Aria — Résumé du matin</b>`,
     ``,
     `📊 <b>Dernières 24h:</b>`,
     `• ${subCount} nouvelle${subCount !== 1 ? 's' : ''} soumission${subCount !== 1 ? 's' : ''}`,
