@@ -84,6 +84,10 @@ async function healGmailWatch(): Promise<string | null> {
 // ============================================================
 async function healEmailScan(): Promise<string | null> {
   try {
+    // Don't try to fix email scan if Google token is broken — needs manual re-auth
+    const tokenBroken = await query(`SELECT value FROM kv_store WHERE key = 'google_token_broken'`).catch(() => []);
+    if (tokenBroken.length > 0 && tokenBroken[0]?.value === 'true') return null;
+
     const rows = await query(`SELECT value FROM kv_store WHERE key = 'last_email_scan'`);
     const lastScan = rows?.[0]?.value as string | undefined;
     const hoursSince = lastScan ? (Date.now() - new Date(lastScan).getTime()) / (1000 * 60 * 60) : 999;
@@ -91,10 +95,22 @@ async function healEmailScan(): Promise<string | null> {
 
     const baseUrl = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
     const cronSecret = process.env.CRON_SECRET ?? '';
-    await fetch(`${baseUrl}/api/cron/email-scan`, {
+    const res = await fetch(`${baseUrl}/api/cron/email-scan`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${cronSecret}` },
     });
+
+    // If email scan returns 500 (likely invalid_grant), mark token as broken
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      if (body.includes('invalid_grant')) {
+        await query(
+          `INSERT INTO kv_store (key, value) VALUES ('google_token_broken', 'true') ON CONFLICT (key) DO UPDATE SET value = 'true'`
+        ).catch(() => {});
+        return 'Google OAuth expire — email scan desactive. Faut re-connecter Gmail.';
+      }
+    }
+
     return `Email scan relance (${Math.round(hoursSince)}h sans scan)`;
   } catch { /* non-fatal */ }
   return null;
