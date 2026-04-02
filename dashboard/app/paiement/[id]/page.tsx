@@ -273,7 +273,7 @@ export default function ClientPortalPage() {
                 textDecoration: 'none', fontWeight: 600, fontSize: '14px',
                 boxSizing: 'border-box',
               }}>
-              Payer par carte — {formatMoney(depot + depotFraisCarte)} (incl. 3% frais)
+              Payer par carte de crédit — {formatMoney(depot + depotFraisCarte)} (incl. 3% frais)
             </a>
           </div>
         )}
@@ -310,7 +310,7 @@ export default function ClientPortalPage() {
                 textDecoration: 'none', fontWeight: 600, fontSize: '14px',
                 boxSizing: 'border-box',
               }}>
-              Payer par carte — {formatMoney(balance + balanceFraisCarte)} (incl. 3% frais)
+              Payer par carte de crédit — {formatMoney(balance + balanceFraisCarte)} (incl. 3% frais)
             </a>
           </div>
         )}
