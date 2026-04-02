@@ -115,12 +115,21 @@ function CouleursContent() {
           <button
             onClick={() => {
               if (isFromForm) {
-                // Try to close this tab — form is still open in the other tab
-                // The form's focus listener will pick up the color from localStorage
+                // Pass color data via URL params since localStorage doesn't work cross-domain
+                const colorData = localStorage.getItem('ne_color_chosen');
+                let returnUrl = 'https://novusepoxy.ca/#ghl-form';
+                if (colorData) {
+                  try {
+                    const d = JSON.parse(colorData);
+                    const params = new URLSearchParams({ color: d.name || '', code: d.code || '', type: d.type || '' });
+                    returnUrl = 'https://novusepoxy.ca/?' + params.toString() + '#ghl-form';
+                  } catch {}
+                }
+                // Try to close this tab first
                 window.close();
                 // Fallback if window.close() doesn't work (some browsers block it)
                 setTimeout(() => {
-                  window.location.href = 'https://novusepoxy.ca/#ghl-form';
+                  window.location.href = returnUrl;
                 }, 300);
               } else {
                 window.location.href = 'https://novusepoxy.ca?chatResume=1';

@@ -157,6 +157,22 @@
       if (form) form.appendChild(colorInput);
     }
 
+    // Check URL params for color (cross-domain fallback since localStorage doesn't share)
+    (function() {
+      try {
+        var params = new URLSearchParams(window.location.search);
+        var colorName = params.get('color');
+        var colorCode = params.get('code');
+        if (colorName) {
+          var data = { name: colorName, code: colorCode || '', type: params.get('type') || '', ts: Date.now() };
+          localStorage.setItem('ne_color_chosen', JSON.stringify(data));
+          // Clean URL params without reloading
+          var clean = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, '', clean);
+        }
+      } catch(e) {}
+    })();
+
     function showChosenColor() {
       try {
         var stored = localStorage.getItem('ne_color_chosen');
