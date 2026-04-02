@@ -119,6 +119,7 @@ ${paymentLink ? `<div style="text-align:center;margin:0 0 16px;"><a href="${paym
       to: sendTo,
       subject,
       html,
+      via: 'gmail',
     });
   } catch (err) {
     console.error('Gmail send error:', err);

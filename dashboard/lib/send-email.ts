@@ -11,12 +11,17 @@ export async function sendEmail({
   subject,
   html,
   replyTo,
+  via,
 }: {
   to: string;
   subject: string;
   html: string;
   replyTo?: string;
+  via?: 'gmail' | 'resend';
 }): Promise<{ id: string }> {
+  if (via === 'gmail') {
+    return sendViaGmail({ to, subject, html, replyTo });
+  }
   // Primary: Resend (reliable, Pro plan 50k/month)
   // Gmail is rate-limited and silently bounces — use Resend for everything
   try {
