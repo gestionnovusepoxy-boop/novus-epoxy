@@ -263,12 +263,10 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
 
       {/* Actions */}
       <div className="flex gap-3 flex-wrap">
-        {inv.statut === 'brouillon' && (
-          <button onClick={handleSend} disabled={!!action}
-            className="bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition">
-            {action === 'send' ? 'Envoi...' : 'Envoyer par email'}
-          </button>
-        )}
+        <button onClick={handleSend} disabled={!!action}
+          className="bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition">
+          {action === 'send' ? 'Envoi...' : inv.statut === 'brouillon' ? 'Envoyer par email' : 'Renvoyer par email'}
+        </button>
         {inv.statut === 'depot_recu' && (
           <button onClick={() => handleStatusChange('travaux_en_cours')} disabled={!!action}
             className="bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition">
