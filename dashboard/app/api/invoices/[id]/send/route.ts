@@ -15,6 +15,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
+  const body = _req.headers.get('content-type')?.includes('json') ? await _req.json().catch(() => ({})) : {};
+  const overrideEmail = (body as Record<string, string>).override_email ?? null;
+
   const rows = await query(
     `SELECT inv.*, c.nom AS client_nom, c.email AS client_email,
             q.secret_token AS quote_token, q.id AS quote_id
@@ -108,10 +111,12 @@ ${paymentLink ? `<div style="text-align:center;margin:0 0 16px;"><a href="${paym
 </body></html>`;
   }
 
+  const sendTo = overrideEmail ?? (inv.client_email as string);
+
   let emailData: { id: string };
   try {
     emailData = await sendEmail({
-      to: inv.client_email as string,
+      to: sendTo,
       subject,
       html,
     });
