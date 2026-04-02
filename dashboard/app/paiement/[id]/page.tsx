@@ -110,8 +110,8 @@ export default function ClientPortalPage() {
   const balancePaid = !!data.balance_paid_at || (success && ['depot_paye', 'planifie'].includes(statut));
   const fullyPaid = depositPaid && balancePaid;
 
-  // Determine current step
-  const currentStep = !hasDates ? 1 : !contractSigned ? 2 : !depositPaid ? 3 : !balancePaid ? 4 : 5;
+  // Determine current step — if deposit already paid, skip straight to balance (step 4)
+  const currentStep = fullyPaid ? 5 : depositPaid ? 4 : !hasDates ? 1 : !contractSigned ? 2 : 3;
 
   const handleInterac = async () => {
     try {
