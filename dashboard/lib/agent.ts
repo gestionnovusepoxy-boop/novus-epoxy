@@ -7,17 +7,38 @@ import { escapeHtml } from '@/lib/utils';
 // Send notification to Telegram admins when bot needs human help
 async function notifyTelegramHandoff(conversationId: number, visitorName: string, reason: string) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const groupId = process.env.TELEGRAM_GROUP_CHAT_ID;
+  const chatIds = groupId
+    ? [groupId]
+    : (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
   if (!botToken || chatIds.length === 0) return;
 
-  const msg = `🔔 *Handoff requis*\n\nClient: ${visitorName || 'Anonyme'}\nRaison: ${reason}\nConversation: [#${conversationId}](https://novus-epoxy.vercel.app/dashboard/conversations/${conversationId})\n\nLe client attend une réponse humaine.`;
+  const msg = [
+    `🔔🔔 <b>HANDOFF REQUIS</b>`,
+    ``,
+    `<b>Client:</b> ${visitorName || 'Anonyme'}`,
+    `<b>Raison:</b> ${reason}`,
+    ``,
+    `<i>Le client attend une réponse humaine.</i>`,
+  ].join('\n');
+
+  const keyboard = {
+    inline_keyboard: [[
+      { text: '📋 Voir conversation', url: `https://novus-epoxy.vercel.app/dashboard/conversations/${conversationId}` },
+    ]]
+  };
 
   await Promise.all(chatIds.map(chatId =>
     fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId.trim(), text: msg, parse_mode: 'Markdown' }),
-    }).catch(() => {})
+      body: JSON.stringify({
+        chat_id: chatId.trim(),
+        text: msg,
+        parse_mode: 'HTML',
+        reply_markup: keyboard
+      }),
+    }).catch(err => console.error('Telegram handoff notification failed:', err))
   ));
 }
 
