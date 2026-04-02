@@ -145,6 +145,67 @@ function buildCommercialHtml(prenom: string, photos: { url: string; caption: str
 </div></body></html>`;
 }
 
+function buildFacebookLeadHtml(prenom: string, photos: { url: string; caption: string }[]): string {
+  const photoGrid = photos.slice(0, 2).map((p, i) => {
+    const pl = i % 2 === 0 ? '0' : '4px';
+    const pr = i % 2 === 0 ? '4px' : '0';
+    return `<td width="50%" style="padding:0 ${pr} 0 ${pl};"><img src="${p.url}" alt="${p.caption}" width="270" style="border-radius:8px;display:block;max-width:100%;" /><p style="color:#64748b;font-size:11px;margin:4px 0 0;">${p.caption}</p></td>`;
+  }).join('');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f8fafc;">
+<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
+<div style="background:#0f172a;padding:24px;text-align:center;border-radius:8px 8px 0 0;">
+  <img src="https://novus-epoxy.vercel.app/logo-email.jpg" alt="Novus Epoxy" width="80" height="80" style="border-radius:12px;" />
+  <h1 style="color:#f59e0b;margin:12px 0 0;font-size:22px;font-weight:700;">Novus Epoxy</h1>
+  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers epoxy haut de gamme — Quebec</p>
+</div>
+<div style="padding:24px;">
+  <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom}!</p>
+  <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
+    Merci d'avoir demande votre <strong>soumission gratuite</strong>! On est ravis de votre interet.
+    Pour preparer votre soumission personnalisee rapidement, on a besoin de quelques details :
+  </p>
+  <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:20px;margin:0 0 20px;">
+    <p style="color:#1e293b;font-weight:700;font-size:15px;margin:0 0 12px;">Repondez a ce courriel avec :</p>
+    <p style="color:#475569;font-size:14px;line-height:2;margin:0;">
+      1. <strong>Type d'espace</strong> — Garage, sous-sol, balcon, commercial?<br/>
+      2. <strong>Superficie approximative</strong> — Combien de pieds carres?<br/>
+      3. <strong>Type de fini souhaite</strong> — Flocon, metallique, couleur unie?<br/>
+      4. <strong>Etat du plancher actuel</strong> — Beton brut, peinture, epoxy a refaire?<br/>
+      5. <strong>Adresse des travaux</strong> — Pour calculer le deplacement
+    </p>
+  </div>
+  <div style="background:#ecfdf5;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #6ee7b7;">
+    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">🎉 Special avril — 20% de rabais!</p>
+    <p style="color:#047857;font-size:13px;margin:0;">Le rabais s'applique automatiquement a votre soumission.</p>
+  </div>
+  ${photoGrid ? `<p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 8px;">Quelques-unes de nos realisations :</p>
+  <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr>${photoGrid}</tr></table>` : ''}
+  <div style="background:#f8fafc;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #e2e8f0;">
+    <p style="color:#475569;font-size:13px;line-height:1.6;margin:0;">
+      ✅ Licence RBQ 5861-8471-01 — Membre APCHQ<br/>
+      ✅ Garantie sur tous nos travaux<br/>
+      ✅ +1 000 projets en 15 ans d'experience<br/>
+      ✅ Soumission gratuite en moins d'une heure
+    </p>
+  </div>
+  <div style="text-align:center;margin:0 0 20px;">
+    <p style="color:#475569;font-size:14px;margin:0 0 12px;">Vous pouvez aussi nous appeler directement :</p>
+    <a href="tel:5813072678" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Appeler maintenant — 581-307-2678</a>
+  </div>
+  <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 20px;">Paiement par virement Interac accepte — 0$ de frais</p>
+  <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;">
+    <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Votre equipe :</p>
+    <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca</strong> — Facturation / Soumission — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a></p>
+    <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Soumission — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a></p>
+  </div>
+</div>
+<div style="background:#f1f5f9;padding:12px 24px;text-align:center;border-radius:0 0 8px 8px;">
+  <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Quebec, G2N 1G8</p>
+</div>
+</div></body></html>`;
+}
+
 // POST — send prospect emails + SMS for a batch of lead IDs
 // Called from: import flow (auto), CRM UI, or Mission Control agent
 export async function POST(req: NextRequest) {
@@ -198,7 +259,7 @@ export async function POST(req: NextRequest) {
 
   const placeholders = batchIds.map((_, i) => `$${i + 1}`).join(',');
   const leads = await query(
-    `SELECT id, nom, telephone, email, service, ville, notes, type, prospect_sent_at FROM crm_leads WHERE id IN (${placeholders})`,
+    `SELECT id, nom, telephone, email, service, ville, notes, type, source, prospect_sent_at FROM crm_leads WHERE id IN (${placeholders})`,
     batchIds,
   );
 
@@ -207,7 +268,7 @@ export async function POST(req: NextRequest) {
   let smsSent = 0;
   let skipped = 0;
 
-  interface LeadRow { id: number; nom: string; telephone: string | null; email: string | null; service: string; ville: string; notes: string; type: string; prospect_sent_at: string | null }
+  interface LeadRow { id: number; nom: string; telephone: string | null; email: string | null; service: string; ville: string; notes: string; type: string; source: string | null; prospect_sent_at: string | null }
 
   for (const _lead of leads) {
     const lead = _lead as unknown as LeadRow;
@@ -231,6 +292,7 @@ export async function POST(req: NextRequest) {
     const prenom = getPrenom(lead.nom);
     const project = lead.service || lead.notes?.split('—')[0] || '';
     const isCommercial = lead.type === 'commercial';
+    const isFacebookLead = (lead.source ?? '').toLowerCase().includes('ghl') || (lead.source ?? '').toLowerCase().includes('facebook');
     const photos = portfolio.length > 0
       ? pickPhotos(portfolio, lead.notes ?? '', lead.service ?? '', lead.type ?? 'residentiel')
       : [];
@@ -242,11 +304,15 @@ export async function POST(req: NextRequest) {
       const nomComplet = lead.nom.trim().slice(0, 40);
       const subject = isCommercial
         ? `${nomComplet} — Partenariat planchers epoxy`
-        : `${nomComplet} — Votre projet en epoxy`;
+        : isFacebookLead
+          ? `${prenom}, votre soumission gratuite — Novus Epoxy`
+          : `${nomComplet} — Votre projet en epoxy`;
 
       const html = isCommercial
         ? buildCommercialHtml(prenom, photos)
-        : buildResidentialHtml(prenom, project, photos);
+        : isFacebookLead
+          ? buildFacebookLeadHtml(prenom, photos)
+          : buildResidentialHtml(prenom, project, photos);
 
       try {
         const result = await sendProspectEmail({ to: lead.email, subject, html });
@@ -265,7 +331,9 @@ export async function POST(req: NextRequest) {
     // 2. SMS only if lead has phone but NO email
     if (!lead.email && lead.telephone?.trim() && !contacted) {
       try {
-        const smsText = `Bonjour ${prenom}, c'est Novus Epoxy! On fait des planchers epoxy haut de gamme dans la region de Quebec. Soumission gratuite, licence RBQ. Appelez-nous au 581-307-2678 ou visitez novusepoxy.ca`;
+        const smsText = isFacebookLead
+          ? `Bonjour ${prenom}! Merci pour votre demande de soumission. Pour la preparer, repondez avec: type d'espace, pieds carres et adresse. Ou appelez-nous: 581-307-2678 — Novus Epoxy`
+          : `Bonjour ${prenom}, c'est Novus Epoxy! On fait des planchers epoxy haut de gamme dans la region de Quebec. Soumission gratuite, licence RBQ. Appelez-nous au 581-307-2678 ou visitez novusepoxy.ca`;
         await sendSMS(lead.telephone, smsText);
         smsSent++;
         contacted = true;
