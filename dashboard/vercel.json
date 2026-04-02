@@ -75,6 +75,10 @@
     {
       "path": "/api/cron/sync-submissions",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/nurture-leads",
+      "schedule": "0 15 * * *"
     }
   ],
   "headers": [
