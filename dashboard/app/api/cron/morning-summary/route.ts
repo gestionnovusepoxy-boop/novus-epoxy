@@ -75,6 +75,20 @@ export async function GET(req: NextRequest) {
     []
   );
 
+  // Sync new GHL/Champfields contacts before prospect emails
+  let ghlImported = 0;
+  try {
+    const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+    const syncRes = await fetch(`${base}/api/crm/leads/sync-ghl`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${process.env.ADMIN_API_KEY ?? ''}` },
+    });
+    if (syncRes.ok) {
+      const syncData = await syncRes.json() as Record<string, unknown>;
+      ghlImported = Number(syncData.imported ?? 0);
+    }
+  } catch { /* non-fatal */ }
+
   // Auto-send offers to leads that were blocked by 21h cutoff
   let pendingProspectSent = 0;
   try {
@@ -163,6 +177,9 @@ export async function GET(req: NextRequest) {
   lines.push(`📊 <b>CRM Leads</b>`);
   lines.push(`🔥 Chauds: ${crmChaudsCount} | 🟡 En conversation: ${crmConvCount} | 🔵 Froids aujourd'hui: ${crmFroidsCount}`);
   lines.push(`Devis crees (CRM): ${crmQuotesCount}`);
+  if (ghlImported > 0) {
+    lines.push(`📥 ${ghlImported} nouveaux leads importes de Champfields/Facebook`);
+  }
   if (pendingProspectSent > 0) {
     lines.push(`🚀 ${pendingProspectSent} offres envoyees ce matin (en attente depuis hier)`);
   }
