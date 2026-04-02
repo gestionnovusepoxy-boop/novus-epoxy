@@ -16,62 +16,103 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const rows = await query(
-    `SELECT inv.*, c.nom AS client_nom, c.email AS client_email
-     FROM invoices inv JOIN clients c ON c.id = inv.client_id WHERE inv.id = $1`,
+    `SELECT inv.*, c.nom AS client_nom, c.email AS client_email,
+            q.secret_token AS quote_token, q.id AS quote_id
+     FROM invoices inv
+     JOIN clients c ON c.id = inv.client_id
+     LEFT JOIN quotes q ON q.id = inv.quote_id
+     WHERE inv.id = $1`,
     [parseInt(id)],
   );
   const inv = rows[0];
   if (!inv) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 });
 
-
   const service = SERVICES[inv.type_service as ServiceType];
+  const logoSrc = 'https://novus-epoxy.vercel.app/logo-email.jpg';
+  const ts = Date.now();
+  const depositPaid = !!inv.depot_paye;
+  const solde = Number(inv.final_montant);
 
-  const html = `
-    <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;">
-      <h1 style="color:#1e293b;">Novus Epoxy</h1>
-      <h2 style="color:#475569;">Facture ${inv.numero}</h2>
-      <p>Bonjour ${escapeHtml(inv.client_nom as string)},</p>
-      <p>Veuillez trouver ci-dessous le détail de votre facture :</p>
-      <table style="width:100%;border-collapse:collapse;margin:20px 0;">
-        <tr style="border-bottom:1px solid #e2e8f0;">
-          <td style="padding:8px 0;color:#64748b;">Service</td>
-          <td style="padding:8px 0;text-align:right;font-weight:600;">${service.label}</td>
-        </tr>
-        <tr style="border-bottom:1px solid #e2e8f0;">
-          <td style="padding:8px 0;color:#64748b;">Superficie</td>
-          <td style="padding:8px 0;text-align:right;">${inv.superficie} pi²</td>
-        </tr>
-        <tr style="border-bottom:1px solid #e2e8f0;">
-          <td style="padding:8px 0;color:#64748b;">Sous-total</td>
-          <td style="padding:8px 0;text-align:right;">${formatMoney(Number(inv.sous_total))}</td>
-        </tr>
-        <tr style="border-bottom:1px solid #e2e8f0;">
-          <td style="padding:8px 0;color:#64748b;">TPS (5%)</td>
-          <td style="padding:8px 0;text-align:right;">${formatMoney(Number(inv.tps))}</td>
-        </tr>
-        <tr style="border-bottom:1px solid #e2e8f0;">
-          <td style="padding:8px 0;color:#64748b;">TVQ (9,975%)</td>
-          <td style="padding:8px 0;text-align:right;">${formatMoney(Number(inv.tvq))}</td>
-        </tr>
-        <tr style="border-bottom:2px solid #1e293b;">
-          <td style="padding:12px 0;font-weight:700;font-size:18px;">Total</td>
-          <td style="padding:12px 0;text-align:right;font-weight:700;font-size:18px;">${formatMoney(Number(inv.total))}</td>
-        </tr>
-      </table>
-      <div style="background:#fffbeb;padding:16px;border-radius:8px;border-left:4px solid #f59e0b;margin:20px 0;">
-        <p style="margin:0;font-weight:600;color:#92400e;">Dépôt requis : ${formatMoney(Number(inv.depot_montant))} (30%)</p>
-        <p style="margin:4px 0 0;color:#92400e;">Solde à la fin des travaux : ${formatMoney(Number(inv.final_montant))} (70%)</p>
-      </div>
-      <p style="color:#64748b;font-size:14px;">Pour toute question, répondez à ce courriel.</p>
-      <p style="margin-top:30px;">Merci de votre confiance,<br/><strong>Novus Epoxy</strong></p>
-    </div>
-  `;
+  // Build payment link via quote page if available
+  const paymentLink = inv.quote_token
+    ? `https://novus-epoxy.vercel.app/paiement/${inv.quote_id}?token=${encodeURIComponent(inv.quote_token as string)}`
+    : null;
+
+  let subject: string;
+  let html: string;
+
+  if (depositPaid && paymentLink) {
+    // Balance payment email with Stripe link
+    subject = `Novus Epoxy — Solde à payer ${formatMoney(solde)} (Facture ${inv.numero})`;
+    html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:16px;background:#ffffff;">
+<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #e2e8f0;margin-bottom:16px;"><tr>
+<td style="padding:12px 0;text-align:center;">
+<img src="${logoSrc}" alt="Novus Epoxy" width="100" height="100" style="border-radius:8px;" />
+<p style="color:#64748b;margin:6px 0 0;font-size:13px;">Planchers époxy haut de gamme</p>
+</td></tr></table>
+<h2 style="color:#1e293b;margin:0 0 12px;font-size:20px;">Solde à payer — Facture ${escapeHtml(inv.numero as string)}</h2>
+<p style="margin:0 0 4px;">Bonjour ${escapeHtml(inv.client_nom as string)},</p>
+<p style="margin:0 0 16px;color:#475569;">Merci pour votre dépôt confirmé. Voici le récapitulatif de votre solde final :</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">Service</td><td style="padding:8px 0;text-align:right;font-weight:600;font-size:14px;">${service.label}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">Total du projet</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.total))}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#16a34a;font-size:14px;">Dépôt reçu ✓</td><td style="padding:8px 0;text-align:right;font-size:14px;color:#16a34a;">-${formatMoney(Number(inv.depot_montant))}</td></tr>
+<tr style="border-bottom:2px solid #1e293b;"><td style="padding:10px 0;font-weight:700;font-size:17px;">Solde à payer</td><td style="padding:10px 0;text-align:right;font-weight:700;font-size:17px;color:#dc2626;">${formatMoney(solde)}</td></tr>
+</table>
+<div style="text-align:center;margin:0 0 12px;">
+<a href="${paymentLink}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:16px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:17px;">
+  Payer mon solde — ${formatMoney(solde)}
+</a>
+</div>
+<p style="text-align:center;color:#64748b;font-size:12px;margin:0 0 16px;">Virement Interac (0$ de frais) ou carte de crédit (3% frais) — votre choix sur la page de paiement.</p>
+<div style="background:#f1f5f9;border-radius:6px;padding:10px;font-size:12px;color:#475569;">
+<strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
+<strong>Chantier :</strong> Jason — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>
+</div>
+<p style="color:#94a3b8;font-size:11px;margin:8px 0 0;">Ref: ${ts}</p>
+</div>
+</body></html>`;
+  } else {
+    // Initial invoice email (deposit not yet paid)
+    subject = `Facture ${inv.numero} — Novus Epoxy`;
+    html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
+<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:16px;background:#ffffff;">
+<table width="100%" cellpadding="0" cellspacing="0" style="border-bottom:2px solid #e2e8f0;margin-bottom:16px;"><tr>
+<td style="padding:12px 0;text-align:center;">
+<img src="${logoSrc}" alt="Novus Epoxy" width="100" height="100" style="border-radius:8px;" />
+<p style="color:#64748b;margin:6px 0 0;font-size:13px;">Planchers époxy haut de gamme</p>
+</td></tr></table>
+<h2 style="color:#1e293b;margin:0 0 12px;font-size:20px;">Facture ${escapeHtml(inv.numero as string)}</h2>
+<p style="margin:0 0 4px;">Bonjour ${escapeHtml(inv.client_nom as string)},</p>
+<p style="margin:0 0 16px;color:#475569;">Veuillez trouver ci-dessous le détail de votre facture :</p>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">Service</td><td style="padding:8px 0;text-align:right;font-weight:600;font-size:14px;">${service.label}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">Superficie</td><td style="padding:8px 0;text-align:right;font-size:14px;">${inv.superficie} pi²</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">Sous-total</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.sous_total))}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">TPS (5%)</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.tps))}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">TVQ (9,975%)</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.tvq))}</td></tr>
+<tr style="border-bottom:2px solid #1e293b;"><td style="padding:10px 0;font-weight:700;font-size:17px;">Total</td><td style="padding:10px 0;text-align:right;font-weight:700;font-size:17px;">${formatMoney(Number(inv.total))}</td></tr>
+</table>
+<div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:12px;margin:0 0 16px;">
+<p style="margin:0 0 4px;color:#92400e;font-weight:700;">Dépôt (30%) : ${formatMoney(Number(inv.depot_montant))}</p>
+<p style="margin:0;color:#64748b;font-size:13px;">Solde à la fin des travaux : ${formatMoney(Number(inv.final_montant))}</p>
+</div>
+${paymentLink ? `<div style="text-align:center;margin:0 0 16px;"><a href="${paymentLink}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:16px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:17px;">Voir ma facture et payer</a></div>` : ''}
+<div style="background:#f1f5f9;border-radius:6px;padding:10px;font-size:12px;color:#475569;">
+<strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
+<strong>Chantier :</strong> Jason — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>
+</div>
+<p style="color:#94a3b8;font-size:11px;margin:8px 0 0;">Ref: ${ts}</p>
+</div>
+</body></html>`;
+  }
 
   let emailData: { id: string };
   try {
     emailData = await sendEmail({
       to: inv.client_email as string,
-      subject: `Facture ${inv.numero} — Novus Epoxy`,
+      subject,
       html,
     });
   } catch (err) {
@@ -81,10 +122,10 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   await query(
     `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
-    [emailData.id, inv.client_email, `Facture ${inv.numero} — Novus Epoxy`, 'sent'],
+    [emailData.id, inv.client_email, subject, 'sent'],
   );
 
   await query(`UPDATE invoices SET statut = 'envoyee' WHERE id = $1 AND statut = 'brouillon'`, [parseInt(id)]);
 
-  return NextResponse.json({ success: true, email_id: emailData.id });
+  return NextResponse.json({ success: true, email_id: emailData.id, type: depositPaid ? 'balance' : 'invoice' });
 }
