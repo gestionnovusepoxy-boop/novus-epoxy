@@ -497,7 +497,7 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
   // Call Claude API
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    const fallback = 'Merci pour votre message! Notre equipe va vous repondre rapidement. En attendant, vous pouvez nous appeler ou remplir le formulaire sur novusepoxy.ca';
+    const fallback = 'Merci pour ton message! Notre equipe va te repondre rapidement. En attendant, tu peux nous appeler ou remplir le formulaire sur novusepoxy.ca';
     await saveMessage(conversationId, 'assistant', fallback);
     return fallback;
   }
@@ -530,7 +530,7 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
   });
 
   if (!claudeRes.ok) {
-    const fallback = 'Desolee, je rencontre un probleme technique. Tu peux nous joindre directement a gestionnovusepoxy@gmail.com ou au 581-307-2678!';
+    const fallback = 'Desolee, je rencontre un probleme technique! Tu peux nous joindre directement a gestionnovusepoxy@gmail.com ou au 581-307-2678!';
     await saveMessage(conversationId, 'assistant', fallback);
     return fallback;
   }
@@ -578,6 +578,24 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
       }
     } catch (err) {
       console.error('Failed to parse quote data from agent response:', err);
+      // Alert admins via Telegram
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+      if (botToken && chatIds.length > 0) {
+        await Promise.all(chatIds.map(chatId =>
+          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId.trim(),
+              text: `⚠️ Erreur création devis automatique — conversation #${conversationId}. Vérifiez le dashboard.`,
+              parse_mode: 'HTML',
+            }),
+          }).catch(() => {})
+        ));
+      }
+      // Tell client about the error instead of fake success
+      responseText = "Désolé, une erreur technique est survenue. Notre équipe va te contacter directement pour préparer ta soumission!";
     }
   }
 

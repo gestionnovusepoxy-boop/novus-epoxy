@@ -202,12 +202,13 @@ async function handleGetStarted(event: Record<string, unknown>) {
       body: JSON.stringify({
         recipient: { id: senderId },
         message: {
-          text: 'Bonjour! 👋 Quel type de plancher epoxy vous interesse?',
+          text: 'Bonjour! 👋 Quel type de plancher epoxy t\'interesse?',
           quick_replies: [
-            { content_type: 'text', title: 'Flocon (Flake)', payload: 'Flocon (Flake)' },
+            { content_type: 'text', title: 'Flocon', payload: 'Flocon' },
+            { content_type: 'text', title: 'Quartz', payload: 'Quartz' },
             { content_type: 'text', title: 'Metallique', payload: 'Metallique' },
+            { content_type: 'text', title: 'Couleur unie', payload: 'Couleur unie' },
             { content_type: 'text', title: 'Commercial', payload: 'Commercial' },
-            { content_type: 'text', title: 'Je ne sais pas', payload: 'Je ne sais pas encore' },
           ],
         },
       }),
@@ -223,19 +224,19 @@ function getQuickReplies(reply: string): { content_type: string; title: string; 
 
   if (lower.includes('quel espace') || lower.includes('quelle piece') || lower.includes('quel endroit') ||
       (lower.includes('garage') && lower.includes('sous-sol') && lower.includes('?'))) {
-    return ['Garage', 'Sous-sol', 'Commercial / Entrepot', 'Autre'].map(t => ({
+    return ['Garage', 'Sous-sol', 'Balcon', 'Commercial', 'Industriel'].map(t => ({
       content_type: 'text', title: t, payload: t,
     }));
   }
 
   if (lower.includes('etat') && (lower.includes('plancher') || lower.includes('beton') || lower.includes('sol'))) {
-    return ['Beton brut', 'Peinture existante', 'Epoxy a refaire', 'Je ne sais pas'].map(t => ({
+    return ['Beton brut', 'Bois', 'Peinture existante', 'Epoxy a refaire'].map(t => ({
       content_type: 'text', title: t, payload: t,
     }));
   }
 
   if ((lower.includes('quel type') || lower.includes('quel style') || lower.includes('quel fini')) && !lower.includes('espace')) {
-    return ['Flocon (Flake)', 'Metallique', 'Commercial'].map(t => ({
+    return ['Flocon', 'Quartz', 'Metallique', 'Couleur unie', 'Commercial'].map(t => ({
       content_type: 'text', title: t, payload: t,
     }));
   }
