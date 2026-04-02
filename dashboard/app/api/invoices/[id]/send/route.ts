@@ -17,7 +17,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = _req.headers.get('content-type')?.includes('json') ? await _req.json().catch(() => ({})) : {};
-  const overrideEmail = (body as Record<string, string>).override_email ?? null;
+  const overrideEmail = (body as Record<string, unknown>).override_email as string ?? null;
+  const smsOnly = !!(body as Record<string, unknown>).sms_only;
 
   const rows = await query(
     `SELECT inv.*, c.nom AS client_nom, c.email AS client_email,
@@ -115,6 +116,21 @@ ${paymentLink ? `<div style="text-align:center;margin:0 0 16px;"><a href="${paym
   const sendTo = overrideEmail ?? (inv.client_email as string);
   const clientTel = inv.client_tel as string | null;
 
+  // Build SMS body (used for sms_only and alongside email)
+  const prenom = (inv.client_nom as string).split(' ')[0];
+  const smsBody = depositPaid && paymentLink
+    ? `${prenom}, c'est Luca de Novus Epoxy! Les travaux sont termines. Voici votre lien pour payer le solde de ${formatMoney(solde)}: ${paymentLink}`
+    : paymentLink
+    ? `${prenom}, c'est Luca de Novus Epoxy! Votre facture est prete. Consultez-la et payez votre depot ici: ${paymentLink}`
+    : `${prenom}, c'est Luca de Novus Epoxy! Votre facture ${inv.numero} est prete. Questions? 581-307-5983`;
+
+  // SMS only — skip email
+  if (smsOnly) {
+    if (!clientTel) return NextResponse.json({ error: 'Pas de numero de telephone pour ce client' }, { status: 400 });
+    const smsSent = await sendSMS(clientTel, smsBody);
+    return NextResponse.json({ success: smsSent, sms_sent: smsSent });
+  }
+
   let emailData: { id: string };
   try {
     emailData = await sendEmail({
@@ -135,15 +151,9 @@ ${paymentLink ? `<div style="text-align:center;margin:0 0 16px;"><a href="${paym
 
   await query(`UPDATE invoices SET statut = 'envoyee' WHERE id = $1 AND statut = 'brouillon'`, [parseInt(id)]);
 
-  // Send SMS if client has a phone number and not overriding email (not a test)
+  // Also send SMS if client has a phone (not for test override emails)
   let smsSent = false;
   if (clientTel && !overrideEmail) {
-    const prenom = (inv.client_nom as string).split(' ')[0];
-    const smsBody = depositPaid && paymentLink
-      ? `${prenom}, c'est Luca de Novus Epoxy! Les travaux sont termines. Voici votre lien pour payer le solde de ${formatMoney(solde)}: ${paymentLink}`
-      : paymentLink
-      ? `${prenom}, c'est Luca de Novus Epoxy! Votre facture est prete. Consultez-la et payez votre depot ici: ${paymentLink}`
-      : `${prenom}, c'est Luca de Novus Epoxy! Votre facture ${inv.numero} est prete. Questions? 581-307-5983`;
     smsSent = await sendSMS(clientTel, smsBody);
   }
 

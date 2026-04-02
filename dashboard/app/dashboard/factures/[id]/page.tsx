@@ -50,6 +50,7 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
   const [loading, setLoading]   = useState(true);
   const [action, setAction]     = useState('');
   const [error, setError]       = useState('');
+  const [toast, setToast]       = useState('');
   const [showPayment, setShowPayment] = useState<'depot' | 'final' | null>(null);
   const [payMethode, setPayMethode]   = useState('virement');
   const [payRef, setPayRef]           = useState('');
@@ -63,13 +64,28 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
     setInv(data);
   }
 
+  function showToast(msg: string) {
+    setToast(msg);
+    setTimeout(() => setToast(''), 4000);
+  }
+
   async function handleSend() {
     setAction('send'); setError('');
     try {
-      const res = await fetch(`/api/invoices/${id}/send`, { method: 'POST' });
+      const res = await fetch(`/api/invoices/${id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
       if (!res.ok) { const j = await res.json(); setError(j.error); }
-      else await reload();
+      else { await reload(); showToast('Email envoyé ✓'); }
     } catch { setError('Erreur envoi'); }
+    setAction('');
+  }
+
+  async function handleSendSMS() {
+    setAction('sms'); setError('');
+    try {
+      const res = await fetch(`/api/invoices/${id}/send`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sms_only: true }) });
+      if (!res.ok) { const j = await res.json(); setError(j.error); }
+      else { showToast('SMS envoyé ✓'); }
+    } catch { setError('Erreur SMS'); }
     setAction('');
   }
 
@@ -121,6 +137,11 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
         </span>
       </div>
 
+      {toast && (
+        <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-2">
+          <p className="text-green-400 text-sm font-medium">{toast}</p>
+        </div>
+      )}
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
           <p className="text-red-400 text-sm">{error}</p>
@@ -267,6 +288,12 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
           className="bg-blue-500 hover:bg-blue-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition">
           {action === 'send' ? 'Envoi...' : inv.statut === 'brouillon' ? 'Envoyer par email' : 'Renvoyer par email'}
         </button>
+        {inv.client_tel && (
+          <button onClick={handleSendSMS} disabled={!!action}
+            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition">
+            {action === 'sms' ? 'Envoi SMS...' : 'Envoyer par SMS'}
+          </button>
+        )}
         {inv.statut === 'depot_recu' && (
           <button onClick={() => handleStatusChange('travaux_en_cours')} disabled={!!action}
             className="bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 text-white font-semibold rounded-lg px-6 py-2.5 text-sm transition">
