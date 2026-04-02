@@ -20,7 +20,13 @@ export async function sendEmail({
   via?: 'gmail' | 'resend';
 }): Promise<{ id: string }> {
   if (via === 'gmail') {
-    return sendViaGmail({ to, subject, html, replyTo });
+    try {
+      return await sendViaGmail({ to, subject, html, replyTo });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
+      return sendViaResend({ to, subject, html, replyTo });
+    }
   }
   // Primary: Resend (reliable, Pro plan 50k/month)
   // Gmail is rate-limited and silently bounces — use Resend for everything
