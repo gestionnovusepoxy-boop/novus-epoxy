@@ -125,6 +125,12 @@ export async function POST(req: NextRequest) {
        WHERE id = $2`,
       [noteEntry, leadId]
     ).catch(() => {});
+
+    // Try to auto-create quote from SMS reply
+    const { tryCreateQuoteFromReply } = await import('@/lib/auto-quote');
+    await tryCreateQuoteFromReply(leadId, body).catch(err =>
+      console.error('Auto-quote from SMS failed:', err)
+    );
   }
 
   // --- 2. Priority Telegram notification with inline buttons ---

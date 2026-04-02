@@ -911,6 +911,13 @@ export async function GET(req: NextRequest) {
       }
 
       await handleLeadFollowUp(msg.id, fromEmail, subject, bodyText, lead.id, lead.nom);
+
+      // Try to auto-create quote from email reply (keyword-based, complements Claude closer)
+      try {
+        const { tryCreateQuoteFromReply } = await import('@/lib/auto-quote');
+        await tryCreateQuoteFromReply(lead.id, bodyText);
+      } catch { /* auto-quote failed — non-blocking */ }
+
       continue;
     }
 
