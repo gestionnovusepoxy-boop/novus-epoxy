@@ -4,6 +4,7 @@ import { query } from '@/lib/db';
 import { SERVICES, formatMoney, type ServiceType } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
+import { sendSMS } from '@/lib/sms';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   // Auth: session OR API key (for internal auto-send from deposit confirmation)
@@ -112,6 +113,7 @@ ${paymentLink ? `<div style="text-align:center;margin:0 0 16px;"><a href="${paym
   }
 
   const sendTo = overrideEmail ?? (inv.client_email as string);
+  const clientTel = inv.client_tel as string | null;
 
   let emailData: { id: string };
   try {
@@ -133,5 +135,17 @@ ${paymentLink ? `<div style="text-align:center;margin:0 0 16px;"><a href="${paym
 
   await query(`UPDATE invoices SET statut = 'envoyee' WHERE id = $1 AND statut = 'brouillon'`, [parseInt(id)]);
 
-  return NextResponse.json({ success: true, email_id: emailData.id, type: depositPaid ? 'balance' : 'invoice' });
+  // Send SMS if client has a phone number and not overriding email (not a test)
+  let smsSent = false;
+  if (clientTel && !overrideEmail) {
+    const prenom = (inv.client_nom as string).split(' ')[0];
+    const smsBody = depositPaid && paymentLink
+      ? `${prenom}, c'est Luca de Novus Epoxy! Les travaux sont termines. Voici votre lien pour payer le solde de ${formatMoney(solde)}: ${paymentLink}`
+      : paymentLink
+      ? `${prenom}, c'est Luca de Novus Epoxy! Votre facture est prete. Consultez-la et payez votre depot ici: ${paymentLink}`
+      : `${prenom}, c'est Luca de Novus Epoxy! Votre facture ${inv.numero} est prete. Questions? 581-307-5983`;
+    smsSent = await sendSMS(clientTel, smsBody);
+  }
+
+  return NextResponse.json({ success: true, email_id: emailData.id, sms_sent: smsSent, type: depositPaid ? 'balance' : 'invoice' });
 }

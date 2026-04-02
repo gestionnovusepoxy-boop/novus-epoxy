@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { headers } from 'next/headers';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -51,5 +52,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   );
 
   if (!rows[0]) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 });
+
+  // Auto-send invoice (email + SMS) when job is marked complete
+  if (body.statut === 'completee') {
+    const apiKey = process.env.ADMIN_API_KEY ?? '';
+    const hdrs = await headers();
+    const origin = hdrs.get('origin') ?? 'https://novus-epoxy.vercel.app';
+    fetch(`${origin}/api/invoices/${id}/send`, {
+      method: 'POST',
+      headers: { 'x-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    }).catch(() => {});
+  }
+
   return NextResponse.json(rows[0]);
 }
