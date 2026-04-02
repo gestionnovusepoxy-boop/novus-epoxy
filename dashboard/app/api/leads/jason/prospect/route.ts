@@ -328,13 +328,14 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. SMS only if lead has phone but NO email
-    if (!lead.email && lead.telephone?.trim() && !contacted) {
+    // 2. SMS — Facebook leads: ALWAYS send (email + SMS combo). Others: only if no email.
+    const shouldSMS = lead.telephone?.trim() && (isFacebookLead || !contacted);
+    if (shouldSMS) {
       try {
         const smsText = isFacebookLead
-          ? `Bonjour ${prenom}! Merci pour votre demande de soumission. Pour la preparer, repondez avec: type d'espace, pieds carres et adresse. Ou appelez-nous: 581-307-2678 — Novus Epoxy`
+          ? `Bonjour ${prenom}! Merci pour votre demande de soumission chez Novus Epoxy. Pour la preparer, j'ai besoin de quelques infos:\n\n1. Type d'espace (garage, sous-sol, balcon)?\n2. Combien de pieds carres?\n3. Quel fini (flocon, metallique, couleur unie)?\n4. Adresse des travaux?\n\nRepondez ici ou appelez-nous: 581-307-2678\n\n— Luca, Novus Epoxy`
           : `Bonjour ${prenom}, c'est Novus Epoxy! On fait des planchers epoxy haut de gamme dans la region de Quebec. Soumission gratuite, licence RBQ. Appelez-nous au 581-307-2678 ou visitez novusepoxy.ca`;
-        await sendSMS(lead.telephone, smsText);
+        await sendSMS(lead.telephone!, smsText);
         smsSent++;
         contacted = true;
       } catch (err) {
