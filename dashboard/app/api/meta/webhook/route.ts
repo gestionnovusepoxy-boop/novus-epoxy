@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { query } from '@/lib/db';
 import { getOrCreateConversation, processMessage } from '@/lib/agent';
+import { sendSMS } from '@/lib/sms';
 
 // GET — Meta webhook verification (subscribe handshake)
 export async function GET(req: NextRequest) {
@@ -73,6 +74,23 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
+// Send Telegram notification to all admin chat IDs
+async function notifyTelegramFacebookLead(nom: string, email: string, telephone: string | null) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  if (!botToken || chatIds.length === 0) return;
+
+  const msg = `🔥 *Nouveau lead Facebook!*\n\n${nom} — ${email} — ${telephone ?? 'Pas de tél'}\n\nAria va le contacter automatiquement.`;
+
+  await Promise.all(chatIds.map(chatId =>
+    fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId.trim(), text: msg, parse_mode: 'Markdown' }),
+    }).catch(() => {})
+  ));
+}
+
 // Handle Facebook Lead Ads
 async function handleLeadgen(change: Record<string, unknown>) {
   const leadgenId = (change.value as Record<string, unknown>)?.leadgen_id;
@@ -99,6 +117,7 @@ async function handleLeadgen(change: Record<string, unknown>) {
 
     if (!email) return;
 
+    // 1. Keep submission insert (backwards compat + quote generation)
     await query(
       `INSERT INTO submissions (nom, email, telephone, service, message, statut)
        VALUES ($1, $2, $3, $4, $5, 'nouveau')`,
@@ -110,6 +129,54 @@ async function handleLeadgen(change: Record<string, unknown>) {
         `Lead Facebook #${leadgenId} — ${leadData.ad_name ?? 'N/A'}`,
       ],
     );
+
+    // 2. Insert into crm_leads so Aria picks it up
+    const notes = `Lead Facebook Ad #${leadgenId} — Ad: ${leadData.ad_name ?? 'N/A'} — Form: ${leadData.form_name ?? 'N/A'}`;
+    const crmResult = await query(
+      `INSERT INTO crm_leads (nom, email, telephone, source, statut, temperature, notes, type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (email) DO NOTHING
+       RETURNING id`,
+      [
+        nom.slice(0, 120),
+        email.slice(0, 255),
+        telephone?.slice(0, 30) ?? null,
+        'facebook-leadad',
+        'nouveau',
+        'chaud',
+        notes,
+        'residential',
+      ],
+    );
+
+    // Only notify + trigger Aria if this is a NEW lead (not a duplicate)
+    const newLeadId = crmResult?.[0]?.id;
+    if (newLeadId) {
+      // 3. Telegram notification
+      await notifyTelegramFacebookLead(nom, email, telephone);
+
+      // 4. SMS notification to Luca + Jason
+      const smsMsg = `🔥 Nouveau lead Facebook! ${nom} - ${email} - ${telephone ?? 'N/A'} — Aria va le contacter auto.`;
+      const adminPhone = process.env.ADMIN_PHONE;
+      const jasonPhone = process.env.JASON_PHONE;
+      if (adminPhone) sendSMS(adminPhone, smsMsg).catch(() => {});
+      if (jasonPhone) sendSMS(jasonPhone, smsMsg).catch(() => {});
+
+      // 5. Trigger Aria immediately (don't wait for the 10-min cron)
+      const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+        ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
+      const apiKey = process.env.ADMIN_API_KEY;
+      if (apiKey) {
+        fetch(`${baseUrl}/api/leads/jason/prospect`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+          },
+          body: JSON.stringify({ leadId: newLeadId }),
+        }).catch(err => console.error('Failed to trigger Aria for Facebook lead:', err));
+      }
+    }
   } catch (err) {
     console.error('Error processing Meta lead:', err);
   }
