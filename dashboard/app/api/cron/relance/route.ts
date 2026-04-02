@@ -5,14 +5,16 @@ import { sendFollowUpSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
 
+export const maxDuration = 60;
+
 // Vercel Cron — runs every 6 hours to send follow-ups on unanswered quotes
 // Relance 1: 48h after sent
 // Relance 2: 5 days after sent (SMS + email)
 export async function GET(req: NextRequest) {
-  // Verify cron secret (Vercel sets CRON_SECRET automatically for cron jobs)
   const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
   const cronSecret = process.env.CRON_SECRET ?? '';
-  if (!cronSecret || !authHeader || cronSecret !== authHeader) {
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

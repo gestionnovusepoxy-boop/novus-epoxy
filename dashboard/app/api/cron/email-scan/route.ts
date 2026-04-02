@@ -504,9 +504,9 @@ export async function GET(req: NextRequest) {
   // Auth — accept CRON_SECRET or ADMIN_API_KEY
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.replace('Bearer ', '');
-  const secret = CRON_SECRET();
+  const cronSecret = CRON_SECRET();
   const adminKey = process.env.ADMIN_API_KEY ?? '';
-  if (secret && token !== secret && token !== adminKey) {
+  if (!token || (token !== cronSecret && token !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

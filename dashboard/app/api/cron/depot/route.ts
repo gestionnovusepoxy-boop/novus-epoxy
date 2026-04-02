@@ -5,13 +5,16 @@ import { formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
 
+export const maxDuration = 60;
+
 // Vercel Cron — runs daily at 2PM UTC to send deposit reminders
 // - 24h-48h after contract signed: send reminder
 // - >48h after contract signed: send final warning
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
   const cronSecret = process.env.CRON_SECRET ?? '';
-  if (!cronSecret || !authHeader || cronSecret !== authHeader) {
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

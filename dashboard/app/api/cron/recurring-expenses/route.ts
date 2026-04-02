@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 
+export const maxDuration = 60;
+
 export async function GET(req: NextRequest) {
-  // Verify cron secret
-  const authHeader = req.headers.get('authorization');
-  const cronSecret = process.env.CRON_SECRET;
-  if (!cronSecret || !authHeader || authHeader !== `Bearer ${cronSecret}`) {
-    return NextResponse.json({ error: 'Non autorise' }, { status: 401 });
+  const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
+  const cronSecret = process.env.CRON_SECRET ?? '';
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   const today = new Date().toISOString().slice(0, 10);

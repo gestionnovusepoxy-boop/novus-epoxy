@@ -6,12 +6,15 @@ import { sendEmail } from '@/lib/send-email';
 // TODO: Replace with real Google review link once Google Business Profile is verified
 const GOOGLE_REVIEW_URL = process.env.GOOGLE_REVIEW_URL ?? 'https://novusepoxy.ca';
 
+export const maxDuration = 60;
+
 // Vercel Cron — runs daily to send Google review requests
 // Sends SMS 3 days after work is completed
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
   const cronSecret = process.env.CRON_SECRET ?? '';
-  if (!cronSecret || !authHeader || cronSecret !== authHeader) {
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

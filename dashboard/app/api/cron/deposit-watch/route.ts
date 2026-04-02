@@ -19,6 +19,8 @@ async function sendTelegram(chatId: string, text: string) {
   }
 }
 
+export const maxDuration = 60;
+
 // Vercel Cron — Auto-detect deposits and missing final payments
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';

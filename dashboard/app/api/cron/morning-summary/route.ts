@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 
+export const maxDuration = 60;
+
 async function sendTelegram(chatId: string, text: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return;
@@ -15,9 +17,9 @@ async function sendTelegram(chatId: string, text: string) {
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.replace('Bearer ', '');
-  const adminKey = process.env.ADMIN_API_KEY ?? '';
   const cronSecret = process.env.CRON_SECRET ?? '';
-  if (adminKey && token !== adminKey && token !== cronSecret) {
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  if (!token || (token !== cronSecret && token !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

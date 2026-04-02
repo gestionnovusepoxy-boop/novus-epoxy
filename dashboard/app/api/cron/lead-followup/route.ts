@@ -20,12 +20,14 @@ async function sendTelegram(chatId: string, text: string) {
   }
 }
 
+export const maxDuration = 60;
+
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.replace('Bearer ', '');
   const cronSecret = process.env.CRON_SECRET ?? '';
   const adminKey = process.env.ADMIN_API_KEY ?? '';
-  if ((cronSecret || adminKey) && token !== cronSecret && token !== adminKey) {
+  if (!token || (token !== cronSecret && token !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { google } from 'googleapis';
 
+export const maxDuration = 90;
+
 // Echo — Guardian System
 // Runs every hour: monitors integrations, auto-repairs, detects threats, secures data
 

@@ -5,6 +5,8 @@ import { google } from 'googleapis';
 // Must be called once to start, then every ~6 days to renew (expires after 7 days).
 // Add to Vercel cron or call manually via: POST /api/gmail/watch
 
+export const maxDuration = 60;
+
 const TOPIC_NAME = 'projects/true-orb-491120-j5/topics/gmail-notifications';
 
 function getGmailClient() {
@@ -23,9 +25,9 @@ export async function POST(req: NextRequest) {
   // Auth — accept CRON_SECRET or ADMIN_API_KEY
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.replace('Bearer ', '');
-  const secret = process.env.CRON_SECRET ?? '';
+  const cronSecret = process.env.CRON_SECRET ?? '';
   const adminKey = process.env.ADMIN_API_KEY ?? '';
-  if (secret && token !== secret && token !== adminKey) {
+  if (!token || (token !== cronSecret && token !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

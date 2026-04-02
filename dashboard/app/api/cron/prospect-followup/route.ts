@@ -2,13 +2,16 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
 
+export const maxDuration = 60;
+
 // Vercel Cron — Aria follow-up on Hunter prospects
 // Follow-up 1: 48h after prospect sent (gentle reminder)
 // Follow-up 2: 5 days after prospect sent (last chance)
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
   const cronSecret = process.env.CRON_SECRET ?? '';
-  if (!cronSecret || !authHeader || cronSecret !== authHeader) {
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

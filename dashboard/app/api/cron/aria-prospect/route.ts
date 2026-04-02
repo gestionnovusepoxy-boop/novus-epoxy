@@ -21,9 +21,9 @@ async function sendTelegram(text: string) {
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.replace('Bearer ', '');
-  const adminKey = process.env.ADMIN_API_KEY ?? '';
   const cronSecret = process.env.CRON_SECRET ?? '';
-  if (adminKey && token !== adminKey && token !== cronSecret) {
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  if (!token || (token !== cronSecret && token !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

@@ -2,12 +2,15 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendReferralSMS } from '@/lib/sms';
 
+export const maxDuration = 60;
+
 // Vercel Cron — runs weekly to send referral SMS 6 months after completed work
 // 1 single SMS per client, never repeated
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
   const cronSecret = process.env.CRON_SECRET ?? '';
-  if (!cronSecret || !authHeader || cronSecret !== authHeader) {
+  const adminKey = process.env.ADMIN_API_KEY ?? '';
+  if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
