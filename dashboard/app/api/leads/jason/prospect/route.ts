@@ -55,16 +55,16 @@ function buildResidentialHtml(prenom: string, project: string, photos: { url: st
 <div style="background:#0f172a;padding:24px;text-align:center;border-radius:8px 8px 0 0;">
   <img src="https://novus-epoxy.vercel.app/logo-email.jpg" alt="Novus Epoxy" width="80" height="80" style="border-radius:12px;" />
   <h1 style="color:#f59e0b;margin:12px 0 0;font-size:22px;font-weight:700;">Novus Epoxy</h1>
-  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers epoxy haut de gamme — Quebec</p>
+  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers époxy haut de gamme — Québec</p>
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
-    C'est Jason de Novus Epoxy! On se specialise en planchers epoxy haut de gamme dans la region de Quebec.
-    ${project ? `J'ai vu que vous pourriez etre interesse par <strong>${project}</strong>.` : 'On aimerait vous montrer ce qu\'on fait.'}
-    Voici quelques-unes de nos realisations recentes :
+    C'est Jason de Novus Epoxy! On se spécialise en planchers époxy haut de gamme dans la région de Québec.
+    ${project ? `J'ai vu que vous pourriez être intéressé par <strong>${project}</strong>.` : 'On aimerait vous montrer ce qu\'on fait.'}
+    Voici quelques-unes de nos réalisations récentes :
   </p>
-  <p style="color:#1e293b;font-weight:700;font-size:15px;margin:0 0 12px;">Nos realisations :</p>
+  <p style="color:#1e293b;font-weight:700;font-size:15px;margin:0 0 12px;">Nos réalisations :</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
     <tr>${row1}</tr>
     <tr>${row2}</tr>
@@ -74,23 +74,23 @@ function buildResidentialHtml(prenom: string, project: string, photos: { url: st
     <p style="color:#475569;font-size:13px;line-height:1.6;margin:0;">
       ✅ Licence RBQ 5861-8471-01 — Membre APCHQ<br/>
       ✅ Garantie sur tous nos travaux<br/>
-      ✅ +1 000 projets en 15 ans d'experience<br/>
+      ✅ +1 000 projets en 15 ans d'expérience<br/>
       ✅ Soumission gratuite, sans obligation
     </p>
   </div>
   <div style="text-align:center;margin:0 0 20px;">
-    <p style="color:#475569;font-size:14px;margin:0 0 12px;">On peut vous preparer une soumission gratuite en moins d'une heure.</p>
+    <p style="color:#475569;font-size:14px;margin:0 0 12px;">On peut vous préparer une soumission gratuite en moins d'une heure.</p>
     <a href="https://novusepoxy.ca/#contact" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Demander ma soumission gratuite</a>
   </div>
-  <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 20px;">Paiement par virement Interac accepte — 0$ de frais</p>
+  <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 20px;">Paiement par virement Interac accepté — 0$ de frais</p>
   <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;">
-    <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Une question? On est la pour vous.</p>
+    <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Une question? On est là pour vous.</p>
     <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca</strong> — Facturation / Soumission — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a></p>
     <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Soumission — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a></p>
   </div>
 </div>
 <div style="background:#f1f5f9;padding:12px 24px;text-align:center;border-radius:0 0 8px 8px;">
-  <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Quebec, G2N 1G8</p>
+  <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Québec, G2N 1G8</p>
 </div>
 </div></body></html>`;
 }
@@ -110,33 +110,33 @@ function buildCommercialHtml(prenom: string, photos: { url: string; caption: str
 <div style="background:#0f172a;padding:24px;text-align:center;border-radius:8px 8px 0 0;">
   <img src="https://novus-epoxy.vercel.app/logo-email.jpg" alt="Novus Epoxy" width="80" height="80" style="border-radius:12px;" />
   <h1 style="color:#f59e0b;margin:12px 0 0;font-size:22px;font-weight:700;">Novus Epoxy</h1>
-  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers epoxy haut de gamme — Quebec</p>
+  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers époxy haut de gamme — Québec</p>
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
-    Je me presente, <strong>Jason</strong>, de Novus Epoxy. On travaille avec plusieurs entrepreneurs dans la region de Quebec et on cherche a batir des <strong>partenariats solides</strong>.
+    Je me presente, <strong>Jason</strong>, de Novus Epoxy. On travaille avec plusieurs entrepreneurs dans la région de Québec et on cherche à bâtir des <strong>partenariats solides</strong>.
   </p>
-  <p style="color:#1e293b;font-weight:700;font-size:15px;margin:0 0 12px;">Nos realisations :</p>
+  <p style="color:#1e293b;font-weight:700;font-size:15px;margin:0 0 12px;">Nos réalisations :</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
     <tr>${row1}</tr>
     <tr>${row2}</tr>
   </table>
   <div style="background:#0f172a;border-radius:12px;padding:24px;margin:0 0 20px;color:#ffffff;">
     <h2 style="color:#f59e0b;font-size:18px;margin:0 0 16px;">Programme Partenaire</h2>
-    <p style="margin:0 0 6px;font-size:14px;">✅ Commission sur chaque projet refere</p>
-    <p style="margin:0 0 6px;font-size:14px;">✅ Prix partenaire preferentiel</p>
-    <p style="margin:0 0 6px;font-size:14px;">✅ Priorite de planification pour vos chantiers</p>
+    <p style="margin:0 0 6px;font-size:14px;">✅ Commission sur chaque projet référé</p>
+    <p style="margin:0 0 6px;font-size:14px;">✅ Prix partenaire préférentiel</p>
+    <p style="margin:0 0 6px;font-size:14px;">✅ Priorité de planification pour vos chantiers</p>
     <p style="margin:0 0 6px;font-size:14px;">✅ Soumission en moins d'une heure</p>
-    <p style="margin:0;font-size:14px;">✅ Service cle en main</p>
+    <p style="margin:0;font-size:14px;">✅ Service clé en main</p>
   </div>
   <div style="text-align:center;margin:0 0 20px;">
     <a href="https://novusepoxy.ca/#contact" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Nous contacter</a>
     <p style="color:#1e293b;font-size:15px;font-weight:700;margin:12px 0 0;">ou appelez Jason : 581-307-2678</p>
   </div>
   <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;">
-    <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca Hayes</strong> — Coproprietaire — 581-307-5983</p>
-    <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Operations — 581-307-2678</p>
+    <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca Hayes</strong> — Copropriétaire — 581-307-5983</p>
+    <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Opérations — 581-307-2678</p>
   </div>
 </div>
 <div style="background:#f1f5f9;padding:12px 24px;text-align:center;border-radius:0 0 8px 8px;">
@@ -157,35 +157,35 @@ function buildFacebookLeadHtml(prenom: string, photos: { url: string; caption: s
 <div style="background:#0f172a;padding:24px;text-align:center;border-radius:8px 8px 0 0;">
   <img src="https://novus-epoxy.vercel.app/logo-email.jpg" alt="Novus Epoxy" width="80" height="80" style="border-radius:12px;" />
   <h1 style="color:#f59e0b;margin:12px 0 0;font-size:22px;font-weight:700;">Novus Epoxy</h1>
-  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers epoxy haut de gamme — Quebec</p>
+  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers époxy haut de gamme — Québec</p>
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom}!</p>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
-    Merci d'avoir demande votre <strong>soumission gratuite</strong>! On est ravis de votre interet.
-    Pour preparer votre soumission personnalisee rapidement, on a besoin de quelques details :
+    Merci d'avoir demandé votre <strong>soumission gratuite</strong>! On est ravis de votre intérêt.
+    Pour préparer votre soumission personnalisée rapidement, on a besoin de quelques détails :
   </p>
   <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:20px;margin:0 0 20px;">
-    <p style="color:#1e293b;font-weight:700;font-size:15px;margin:0 0 12px;">Repondez a ce courriel avec :</p>
+    <p style="color:#1e293b;font-weight:700;font-size:15px;margin:0 0 12px;">Répondez à ce courriel avec :</p>
     <p style="color:#475569;font-size:14px;line-height:2;margin:0;">
       1. <strong>Type d'espace</strong> — Garage, sous-sol, balcon, commercial?<br/>
-      2. <strong>Superficie approximative</strong> — Combien de pieds carres?<br/>
-      3. <strong>Type de fini souhaite</strong> — Flocon, metallique, couleur unie?<br/>
-      4. <strong>Etat du plancher actuel</strong> — Beton brut, peinture, epoxy a refaire?<br/>
-      5. <strong>Adresse des travaux</strong> — Pour calculer le deplacement
+      2. <strong>Superficie approximative</strong> — Combien de pieds carrés?<br/>
+      3. <strong>Type de fini souhaité</strong> — Flocon, métallique, couleur unie?<br/>
+      4. <strong>Etat du plancher actuel</strong> — Béton brut, peinture, époxy à refaire?<br/>
+      5. <strong>Adresse des travaux</strong> — Pour calculer le déplacement
     </p>
   </div>
   <div style="background:#ecfdf5;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #6ee7b7;">
-    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">🎉 Special avril — 20% de rabais!</p>
+    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">🎉 Spécial avril — 20% de rabais!</p>
     <p style="color:#047857;font-size:13px;margin:0;">Le rabais s'applique automatiquement a votre soumission.</p>
   </div>
-  ${photoGrid ? `<p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 8px;">Quelques-unes de nos realisations :</p>
+  ${photoGrid ? `<p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 8px;">Quelques-unes de nos réalisations :</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr>${photoGrid}</tr></table>` : ''}
   <div style="background:#f8fafc;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #e2e8f0;">
     <p style="color:#475569;font-size:13px;line-height:1.6;margin:0;">
       ✅ Licence RBQ 5861-8471-01 — Membre APCHQ<br/>
       ✅ Garantie sur tous nos travaux<br/>
-      ✅ +1 000 projets en 15 ans d'experience<br/>
+      ✅ +1 000 projets en 15 ans d'expérience<br/>
       ✅ Soumission gratuite en moins d'une heure
     </p>
   </div>
@@ -193,15 +193,15 @@ function buildFacebookLeadHtml(prenom: string, photos: { url: string; caption: s
     <p style="color:#475569;font-size:14px;margin:0 0 12px;">Vous pouvez aussi nous appeler directement :</p>
     <a href="tel:5813072678" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Appeler maintenant — 581-307-2678</a>
   </div>
-  <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 20px;">Paiement par virement Interac accepte — 0$ de frais</p>
+  <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 20px;">Paiement par virement Interac accepté — 0$ de frais</p>
   <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;">
-    <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Votre equipe :</p>
+    <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Votre équipe :</p>
     <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca</strong> — Facturation / Soumission — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a></p>
     <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Soumission — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a></p>
   </div>
 </div>
 <div style="background:#f1f5f9;padding:12px 24px;text-align:center;border-radius:0 0 8px 8px;">
-  <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Quebec, G2N 1G8</p>
+  <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Québec, G2N 1G8</p>
 </div>
 </div></body></html>`;
 }
@@ -303,10 +303,10 @@ export async function POST(req: NextRequest) {
     if (lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
       const nomComplet = lead.nom.trim().slice(0, 40);
       const subject = isCommercial
-        ? `${nomComplet} — Partenariat planchers epoxy`
+        ? `${nomComplet} — Partenariat planchers époxy`
         : isFacebookLead
           ? `${prenom}, votre soumission gratuite — Novus Epoxy`
-          : `${nomComplet} — Votre projet en epoxy`;
+          : `${nomComplet} — Votre projet en époxy`;
 
       const html = isCommercial
         ? buildCommercialHtml(prenom, photos)
@@ -333,8 +333,8 @@ export async function POST(req: NextRequest) {
     if (shouldSMS) {
       try {
         const smsText = isFacebookLead
-          ? `Bonjour ${prenom}! Merci pour votre demande de soumission chez Novus Epoxy. Pour la preparer, j'ai besoin de quelques infos:\n\n1. Type d'espace (garage, sous-sol, balcon)?\n2. Combien de pieds carres?\n3. Quel fini (flocon, metallique, couleur unie)?\n4. Adresse des travaux?\n\nRepondez ici ou appelez-nous: 581-307-2678\n\n— Luca, Novus Epoxy`
-          : `Bonjour ${prenom}, c'est Novus Epoxy! On fait des planchers epoxy haut de gamme dans la region de Quebec. Soumission gratuite, licence RBQ. Appelez-nous au 581-307-2678 ou visitez novusepoxy.ca`;
+          ? `Bonjour ${prenom}! Merci pour votre demande de soumission chez Novus Epoxy. Pour la préparer, j'ai besoin de quelques infos:\n\n1. Type d'espace (garage, sous-sol, balcon)?\n2. Combien de pieds carrés?\n3. Quel fini (flocon, métallique, couleur unie)?\n4. Adresse des travaux?\n\nRépondez ici ou appelez-nous: 581-307-2678\n\n— Luca, Novus Epoxy`
+          : `Bonjour ${prenom}, c'est Novus Epoxy! On fait des planchers époxy haut de gamme dans la région de Québec. Soumission gratuite, licence RBQ. Appelez-nous au 581-307-2678 ou visitez novusepoxy.ca`;
         await sendSMS(lead.telephone!, smsText);
         smsSent++;
         contacted = true;

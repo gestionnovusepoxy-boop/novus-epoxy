@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
           max_tokens: 400,
           messages: [{
             role: 'user',
-            content: `Genere un email de suivi chaleureux en francais (max 120 mots) pour un lead qui n'a pas repondu depuis 4 jours. Nom: ${lead.nom}. Service d'interet: ${lead.service || 'plancher epoxy'}. Rappelle qu'on est disponibles pour un estimé gratuit. Offre: formulaire novusepoxy.ca/#contact, appeler Luca 581-307-5983 ou Jason 581-307-2678. Signe: L'equipe Novus Epoxy. Reponds avec juste le texte de l'email, pas de JSON.`,
+            content: `Génère un email de suivi chaleureux en français (max 120 mots) pour un lead qui n'a pas répondu depuis 4 jours. Nom: ${lead.nom}. Service d'intérêt: ${lead.service || 'plancher époxy'}. Rappelle qu'on est disponibles pour un estimé gratuit. Offre: formulaire novusepoxy.ca/#contact, appeler Luca 581-307-5983 ou Jason 581-307-2678. Signe: L'équipe Novus Epoxy. Réponds avec juste le texte de l'email, pas de JSON.`,
           }],
         }),
       });
@@ -72,26 +72,30 @@ export async function GET(req: NextRequest) {
       if (!followupText) continue;
 
       // 3. Send via Gmail
-      const followupHtml =`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
-        <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
-          <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />
+      const followupHtml =`<div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
+        <div style="background:#0f172a;padding:24px;text-align:center;border-radius:8px 8px 0 0;">
+          <img src="https://novus-epoxy.vercel.app/logo-email.jpg" alt="Novus Epoxy" width="80" height="80" style="border-radius:12px;" />
+          <h1 style="color:#f59e0b;margin:12px 0 0;font-size:22px;font-weight:700;">Novus Epoxy</h1>
+          <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers époxy haut de gamme — Québec</p>
         </div>
-        <div style="padding:24px;border:1px solid #e2e8f0;border-top:none;border-radius:0 0 8px 8px;">
+        <div style="padding:24px;">
           <p style="color:#1e293b;line-height:1.6;">${followupText.replace(/\n/g, '<br/>')}</p>
           <div style="text-align:center;margin:20px 0;">
             <a href="https://novusepoxy.ca/#contact" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:12px 28px;border-radius:6px;text-decoration:none;font-weight:700;">Obtenir mon estimé gratuit</a>
           </div>
-          <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;" />
-          <p style="color:#64748b;font-size:12px;margin:0;">
-            Novus Epoxy — Planchers epoxy haut de gamme<br/>
-            RBQ 5861-8471-01 | Garantie 10 ans | 15 ans d'experience<br/>
-            581-307-5983 (Luca) | 581-307-2678 (Jason) | <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
-          </p>
+          <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;margin-top:20px;">
+            <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Une question? On est là pour vous.</p>
+            <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca</strong> — Facturation / Soumission — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a></p>
+            <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Soumission — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a></p>
+          </div>
+        </div>
+        <div style="background:#f1f5f9;padding:12px 24px;text-align:center;border-radius:0 0 8px 8px;">
+          <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Québec, G2N 1G8</p>
         </div>
       </div>`;
 
       try {
-        await sendEmail({ to: lead.email as string, subject: `On pense a vous — Novus Epoxy`, html: followupHtml });
+        await sendEmail({ to: lead.email as string, subject: `On pense à vous — Novus Epoxy`, html: followupHtml });
       } catch { continue; }
 
       // 4. Update followup_count and last_agent_reply_at

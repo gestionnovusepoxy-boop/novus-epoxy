@@ -66,58 +66,58 @@ function buildNurture3Html(prenom: string, photos: { url: string; caption: strin
 <div style="background:#0f172a;padding:24px;text-align:center;border-radius:8px 8px 0 0;">
   <img src="https://novus-epoxy.vercel.app/logo-email.jpg" alt="Novus Epoxy" width="80" height="80" style="border-radius:12px;" />
   <h1 style="color:#f59e0b;margin:12px 0 0;font-size:22px;font-weight:700;">Novus Epoxy</h1>
-  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers epoxy haut de gamme — Quebec</p>
+  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers époxy haut de gamme — Québec</p>
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 20px;">
-    Avant de choisir un installateur pour votre plancher epoxy, voici <strong>3 erreurs courantes</strong> a eviter :
+    Avant de choisir un installateur pour votre plancher époxy, voici <strong>3 erreurs courantes</strong> à éviter :
   </p>
 
   <div style="background:#fff7ed;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:16px;margin:0 0 12px;">
     <p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 4px;">1. Choisir un installateur sans licence RBQ</p>
     <p style="color:#475569;font-size:13px;line-height:1.5;margin:0;">
-      Sans licence, vous n'avez aucune garantie legale. En cas de probleme, aucun recours possible.
-      Novus Epoxy detient la licence RBQ 5861-8471-01 et est membre de l'APCHQ.
+      Sans licence, vous n'avez aucune garantie légale. En cas de problème, aucun recours possible.
+      Novus Epoxy détient la licence RBQ 5861-8471-01 et est membre de l'APCHQ.
     </p>
   </div>
 
   <div style="background:#fff7ed;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:16px;margin:0 0 12px;">
-    <p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 4px;">2. Negliger la preparation du beton</p>
+    <p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 4px;">2. Négliger la préparation du béton</p>
     <p style="color:#475569;font-size:13px;line-height:1.5;margin:0;">
-      Un meulage diamant professionnel est essentiel pour que l'epoxy adhere correctement.
-      Sans ca, le revetement peut decoller en quelques mois. On ne saute jamais cette etape.
+      Un meulage diamant professionnel est essentiel pour que l'époxy adhère correctement.
+      Sans ca, le revêtement peut décoller en quelques mois. On ne saute jamais cette étape.
     </p>
   </div>
 
   <div style="background:#fff7ed;border-left:4px solid #f59e0b;border-radius:0 8px 8px 0;padding:16px;margin:0 0 20px;">
-    <p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 4px;">3. Choisir le mauvais type d'epoxy</p>
+    <p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 4px;">3. Choisir le mauvais type d'époxy</p>
     <p style="color:#475569;font-size:13px;line-height:1.5;margin:0;">
-      Garage, sous-sol, commercial — chaque usage demande un produit different.
+      Garage, sous-sol, commercial — chaque usage demande un produit différent.
       On vous guide vers le bon choix selon votre projet et votre budget.
     </p>
   </div>
 
-  ${photoGrid ? `<p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 8px;">Quelques-unes de nos realisations :</p>
+  ${photoGrid ? `<p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 8px;">Quelques-unes de nos réalisations :</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr>${photoGrid}</tr></table>` : ''}
 
   <div style="background:#ecfdf5;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #6ee7b7;">
-    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">Special avril — 20% de rabais!</p>
-    <p style="color:#047857;font-size:13px;margin:0;">Le rabais s'applique automatiquement a votre soumission.</p>
+    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">Spécial avril — 20% de rabais!</p>
+    <p style="color:#047857;font-size:13px;margin:0;">Le rabais s'applique automatiquement à votre soumission.</p>
   </div>
 
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
-    On peut vous aider a faire le bon choix — <strong>repondez a ce courriel</strong> ou appelez-nous directement.
+    On peut vous aider à faire le bon choix — <strong>répondez à ce courriel</strong> ou appelez-nous directement.
   </p>
 
   <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;">
-    <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Votre equipe :</p>
+    <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Votre équipe :</p>
     <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca</strong> — Facturation / Soumission — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a></p>
     <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Soumission — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a></p>
   </div>
 </div>
 <div style="background:#f1f5f9;padding:12px 24px;text-align:center;border-radius:0 0 8px 8px;">
-  <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Quebec, G2N 1G8 | novusepoxy.ca</p>
+  <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Québec, G2N 1G8 | novusepoxy.ca</p>
 </div>
 </div></body></html>`;
 }
@@ -128,7 +128,7 @@ function buildNurture5Html(prenom: string): string {
 <div style="background:#0f172a;padding:24px;text-align:center;border-radius:8px 8px 0 0;">
   <img src="https://novus-epoxy.vercel.app/logo-email.jpg" alt="Novus Epoxy" width="80" height="80" style="border-radius:12px;" />
   <h1 style="color:#f59e0b;margin:12px 0 0;font-size:22px;font-weight:700;">Novus Epoxy</h1>
-  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers epoxy haut de gamme — Quebec</p>
+  <p style="color:#94a3b8;margin:4px 0 0;font-size:13px;">Planchers époxy haut de gamme — Québec</p>
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
@@ -137,14 +137,14 @@ function buildNurture5Html(prenom: string): string {
   </p>
 
   <div style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:20px;margin:0 0 20px;text-align:center;">
-    <p style="color:#dc2626;font-weight:700;font-size:18px;margin:0 0 8px;">Le rabais de 20% se termine bientot</p>
+    <p style="color:#dc2626;font-weight:700;font-size:18px;margin:0 0 8px;">Le rabais de 20% se termine bientôt</p>
     <p style="color:#475569;font-size:14px;margin:0;">Profitez-en avant la fin du mois d'avril!</p>
   </div>
 
   <div style="background:#f0fdf4;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #86efac;">
     <p style="color:#166534;font-size:14px;margin:0;">
       On a une <strong>ouverture dans notre calendrier</strong> la semaine prochaine.
-      Repondez <strong>OUI</strong> et on vous prepare une soumission en moins d'une heure.
+      Répondez <strong>OUI</strong> et on vous prépare une soumission en moins d'une heure.
     </p>
   </div>
 
@@ -152,16 +152,16 @@ function buildNurture5Html(prenom: string): string {
     <a href="https://novusepoxy.ca/#contact" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:16px 48px;border-radius:8px;text-decoration:none;font-weight:700;font-size:18px;">Je veux ma soumission</a>
   </div>
 
-  <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 20px;">Paiement par virement Interac accepte — 0$ de frais</p>
+  <p style="color:#94a3b8;font-size:12px;text-align:center;margin:0 0 20px;">Paiement par virement Interac accepté — 0$ de frais</p>
 
   <div style="border-top:1px solid #e2e8f0;padding:16px 0 0;">
-    <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Votre equipe :</p>
+    <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 6px;">Votre équipe :</p>
     <p style="color:#475569;font-size:13px;margin:0 0 2px;"><strong>Luca</strong> — Facturation / Soumission — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a></p>
     <p style="color:#475569;font-size:13px;margin:0;"><strong>Jason</strong> — Chantier / Soumission — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a></p>
   </div>
 </div>
 <div style="background:#f1f5f9;padding:12px 24px;text-align:center;border-radius:0 0 8px 8px;">
-  <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Quebec, G2N 1G8 | novusepoxy.ca</p>
+  <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Québec, G2N 1G8 | novusepoxy.ca</p>
 </div>
 </div></body></html>`;
 }
@@ -227,7 +227,7 @@ export async function GET(req: NextRequest) {
 
       const prenom = getPrenom(lead.nom);
       const html = buildNurture3Html(prenom, photos);
-      const subject = `${prenom}, 3 erreurs a eviter avant de faire poser un plancher epoxy`;
+      const subject = `${prenom}, 3 erreurs à éviter avant de faire poser un plancher époxy`;
 
       try {
         await sendProspectEmail({ to: lead.email!, subject, html });
@@ -274,7 +274,7 @@ export async function GET(req: NextRequest) {
       if (daysSince < 7) continue;
 
       const prenom = getPrenom(lead.nom);
-      const smsText = `Bonjour ${prenom}! C'est Luca de Novus Epoxy. Notre rabais de 20% en avril se termine bientot. Si vous avez des questions sur votre projet, je suis disponible au 581-307-5983. Bonne journee!`;
+      const smsText = `Bonjour ${prenom}! C'est Luca de Novus Epoxy. Notre rabais de 20% en avril se termine bientôt. Si vous avez des questions sur votre projet, je suis disponible au 581-307-5983. Bonne journée!`;
 
       try {
         const sent = await sendSMS(lead.telephone!, smsText);
@@ -324,7 +324,7 @@ export async function GET(req: NextRequest) {
 
       const prenom = getPrenom(lead.nom);
       const html = buildNurture5Html(prenom);
-      const subject = `${prenom}, derniere chance — rabais avril 20%`;
+      const subject = `${prenom}, dernière chance — rabais avril 20%`;
 
       try {
         await sendProspectEmail({ to: lead.email!, subject, html });
