@@ -1262,14 +1262,43 @@ export async function POST(req: NextRequest) {
     const text = ((message.text ?? message.caption ?? '') as string).trim();
     if (!text || text.length < 3) return NextResponse.json({ ok: true });
 
-    // Detect quote/soumission requests from admins in the group
+    // Check if there's an active group conversation (bot asked a question recently)
     const lowerText = text.toLowerCase();
-    const isQuoteRequest = (lowerText.includes('soumission') || lowerText.includes('devis') || lowerText.includes('produit moi') || lowerText.includes('créer un devis') || lowerText.includes('creer un devis') || lowerText.includes('fait moi un devis') || lowerText.includes('fais moi un devis')) && isAdmin;
+    const groupConvoKey = `tg_group_convo_${chatId}`;
+    let hasActiveConvo = false;
+    try {
+      const convoRow = await query(`SELECT value FROM kv_store WHERE key = $1`, [groupConvoKey]);
+      if (convoRow.length > 0) {
+        const convoData = JSON.parse(convoRow[0].value as string);
+        // Active if last bot message was less than 5 minutes ago
+        if (convoData.ts && (Date.now() - convoData.ts) < 300000) {
+          hasActiveConvo = true;
+        }
+      }
+    } catch { /* no active convo */ }
+
+    const isQuoteRequest = ((lowerText.includes('soumission') || lowerText.includes('devis') || lowerText.includes('produit moi') || lowerText.includes('créer un devis') || lowerText.includes('creer un devis') || lowerText.includes('fait moi un devis') || lowerText.includes('fais moi un devis')) && isAdmin) || (hasActiveConvo && isAdmin);
     if (isQuoteRequest) {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (apiKey) {
         try {
-          await sendTelegram(chatId, '🤖 Je crée le devis...');
+          if (!hasActiveConvo) await sendTelegram(chatId, '🤖 Je crée le devis...');
+
+          // Load conversation history for context (follow-up messages)
+          type ConvoMsg = { role: 'user' | 'assistant'; content: string };
+          let convoHistory: ConvoMsg[] = [];
+          try {
+            const convoRow = await query(`SELECT value FROM kv_store WHERE key = $1`, [groupConvoKey]);
+            if (convoRow.length > 0) {
+              const convoData = JSON.parse(convoRow[0].value as string);
+              if (convoData.history && (Date.now() - convoData.ts) < 300000) {
+                convoHistory = convoData.history;
+              }
+            }
+          } catch { /* fresh convo */ }
+
+          // Add current message to history
+          convoHistory.push({ role: 'user', content: text });
 
           // Use Claude to extract client info and create the quote
           const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
@@ -1282,9 +1311,9 @@ export async function POST(req: NextRequest) {
             body: JSON.stringify({
               model: 'claude-sonnet-4-6',
               max_tokens: 1024,
-              system: `Tu es l'assistant admin de Novus Epoxy. Extrais les infos client du message et appelle l'outil creer_devis_sms. Services: flake (8.50$/pi²), metallique (12.75$/pi²), commercial (15$/pi²), couleur_unie (7.50$/pi²), quartz (11$/pi²). Si le type n'est pas clair, utilise "flake" par défaut. Si pas de téléphone, mets "0000000000".`,
+              system: `Tu es l'assistant admin de Novus Epoxy. Extrais les infos client du message et appelle l'outil creer_devis_sms. Services: flake (8.50$/pi²), metallique (12.75$/pi²), commercial (15$/pi²), couleur_unie (7.50$/pi²), quartz (11$/pi²). Si le type n'est pas clair, utilise "flake" par défaut. Si pas de téléphone, mets "0000000000". Si tu as assez d'infos, cree le devis. Sinon demande ce qui manque.`,
               tools: [TOOLS[0]], // creer_devis_sms tool
-              messages: [{ role: 'user', content: text }],
+              messages: convoHistory,
             }),
           });
 
@@ -1373,10 +1402,20 @@ export async function POST(req: NextRequest) {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ chat_id: chatId, text: summary, parse_mode: 'HTML', reply_markup: buttons }),
               });
+              // Clear conversation after quote created
+              await query(`DELETE FROM kv_store WHERE key = $1`, [groupConvoKey]).catch(() => {});
             } else {
-              // Claude responded with text instead of tool
+              // Claude responded with text (asking for more info) — save conversation
               const textBlock = content.find((b: CB) => b.type === 'text');
-              if (textBlock?.text) await sendTelegram(chatId, textBlock.text);
+              if (textBlock?.text) {
+                await sendTelegram(chatId, textBlock.text);
+                convoHistory.push({ role: 'assistant', content: textBlock.text });
+                // Save conversation so next message continues the flow
+                await query(
+                  `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+                  [groupConvoKey, JSON.stringify({ history: convoHistory, ts: Date.now() })]
+                ).catch(() => {});
+              }
             }
           } else {
             await sendTelegram(chatId, '❌ Erreur API Claude');
