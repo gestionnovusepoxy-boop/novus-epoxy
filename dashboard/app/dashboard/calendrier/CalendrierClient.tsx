@@ -478,8 +478,10 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
           editable={true}
           selectable={true}
           selectMirror={true}
-          dayMaxEvents={3}
-          eventMaxStack={3}
+          dayMaxEvents={4}
+          dayMaxEventRows={4}
+          eventDisplay="block"
+          eventOrder="start,-duration,allDay,title"
           nowIndicator={true}
           weekNumbers={false}
           slotMinTime="06:00:00"

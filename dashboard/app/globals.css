@@ -92,7 +92,11 @@ body {
 }
 
 .novus-calendar .fc .fc-daygrid-day-frame {
-  min-height: 90px;
+  min-height: 110px;
+}
+
+.novus-calendar .fc .fc-daygrid-event-harness {
+  margin-bottom: 2px;
 }
 
 .novus-calendar .fc .fc-event {
