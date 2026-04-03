@@ -40,13 +40,13 @@ interface CalendarEvent {
 }
 
 const EVENT_COLORS = [
-  { label: 'Jaune', value: '#f59e0b' },
-  { label: 'Bleu', value: '#3b82f6' },
-  { label: 'Vert', value: '#22c55e' },
-  { label: 'Rouge', value: '#ef4444' },
-  { label: 'Violet', value: '#8b5cf6' },
-  { label: 'Rose', value: '#ec4899' },
-  { label: 'Cyan', value: '#06b6d4' },
+  { label: 'Rendez-vous client', value: '#f59e0b' },
+  { label: 'Travaux confirmes', value: '#3b82f6' },
+  { label: 'Complete / Termine', value: '#22c55e' },
+  { label: 'Urgent / Important', value: '#ef4444' },
+  { label: 'Estimation / Visite', value: '#8b5cf6' },
+  { label: 'Personnel', value: '#ec4899' },
+  { label: 'Rappel / Suivi', value: '#06b6d4' },
 ];
 
 const EVENT_TYPES = [
@@ -257,24 +257,68 @@ function CreateEventModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-slate-400 text-xs mb-1">Début</label>
+              <label className="block text-slate-400 text-xs mb-1">Date début</label>
               <input
-                type={isAllDay ? 'date' : 'datetime-local'}
-                value={isAllDay ? start.split('T')[0] : start.slice(0, 16)}
-                onChange={e => setStart(isAllDay ? e.target.value + 'T08:00:00' : e.target.value)}
+                type="date"
+                value={start.split('T')[0]}
+                onChange={e => {
+                  const time = start.includes('T') ? start.split('T')[1] : '08:00:00';
+                  setStart(e.target.value + 'T' + time);
+                }}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
               />
             </div>
             <div>
-              <label className="block text-slate-400 text-xs mb-1">Fin</label>
+              <label className="block text-slate-400 text-xs mb-1">Date fin</label>
               <input
-                type={isAllDay ? 'date' : 'datetime-local'}
-                value={isAllDay ? end.split('T')[0] : end.slice(0, 16)}
-                onChange={e => setEnd(isAllDay ? e.target.value + 'T17:00:00' : e.target.value)}
+                type="date"
+                value={end.split('T')[0]}
+                onChange={e => {
+                  const time = end.includes('T') ? end.split('T')[1] : '16:00:00';
+                  setEnd(e.target.value + 'T' + time);
+                }}
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
               />
             </div>
           </div>
+
+          {!isAllDay && (
+            <div>
+              <label className="block text-slate-400 text-xs mb-1">Plage horaire</label>
+              <div className="flex gap-2">
+                {[
+                  { label: 'AM (8h-12h)', value: 'am' },
+                  { label: 'PM (12h-16h)', value: 'pm' },
+                ].map(slot => {
+                  const currentHour = parseInt(start.split('T')[1]?.split(':')[0] || '8');
+                  const isAm = currentHour < 12;
+                  const active = (slot.value === 'am' && isAm) || (slot.value === 'pm' && !isAm);
+                  return (
+                    <button
+                      key={slot.value}
+                      type="button"
+                      onClick={() => {
+                        const date = start.split('T')[0];
+                        const endDate = end.split('T')[0];
+                        if (slot.value === 'am') {
+                          setStart(date + 'T08:00:00');
+                          setEnd(endDate + 'T12:00:00');
+                        } else {
+                          setStart(date + 'T12:00:00');
+                          setEnd(endDate + 'T16:00:00');
+                        }
+                      }}
+                      className={`flex-1 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                        active ? 'bg-amber-500 text-black' : 'bg-slate-700 text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      {slot.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <label className="flex items-center gap-2 text-sm text-slate-400 cursor-pointer">
             <input type="checkbox" checked={isAllDay} onChange={e => setIsAllDay(e.target.checked)} className="rounded" />
