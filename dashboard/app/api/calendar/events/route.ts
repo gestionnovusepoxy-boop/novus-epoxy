@@ -48,6 +48,9 @@ export async function GET(req: NextRequest) {
     const statusLabel = isComplete ? ' ✓' : isProvisoire ? ' ?' : '';
     const extra = { type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut };
 
+    const cls1 = slot1.start === '08:00' ? ['novus-am'] : ['novus-pm'];
+    const cls2 = slot2.start === '08:00' ? ['novus-am'] : ['novus-pm'];
+
     return [
       {
         id: `booking-${b.id}-j1`,
@@ -56,6 +59,7 @@ export async function GET(req: NextRequest) {
         end: `${j1}T${slot1.end}:00`,
         backgroundColor: color1,
         borderColor: color1,
+        classNames: cls1,
         extendedProps: extra,
         editable: !isComplete,
       },
@@ -66,6 +70,7 @@ export async function GET(req: NextRequest) {
         end: `${j2}T${slot2.end}:00`,
         backgroundColor: color2,
         borderColor: color2,
+        classNames: cls2,
         extendedProps: extra,
         editable: !isComplete,
       },
