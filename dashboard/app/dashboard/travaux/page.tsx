@@ -725,7 +725,7 @@ function CompletedJobCard({ job }: { job: Travail }) {
 
       <button
         onClick={() => setExpanded(!expanded)}
-        className="text-xs text-slate-500 hover:text-slate-300 transition"
+        className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-semibold text-sm py-3 px-4 rounded-lg border border-amber-500/30 transition"
       >
         {expanded ? '▾ Masquer rapport' : '▸ Voir rapport du projet'}
       </button>
