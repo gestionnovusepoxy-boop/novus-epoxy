@@ -19,23 +19,24 @@ export async function sendEmail({
   replyTo?: string;
   via?: 'gmail' | 'resend';
 }): Promise<{ id: string }> {
-  if (via === 'gmail') {
+  // Primary: Gmail API (gestionnovusepoxy@gmail.com) for all client emails
+  // Resend only used if explicitly requested (via: 'resend') for mass/prospect emails
+  if (via === 'resend') {
     try {
-      return await sendViaGmail({ to, subject, html, replyTo });
+      return await sendViaResend({ to, subject, html, replyTo });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
-      return sendViaResend({ to, subject, html, replyTo });
+      console.log(`[sendEmail] Resend failed (${msg.slice(0, 100)}), fallback Gmail`);
+      return sendViaGmail({ to, subject, html, replyTo });
     }
   }
-  // Primary: Resend (reliable, Pro plan 50k/month)
-  // Gmail is rate-limited and silently bounces — use Resend for everything
+  // Default: Gmail — visible in Messages envoyés, from gestionnovusepoxy@gmail.com
   try {
-    return await sendViaResend({ to, subject, html, replyTo });
+    return await sendViaGmail({ to, subject, html, replyTo });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.log(`[sendEmail] Resend failed (${msg.slice(0, 100)}), trying Gmail as fallback`);
-    return sendViaGmail({ to, subject, html, replyTo });
+    console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
+    return sendViaResend({ to, subject, html, replyTo });
   }
 }
 
