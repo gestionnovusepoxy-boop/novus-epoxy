@@ -15,3 +15,176 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* ─── FullCalendar Dark Theme ─── */
+.novus-calendar .fc {
+  --fc-border-color: #334155;
+  --fc-button-bg-color: #1e293b;
+  --fc-button-border-color: #475569;
+  --fc-button-hover-bg-color: #334155;
+  --fc-button-hover-border-color: #64748b;
+  --fc-button-active-bg-color: #f59e0b;
+  --fc-button-active-border-color: #f59e0b;
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: #1e293b;
+  --fc-list-event-hover-bg-color: #334155;
+  --fc-today-bg-color: rgba(245, 158, 11, 0.06);
+  --fc-event-bg-color: #f59e0b;
+  --fc-event-border-color: #d97706;
+  --fc-event-text-color: #fff;
+  --fc-highlight-color: rgba(245, 158, 11, 0.12);
+  --fc-non-business-color: rgba(15, 23, 42, 0.4);
+  --fc-now-indicator-color: #ef4444;
+  color: #e2e8f0;
+  font-size: 13px;
+}
+
+.novus-calendar .fc .fc-button {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  text-transform: capitalize;
+  box-shadow: none !important;
+}
+
+.novus-calendar .fc .fc-button-active,
+.novus-calendar .fc .fc-button:active {
+  color: #000 !important;
+  background-color: #f59e0b !important;
+  border-color: #f59e0b !important;
+}
+
+.novus-calendar .fc .fc-button-primary:not(:disabled):hover {
+  background-color: #334155;
+  border-color: #64748b;
+}
+
+.novus-calendar .fc .fc-toolbar-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f8fafc;
+  text-transform: capitalize;
+}
+
+.novus-calendar .fc .fc-col-header-cell {
+  background: #1e293b;
+  border-color: #334155;
+}
+
+.novus-calendar .fc .fc-col-header-cell-cushion {
+  color: #94a3b8;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  padding: 8px 4px;
+}
+
+.novus-calendar .fc .fc-daygrid-day-number {
+  color: #cbd5e1;
+  font-weight: 500;
+  padding: 6px 8px;
+}
+
+.novus-calendar .fc .fc-day-today .fc-daygrid-day-number {
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+.novus-calendar .fc .fc-daygrid-day-frame {
+  min-height: 90px;
+}
+
+.novus-calendar .fc .fc-event {
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+}
+
+.novus-calendar .fc .fc-event:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+  transition: all 0.15s ease;
+}
+
+.novus-calendar .fc .fc-daygrid-event-dot {
+  display: none;
+}
+
+.novus-calendar .fc .fc-timegrid-slot {
+  height: 40px;
+  border-color: #1e293b;
+}
+
+.novus-calendar .fc .fc-timegrid-slot-label-cushion {
+  color: #64748b;
+  font-size: 11px;
+}
+
+.novus-calendar .fc .fc-list-event:hover td {
+  background-color: #334155;
+}
+
+.novus-calendar .fc .fc-list-day-cushion {
+  background: #1e293b;
+  color: #f59e0b;
+  font-weight: 700;
+}
+
+.novus-calendar .fc .fc-scrollgrid {
+  border-color: #334155;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.novus-calendar .fc td,
+.novus-calendar .fc th {
+  border-color: #1e293b;
+}
+
+.novus-calendar .fc .fc-daygrid-more-link {
+  color: #f59e0b;
+  font-weight: 600;
+  font-size: 11px;
+}
+
+.novus-calendar .fc .fc-popover {
+  background: #1e293b;
+  border-color: #475569;
+  border-radius: 8px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.novus-calendar .fc .fc-popover-header {
+  background: #0f172a;
+  color: #f59e0b;
+  font-weight: 700;
+  border-radius: 8px 8px 0 0;
+}
+
+.novus-calendar .fc .fc-day-other .fc-daygrid-day-number {
+  color: #475569;
+}
+
+.novus-calendar .fc .fc-button-group {
+  gap: 2px;
+}
+
+.novus-calendar .fc .fc-toolbar {
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+@media (max-width: 640px) {
+  .novus-calendar .fc .fc-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .novus-calendar .fc .fc-toolbar-chunk {
+    display: flex;
+    justify-content: center;
+  }
+}
