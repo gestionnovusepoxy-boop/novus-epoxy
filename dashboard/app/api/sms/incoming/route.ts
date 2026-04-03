@@ -196,10 +196,27 @@ export async function POST(req: NextRequest) {
   const wantsQuote = lower.includes('soumission') || lower.includes('devis') || lower.includes('prix') || lower.includes('combien') || lower.includes('cout') || lower.includes('coût') || lower.includes('estimation') || lower.includes('estimé');
   const hasQuestion = body.includes('?') || lower.includes('est-ce') || lower.includes('est ce') || lower.includes('comment') || lower.includes('quand') || lower.includes('disponible');
   const isPositive = lower.includes('oui') || lower.includes('ok') || lower.includes('interesse') || lower.includes('intéressé') || lower.includes('parfait') || lower.includes('super') || lower.includes("j'aimerais") || lower.includes('je veux') || lower.includes('je voudrais');
-  const isNegative = lower.includes('non') || lower.includes('pas interesse') || lower.includes('pas intéressé') || lower.includes('arret') || lower.includes('stop');
+  const isNegative = lower.includes('pas interesse') || lower.includes('pas intéressé');
+  const isOptOut = lower === 'stop' || lower === 'arret' || lower === 'arreter' || lower === 'arrêter' || lower === 'desabonner' || lower === 'désabonner' || lower.includes('arretez') || lower.includes('arrêtez') || lower.includes('ne me contactez plus') || lower.includes('plus de message') || lower.includes('plus de texto') || lower.includes('laisser tranquille');
 
   let autoReply: string;
-  if (isNegative) {
+  if (isOptOut) {
+    // Opt-out: save to DB so we NEVER contact this person again
+    const phone = from.startsWith('+') ? from : `+1${last10}`;
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [`sms_optout_${phone}`, JSON.stringify({ phone: from, date: new Date().toISOString(), message: body })]
+    ).catch(() => {});
+
+    // Also update lead status if exists
+    if (leadId) {
+      await query(`UPDATE crm_leads SET statut = 'ferme', notes = COALESCE(notes, '') || $1, updated_at = NOW() WHERE id = $2`,
+        [`\n[OPT-OUT SMS ${new Date().toLocaleDateString('fr-CA')}] Client a demande de ne plus etre contacte.`, leadId]
+      ).catch(() => {});
+    }
+
+    autoReply = `Votre demande est respectee. Vous ne recevrez plus de messages de Novus Epoxy. Si vous changez d'avis, ecrivez-nous a gestionnovusepoxy@gmail.com. Bonne journee!`;
+  } else if (isNegative) {
     autoReply = `${greeting} Aucun probleme, on respecte votre choix. Si jamais vous changez d'idee, n'hesitez pas a nous recontacter! — Novus Epoxy`;
   } else if (wantsQuote || isPositive) {
     autoReply = `${greeting} Parfait! Pour vous envoyer une soumission gratuite, on a besoin de: 1) Type de surface (garage, sous-sol, balcon...) 2) Superficie estimee en pi2 3) Votre adresse 4) Votre courriel. Repondez ici et on vous prepare ca! — Novus Epoxy`;
