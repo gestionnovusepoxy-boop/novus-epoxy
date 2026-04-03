@@ -1238,24 +1238,84 @@ export async function POST(req: NextRequest) {
             const toolUse = content.find((b: CB) => b.type === 'tool_use');
 
             if (toolUse && toolUse.name === 'creer_devis_sms') {
-              // Execute the tool using existing executeTool function
-              const result = await executeTool('creer_devis_sms', toolUse.input as Record<string, unknown>);
-              const parsed = JSON.parse(result);
+              // Create quote as BROUILLON — don't send anything yet
+              const inp = toolUse.input as Record<string, unknown>;
+              const serviceKey = inp.type_service as ServiceType;
+              const superficie = Number(inp.superficie);
+
+              // Check active promotions
+              let rabaisPct = 0;
+              try {
+                const promoRows = await query(
+                  `SELECT rabais_pct, services FROM promotions
+                   WHERE actif = true AND date_debut <= CURRENT_DATE AND date_fin >= CURRENT_DATE
+                   ORDER BY rabais_pct DESC LIMIT 1`,
+                );
+                if (promoRows.length > 0) {
+                  const promo = promoRows[0];
+                  const services = promo.services as string[] | null;
+                  if (!services || services.length === 0 || services.includes(serviceKey)) {
+                    rabaisPct = Number(promo.rabais_pct);
+                  }
+                }
+              } catch { /* no promo */ }
+
+              const calc = calculateQuote(serviceKey, superficie, rabaisPct);
+              const service = SERVICES[serviceKey];
+
+              const rows = await query(
+                `INSERT INTO quotes (
+                  client_nom, client_email, client_tel, client_adresse,
+                  type_service, superficie, couleur_flake, etat_plancher, notes,
+                  prix_pied_carre, rabais_pct, rabais_montant,
+                  sous_total, tps, tvq, total, depot_requis,
+                  statut
+                ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,'brouillon')
+                RETURNING id`,
+                [
+                  inp.client_nom, (inp.client_email as string) || '', (inp.client_tel as string) || '', (inp.client_adresse as string) || '',
+                  serviceKey, superficie, (inp.couleur_flake as string) || null, (inp.etat_plancher as string) || null, (inp.notes as string) || null,
+                  calc.prix_pied_carre, rabaisPct, calc.rabais_montant,
+                  calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
+                ]
+              );
+              const quoteId = rows[0].id as number;
+
               const summary = [
-                `✅ <b>Devis #${parsed.devis_id} cree!</b>`,
+                `📋 <b>Devis #${quoteId} cree (brouillon)</b>`,
                 ``,
-                `👤 ${parsed.client}`,
-                `📞 ${parsed.telephone}`,
-                `🔧 ${parsed.service} — ${parsed.superficie}`,
-                parsed.couleur !== 'aucune' ? `🎨 ${parsed.couleur}` : '',
+                `👤 ${inp.client_nom}`,
+                inp.client_tel ? `📞 ${inp.client_tel}` : '',
+                inp.client_email ? `📧 ${inp.client_email}` : '',
+                inp.client_adresse ? `🏠 ${inp.client_adresse}` : '',
+                `🔧 ${service.label} — ${superficie} pi²`,
+                inp.couleur_flake ? `🎨 ${inp.couleur_flake}` : '',
+                inp.etat_plancher ? `🧱 ${inp.etat_plancher}` : '',
+                rabaisPct > 0 ? `🏷 Rabais ${rabaisPct}%` : '',
                 ``,
-                `💰 Total: ${parsed.total}`,
-                `💳 Depot: ${parsed.depot}`,
-                `📱 SMS: ${parsed.sms_envoye ? 'Envoye' : 'Non envoye'}`,
+                `💰 Total: ${formatMoney(calc.total)}`,
+                `💳 Depot: ${formatMoney(calc.depot_requis)}`,
                 ``,
-                `🔗 <a href="${parsed.lien_dashboard}">Voir le devis</a>`,
+                `⚠️ <b>En attente d'approbation</b>`,
               ].filter(Boolean).join('\n');
-              await sendTelegram(chatId, summary);
+
+              const buttons = {
+                inline_keyboard: [
+                  [
+                    { text: '✅ Approuver et envoyer', callback_data: `approve_quote_${quoteId}` },
+                    { text: '❌ Rejeter', callback_data: `reject_quote_${quoteId}` },
+                  ],
+                  [
+                    { text: '📋 Modifier', url: `https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}` },
+                  ],
+                ],
+              };
+
+              await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: chatId, text: summary, parse_mode: 'HTML', reply_markup: buttons }),
+              });
             } else {
               // Claude responded with text instead of tool
               const textBlock = content.find((b: CB) => b.type === 'text');
