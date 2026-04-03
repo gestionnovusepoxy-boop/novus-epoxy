@@ -1044,10 +1044,15 @@ export async function POST(req: NextRequest) {
 <p style="color:#475569;font-size:12px;">Questions? 581-307-2678 (Jason) ou 581-307-5983 (Luca)</p>
 </div></body></html>`;
           try {
-            await sendEmail({ to: q.client_email as string, subject: `Soumission Novus Epoxy #${q.id}`, html });
-            results.push(`📧 Email envoye a ${q.client_email}`);
-          } catch {
-            results.push(`❌ Erreur email`);
+            const emailResult = await sendEmail({ to: q.client_email as string, subject: `Soumission Novus Epoxy #${q.id}`, html, via: 'gmail' });
+            if (emailResult.id && emailResult.id.startsWith('gmail-') || emailResult.id) {
+              results.push(`📧 Email envoye a ${q.client_email} (via Gmail, visible dans Messages envoyes)`);
+            } else {
+              results.push(`⚠️ Email envoye mais non confirme dans Gmail`);
+            }
+          } catch (emailErr) {
+            const errMsg = emailErr instanceof Error ? emailErr.message : 'erreur';
+            results.push(`❌ Erreur email: ${errMsg.slice(0, 80)}`);
           }
         } else if (sendViaEmail && !q.client_email) {
           results.push(`⚠️ Pas d'email pour ce client`);
