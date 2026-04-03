@@ -20,7 +20,7 @@ const TVQ_RATE = 0.09975;
 interface Expense {
   id: number; date_depense: string; fournisseur: string; description: string | null;
   categorie: string; montant_ht: number; tps: number; tvq: number; montant_ttc: number;
-  methode: string | null; reconciled: boolean; created_at: string;
+  methode: string | null; reconciled: boolean; created_at: string; receipt_url: string | null;
 }
 
 interface ScanResult {
@@ -51,6 +51,7 @@ function PageContent() {
   const [page, setPage]       = useState(1);
   const [categorie, setCat]   = useState('');
   const [search, setSearch]   = useState('');
+  const [viewingReceipt, setViewingReceipt] = useState<{ url: string; fournisseur: string } | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState('');
@@ -536,8 +537,21 @@ function PageContent() {
                 <tr key={exp.id} className="border-b border-slate-700 hover:bg-slate-700/50 transition">
                   <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm whitespace-nowrap">{formatDate(exp.date_depense)}</td>
                   <td className="px-2 sm:px-4 py-3">
-                    <p className="text-white text-xs sm:text-sm font-medium">{exp.fournisseur}</p>
-                    {exp.description && <p className="text-slate-400 text-xs">{exp.description}</p>}
+                    <div className="flex items-center gap-2">
+                      {exp.receipt_url && (
+                        <button
+                          onClick={() => setViewingReceipt({ url: exp.receipt_url!, fournisseur: exp.fournisseur })}
+                          className="flex-shrink-0 w-8 h-8 rounded bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 hover:bg-amber-500/30 transition"
+                          title="Voir la facture"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                        </button>
+                      )}
+                      <div>
+                        <p className="text-white text-xs sm:text-sm font-medium">{exp.fournisseur}</p>
+                        {exp.description && <p className="text-slate-400 text-xs">{exp.description}</p>}
+                      </div>
+                    </div>
                   </td>
                   <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">{CAT_LABEL[exp.categorie]}</td>
                   <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">{formatMoney(Number(exp.montant_ht))}</td>
@@ -563,6 +577,27 @@ function PageContent() {
             <span className="px-3 py-1.5 text-slate-400 text-sm">Page {page} / {Math.ceil(total / 25)}</span>
             <button onClick={() => setPage(p => p + 1)} disabled={page >= Math.ceil(total / 25)}
               className="px-3 py-1.5 bg-slate-700 rounded text-sm text-white disabled:opacity-40">Suivant</button>
+          </div>
+        )}
+        {/* Receipt Photo Viewer Modal */}
+        {viewingReceipt && (
+          <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setViewingReceipt(null)}>
+            <div className="relative max-w-3xl w-full max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between w-full mb-3">
+                <h3 className="text-white font-bold text-lg">Facture — {viewingReceipt.fournisseur}</h3>
+                <button
+                  onClick={() => setViewingReceipt(null)}
+                  className="w-10 h-10 bg-slate-800 hover:bg-slate-700 text-white rounded-full flex items-center justify-center text-xl transition"
+                >
+                  &times;
+                </button>
+              </div>
+              <img
+                src={viewingReceipt.url}
+                alt={`Facture ${viewingReceipt.fournisseur}`}
+                className="max-h-[80vh] w-auto rounded-xl border border-slate-700 object-contain"
+              />
+            </div>
           </div>
         )}
       </div>

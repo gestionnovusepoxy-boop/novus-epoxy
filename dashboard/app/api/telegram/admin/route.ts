@@ -2081,9 +2081,19 @@ Reponds en JSON strict:
         if (proj.length === 0) { expQuoteId = null; }
       }
 
+      // Store receipt photo in Vercel Blob
+      let receiptUrl: string | null = null;
+      try {
+        const { put } = await import('@vercel/blob');
+        const blob = await put(`receipts/facture-${Date.now()}.jpg`, imageBuffer, { access: 'public', contentType: 'image/jpeg' });
+        receiptUrl = blob.url;
+      } catch (blobErr) {
+        console.error('Receipt blob upload failed:', blobErr);
+      }
+
       const rows = await query(
-        `INSERT INTO expenses (date_depense, fournisseur, description, categorie, montant_ht, tps, tvq, montant_ttc, methode, reference, quote_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`,
+        `INSERT INTO expenses (date_depense, fournisseur, description, categorie, montant_ht, tps, tvq, montant_ttc, methode, reference, quote_id, receipt_url)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
         [
           parsed.date_depense || new Date().toISOString().slice(0, 10),
           (parsed.fournisseur || 'Inconnu').slice(0, 120),
@@ -2093,6 +2103,7 @@ Reponds en JSON strict:
           methode,
           parsed.reference || null,
           expQuoteId,
+          receiptUrl,
         ]
       );
 
