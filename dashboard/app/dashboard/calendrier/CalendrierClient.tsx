@@ -127,12 +127,30 @@ function EventDetailModal({
                   return <span className={`px-2 py-1 rounded ${cls}`}>{label}</span>;
                 })()}
               </div>
-              <a
-                href={`/dashboard/devis/${props.quoteId}`}
-                className="block w-full text-center mt-3 px-4 py-2 bg-amber-500 text-black rounded-lg font-medium text-sm hover:bg-amber-400 transition"
-              >
-                Voir devis #{props.quoteId as number}
-              </a>
+              <div className="flex gap-2 mt-3">
+                {props.tel && (
+                  <a
+                    href={`tel:${props.tel}`}
+                    className="flex-1 text-center px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-500 transition"
+                  >
+                    Appeler
+                  </a>
+                )}
+                <a
+                  href={`/dashboard/devis/${props.quoteId}`}
+                  className="flex-1 text-center px-4 py-2.5 bg-amber-500 text-black rounded-lg font-medium text-sm hover:bg-amber-400 transition"
+                >
+                  Devis #{props.quoteId as number}
+                </a>
+              </div>
+              {(props.statut === 'facture' || props.statut === 'paye') && (
+                <a
+                  href={`/dashboard/factures`}
+                  className="block w-full text-center px-4 py-2.5 bg-purple-600 text-white rounded-lg font-medium text-sm hover:bg-purple-500 transition"
+                >
+                  Voir facture
+                </a>
+              )}
             </>
           ) : (
             <>
@@ -338,9 +356,14 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
     const ev = clickInfo.event;
     let props: Record<string, unknown> = {};
     try {
-      props = typeof ev.extendedProps?.extendedProps === 'string'
-        ? JSON.parse(ev.extendedProps.extendedProps)
-        : typeof ev.extendedProps === 'object' ? JSON.parse(ev.extendedProps.extendedProps || '{}') : {};
+      // FullCalendar stores our extendedProps string inside ev.extendedProps.extendedProps
+      const raw = ev.extendedProps?.extendedProps;
+      if (typeof raw === 'string' && raw.length > 0) {
+        props = JSON.parse(raw);
+      } else if (ev.extendedProps?.type) {
+        // Direct props (shouldn't happen but fallback)
+        props = { ...ev.extendedProps };
+      }
     } catch {
       props = {};
     }
