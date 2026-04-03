@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { SERVICES, type ServiceType, formatMoney } from '@/lib/pricing';
+import { SERVICES, type ServiceType, formatMoney, getServiceDescriptionHtml } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
 
@@ -88,6 +88,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 <h2 style="color:#1e293b;margin:0 0 12px;font-size:20px;">Soumission #${quote.id}</h2>
 <p style="margin:0 0 4px;">Bonjour ${escapeHtml(quote.client_nom as string)},</p>
 <p style="margin:0 0 12px;color:#475569;">Voici votre soumission :</p>
+${getServiceDescriptionHtml(quote.type_service as string) ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin:0 0 12px;"><h3 style="color:#1e293b;margin:0 0 8px;font-size:15px;">Description des travaux</h3>${getServiceDescriptionHtml(quote.type_service as string)}</div>` : ''}
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;">
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Service</td><td style="padding:6px 0;text-align:right;font-weight:600;font-size:14px;">${service.label}</td></tr>
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Superficie</td><td style="padding:6px 0;text-align:right;font-size:14px;">${quote.superficie} pi²</td></tr>

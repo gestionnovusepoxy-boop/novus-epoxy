@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
+import { SERVICES, type ServiceType, calculateQuote, formatMoney, getServiceDescriptionHtml } from '@/lib/pricing';
 import { sendSMS, notifyAdminSMS } from '@/lib/sms';
 import { timingSafeEqual } from 'crypto';
 import { google } from 'googleapis';
@@ -1020,6 +1020,7 @@ export async function POST(req: NextRequest) {
 <h2 style="color:#1e293b;margin:0 0 12px;font-size:20px;">Soumission #${q.id}</h2>
 <p>Bonjour ${q.client_nom},</p>
 <p style="color:#475569;">Voici votre soumission pour vos travaux de plancher epoxy :</p>
+${getServiceDescriptionHtml(q.type_service as string) ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin:0 0 12px;"><h3 style="color:#1e293b;margin:0 0 8px;font-size:15px;">Description des travaux</h3>${getServiceDescriptionHtml(q.type_service as string)}</div>` : ''}
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;">
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Service</td><td style="padding:6px 0;text-align:right;font-weight:600;">${service?.label ?? q.type_service}</td></tr>
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Superficie</td><td style="padding:6px 0;text-align:right;">${q.superficie} pi2</td></tr>
