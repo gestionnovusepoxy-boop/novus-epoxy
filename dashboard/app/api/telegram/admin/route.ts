@@ -1205,6 +1205,73 @@ export async function POST(req: NextRequest) {
     const text = ((message.text ?? message.caption ?? '') as string).trim();
     if (!text || text.length < 3) return NextResponse.json({ ok: true });
 
+    // Detect quote/soumission requests from admins in the group
+    const lowerText = text.toLowerCase();
+    const isQuoteRequest = (lowerText.includes('soumission') || lowerText.includes('devis') || lowerText.includes('produit moi') || lowerText.includes('créer un devis') || lowerText.includes('creer un devis') || lowerText.includes('fait moi un devis') || lowerText.includes('fais moi un devis')) && isAdmin;
+    if (isQuoteRequest) {
+      const apiKey = process.env.ANTHROPIC_API_KEY;
+      if (apiKey) {
+        try {
+          await sendTelegram(chatId, '🤖 Je crée le devis...');
+
+          // Use Claude to extract client info and create the quote
+          const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+              'x-api-key': apiKey,
+              'anthropic-version': '2023-06-01',
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'claude-sonnet-4-6',
+              max_tokens: 1024,
+              system: `Tu es l'assistant admin de Novus Epoxy. Extrais les infos client du message et appelle l'outil creer_devis_sms. Services: flake (8.50$/pi²), metallique (12.75$/pi²), commercial (15$/pi²), couleur_unie (7.50$/pi²), quartz (11$/pi²). Si le type n'est pas clair, utilise "flake" par défaut. Si pas de téléphone, mets "0000000000".`,
+              tools: [TOOLS[0]], // creer_devis_sms tool
+              messages: [{ role: 'user', content: text }],
+            }),
+          });
+
+          if (claudeRes.ok) {
+            const data = await claudeRes.json();
+            type CB = { type: string; text?: string; id?: string; name?: string; input?: Record<string, unknown> };
+            const content = data.content as CB[];
+            const toolUse = content.find((b: CB) => b.type === 'tool_use');
+
+            if (toolUse && toolUse.name === 'creer_devis_sms') {
+              // Execute the tool using existing executeTool function
+              const result = await executeTool('creer_devis_sms', toolUse.input as Record<string, unknown>);
+              const parsed = JSON.parse(result);
+              const summary = [
+                `✅ <b>Devis #${parsed.devis_id} cree!</b>`,
+                ``,
+                `👤 ${parsed.client}`,
+                `📞 ${parsed.telephone}`,
+                `🔧 ${parsed.service} — ${parsed.superficie}`,
+                parsed.couleur !== 'aucune' ? `🎨 ${parsed.couleur}` : '',
+                ``,
+                `💰 Total: ${parsed.total}`,
+                `💳 Depot: ${parsed.depot}`,
+                `📱 SMS: ${parsed.sms_envoye ? 'Envoye' : 'Non envoye'}`,
+                ``,
+                `🔗 <a href="${parsed.lien_dashboard}">Voir le devis</a>`,
+              ].filter(Boolean).join('\n');
+              await sendTelegram(chatId, summary);
+            } else {
+              // Claude responded with text instead of tool
+              const textBlock = content.find((b: CB) => b.type === 'text');
+              if (textBlock?.text) await sendTelegram(chatId, textBlock.text);
+            }
+          } else {
+            await sendTelegram(chatId, '❌ Erreur API Claude');
+          }
+        } catch (err) {
+          console.error('[Telegram Group Quote]', err);
+          await sendTelegram(chatId, `❌ Erreur: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
+        }
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     // If message starts with "Aria" — respond as Aria in the group
     const startsWithAria = /^aria[\s,!?:]/i.test(text);
     if (startsWithAria) {
