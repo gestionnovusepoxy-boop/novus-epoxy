@@ -52,11 +52,11 @@ export const SERVICE_DESCRIPTION: Record<string, { etapes: string[]; epaisseur_t
   metallique: {
     etapes: [
       'Meulage au diamant de la surface',
-      'Application du basecoat époxy (8-12 mils)',
-      'Sablage et application des pigments de couleur époxy métallique (12-20 mils)',
-      'Topcoat uréthane haute performance (2-4 mils)',
+      'Application du basecoat époxy (15-20 mils)',
+      'Sablage et application des pigments de couleur époxy métallique (50 mils)',
+      'Topcoat uréthane haute performance (45-55 mils)',
     ],
-    epaisseur_totale: '22-36 mils (0.56-0.91 mm)',
+    epaisseur_totale: '110-125 mils (2.79-3.18 mm)',
   },
   quartz: {
     etapes: [
