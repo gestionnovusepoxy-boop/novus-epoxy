@@ -688,8 +688,72 @@ function Section({ title, jobs, onRefresh }: { title: string; jobs: Travail[]; o
 }
 
 /* ─── Page ─── */
+/* ─── Completed Job Card (read-only) ─── */
+function CompletedJobCard({ job }: { job: Travail }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-white font-semibold text-base">{job.client_nom}</h3>
+          {job.client_adresse && (
+            <p className="text-slate-500 text-sm">{job.client_adresse}</p>
+          )}
+        </div>
+        <span className="text-xs font-medium px-2.5 py-1 rounded-full border bg-green-500/20 text-green-300 border-green-500/30 whitespace-nowrap">
+          Termine
+        </span>
+      </div>
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <span className="text-slate-300">
+          {SERVICE_LABEL[job.type_service] || job.type_service} — {job.superficie} pi2
+        </span>
+      </div>
+
+      {job.jour1_date && (
+        <div className="flex items-center gap-2 text-sm text-slate-500">
+          <span>Realise: {formatDateFr(job.jour1_date)}</span>
+          {job.jour2_date && <span>— {formatDateFr(job.jour2_date)}</span>}
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+        <span className="text-slate-400">Total: <span className="text-white font-medium">{formatMoney(Number(job.total))}</span></span>
+      </div>
+
+      <button
+        onClick={() => setExpanded(!expanded)}
+        className="text-xs text-slate-500 hover:text-slate-300 transition"
+      >
+        {expanded ? '▾ Masquer rapport' : '▸ Voir rapport du projet'}
+      </button>
+
+      {expanded && (
+        <div className="space-y-3">
+          <PhotoSection quoteId={job.id} />
+          <HoursSection quoteId={job.id} />
+          <ExpensesSection quoteId={job.id} />
+          <ProfitSection quoteId={job.id} total={Number(job.total)} />
+        </div>
+      )}
+
+      <div className="flex justify-end">
+        <Link
+          href={`/dashboard/devis/${job.id}`}
+          className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium px-3 py-2 rounded-lg transition"
+        >
+          Voir devis
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 function PageContent() {
   const [data, setData] = useState<Travail[]>([]);
+  const [tab, setTab] = useState<'actifs' | 'termines'>('actifs');
 
   const load = useCallback(async () => {
     const res = await fetch('/api/travaux');
@@ -698,12 +762,16 @@ function PageContent() {
     setData(json.data ?? []);
   }, []);
 
-  // Group jobs
+  // Split active vs completed
+  const activeJobs = data.filter(j => j.statut !== 'complete');
+  const completedJobs = data.filter(j => j.statut === 'complete');
+
+  // Group active jobs
   const thisWeek: Travail[] = [];
   const upcoming: Travail[] = [];
   const noDates: Travail[] = [];
 
-  for (const job of data) {
+  for (const job of activeJobs) {
     if (!job.jour1_date) {
       noDates.push(job);
     } else if (isThisWeek(job.jour1_date)) {
@@ -713,23 +781,55 @@ function PageContent() {
     }
   }
 
+  const tabCls = (t: 'actifs' | 'termines') =>
+    `px-4 py-2 text-sm font-medium rounded-lg transition ${
+      tab === t
+        ? 'bg-amber-500 text-black'
+        : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
+    }`;
+
   return (
     <PollingProvider onRefresh={load}>
       <div className="p-6 space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-white">Travaux en cours</h2>
-          <span className="text-slate-400 text-sm">{data.length} travaux actifs</span>
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <h2 className="text-2xl font-bold text-white">Travaux</h2>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setTab('actifs')} className={tabCls('actifs')}>
+              En cours ({activeJobs.length})
+            </button>
+            <button onClick={() => setTab('termines')} className={tabCls('termines')}>
+              Termines ({completedJobs.length})
+            </button>
+          </div>
         </div>
 
-        {data.length === 0 && (
-          <div className="bg-slate-800 border border-slate-700 rounded-xl p-12 text-center">
-            <p className="text-slate-500 text-sm">Aucun travail en cours</p>
-          </div>
+        {tab === 'actifs' && (
+          <>
+            {activeJobs.length === 0 && (
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-12 text-center">
+                <p className="text-slate-500 text-sm">Aucun travail en cours</p>
+              </div>
+            )}
+            <Section title="Cette semaine" jobs={thisWeek} onRefresh={load} />
+            <Section title="Prochaines semaines" jobs={upcoming} onRefresh={load} />
+            <Section title="En attente de dates" jobs={noDates} onRefresh={load} />
+          </>
         )}
 
-        <Section title="Cette semaine" jobs={thisWeek} onRefresh={load} />
-        <Section title="Prochaines semaines" jobs={upcoming} onRefresh={load} />
-        <Section title="En attente de dates" jobs={noDates} onRefresh={load} />
+        {tab === 'termines' && (
+          <>
+            {completedJobs.length === 0 && (
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-12 text-center">
+                <p className="text-slate-500 text-sm">Aucun projet termine pour le moment</p>
+              </div>
+            )}
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {completedJobs.map(job => (
+                <CompletedJobCard key={job.id} job={job} />
+              ))}
+            </div>
+          </>
+        )}
       </div>
     </PollingProvider>
   );
