@@ -128,24 +128,24 @@ function EventDetailModal({
                 })()}
               </div>
               <div className="flex gap-2 mt-3">
-                {props.tel && (
+                {String(props.tel || '') && (
                   <a
-                    href={`tel:${props.tel}`}
+                    href={`tel:${String(props.tel)}`}
                     className="flex-1 text-center px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium text-sm hover:bg-green-500 transition"
                   >
                     Appeler
                   </a>
                 )}
                 <a
-                  href={`/dashboard/devis/${props.quoteId}`}
+                  href={`/dashboard/devis/${String(props.quoteId)}`}
                   className="flex-1 text-center px-4 py-2.5 bg-amber-500 text-black rounded-lg font-medium text-sm hover:bg-amber-400 transition"
                 >
-                  Devis #{props.quoteId as number}
+                  Devis #{String(props.quoteId)}
                 </a>
               </div>
               {(props.statut === 'facture' || props.statut === 'paye') && (
                 <a
-                  href={`/dashboard/factures`}
+                  href="/dashboard/factures"
                   className="block w-full text-center px-4 py-2.5 bg-purple-600 text-white rounded-lg font-medium text-sm hover:bg-purple-500 transition"
                 >
                   Voir facture
