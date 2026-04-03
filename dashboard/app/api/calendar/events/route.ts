@@ -46,7 +46,7 @@ export async function GET(req: NextRequest) {
     const j2 = (b.jour2_date as Date).toISOString().split('T')[0];
 
     const statusLabel = isComplete ? ' ✓' : isProvisoire ? ' ?' : '';
-    const extra = JSON.stringify({ type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut });
+    const extra = { type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut };
 
     return [
       {
@@ -86,12 +86,12 @@ export async function GET(req: NextRequest) {
     allDay: e.all_day as boolean,
     backgroundColor: (e.color as string) || '#f59e0b',
     borderColor: (e.color as string) || '#f59e0b',
-    extendedProps: JSON.stringify({
+    extendedProps: {
       type: 'manual',
       eventId: e.id,
       description: e.description || '',
       event_type: e.event_type || 'manual',
-    }),
+    },
     editable: true,
   }));
 

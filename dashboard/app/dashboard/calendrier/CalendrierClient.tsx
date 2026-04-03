@@ -399,17 +399,14 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
   const handleEventClick = useCallback((clickInfo: EventClickArg) => {
     const ev = clickInfo.event;
     let props: Record<string, unknown> = {};
-    try {
-      // FullCalendar stores our extendedProps string inside ev.extendedProps.extendedProps
-      const raw = ev.extendedProps?.extendedProps;
-      if (typeof raw === 'string' && raw.length > 0) {
-        props = JSON.parse(raw);
-      } else if (ev.extendedProps?.type) {
-        // Direct props (shouldn't happen but fallback)
-        props = { ...ev.extendedProps };
-      }
-    } catch {
-      props = {};
+    // extendedProps is now sent as an object from API, FullCalendar merges it directly
+    const ep = ev.extendedProps || {};
+    if (ep.type) {
+      props = { ...ep };
+    } else if (typeof ep.extendedProps === 'string') {
+      try { props = JSON.parse(ep.extendedProps); } catch { props = {}; }
+    } else if (typeof ep.extendedProps === 'object') {
+      props = { ...ep.extendedProps };
     }
     setSelectedEvent({
       id: ev.id,
