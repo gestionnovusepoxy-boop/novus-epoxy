@@ -180,10 +180,9 @@ export async function POST(req: NextRequest) {
     await Promise.all(phones.map(phone => sendSMS(phone, smsAlert).catch(() => {}))).catch(() => {});
   }
 
-  // --- 4. Auto-acknowledge with personalized context ---
-  const contactPerson = quoteId ? 'Luca' : 'Luca ou Jason';
+  // --- 4. Auto-acknowledge + ask for quote info ---
   const greeting = prenom ? `Merci ${prenom}!` : 'Merci!';
-  const autoReply = `${greeting} On a bien recu ton message. ${contactPerson} te rappelle dans les prochaines minutes. — Novus Epoxy`;
+  const autoReply = `${greeting} On a bien recu votre message. Si vous avez besoin d'une soumission gratuite, repondez avec: le type de surface (garage, sous-sol, balcon...), la superficie estimee en pi2, et votre adresse. On vous revient rapidement! — Novus Epoxy`;
 
   return new NextResponse(
     `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${autoReply}</Message></Response>`,
