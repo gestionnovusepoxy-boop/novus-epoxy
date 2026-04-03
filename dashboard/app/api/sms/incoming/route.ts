@@ -180,9 +180,26 @@ export async function POST(req: NextRequest) {
     await Promise.all(phones.map(phone => sendSMS(phone, smsAlert).catch(() => {}))).catch(() => {});
   }
 
-  // --- 4. Auto-acknowledge + ask for quote info ---
+  // --- 4. Smart auto-reply based on what the client said ---
   const greeting = prenom ? `Merci ${prenom}!` : 'Merci!';
-  const autoReply = `${greeting} On a bien recu votre message. Si vous avez besoin d'une soumission gratuite, repondez avec: le type de surface (garage, sous-sol, balcon...), la superficie estimee en pi2, et votre adresse. On vous revient rapidement! — Novus Epoxy`;
+  const lower = body.toLowerCase();
+
+  // Detect intent from message
+  const wantsQuote = lower.includes('soumission') || lower.includes('devis') || lower.includes('prix') || lower.includes('combien') || lower.includes('cout') || lower.includes('coût') || lower.includes('estimation') || lower.includes('estimé');
+  const hasQuestion = body.includes('?') || lower.includes('est-ce') || lower.includes('est ce') || lower.includes('comment') || lower.includes('quand') || lower.includes('disponible');
+  const isPositive = lower.includes('oui') || lower.includes('ok') || lower.includes('interesse') || lower.includes('intéressé') || lower.includes('parfait') || lower.includes('super') || lower.includes("j'aimerais") || lower.includes('je veux') || lower.includes('je voudrais');
+  const isNegative = lower.includes('non') || lower.includes('pas interesse') || lower.includes('pas intéressé') || lower.includes('arret') || lower.includes('stop');
+
+  let autoReply: string;
+  if (isNegative) {
+    autoReply = `${greeting} Aucun probleme, on respecte votre choix. Si jamais vous changez d'idee, n'hesitez pas a nous recontacter! — Novus Epoxy`;
+  } else if (wantsQuote || isPositive) {
+    autoReply = `${greeting} Parfait! Pour vous envoyer une soumission gratuite, on a besoin de: 1) Type de surface (garage, sous-sol, balcon...) 2) Superficie estimee en pi2 3) Votre adresse 4) Votre courriel. Repondez ici et on vous prepare ca! — Novus Epoxy`;
+  } else if (hasQuestion) {
+    autoReply = `${greeting} Bonne question! Un de nos specialistes va vous repondre tres bientot. En attendant, si vous voulez une soumission gratuite, envoyez-nous: le type de surface, la superficie en pi2, votre adresse et courriel. — Novus Epoxy`;
+  } else {
+    autoReply = `${greeting} On a bien recu votre message! Voulez-vous une soumission gratuite? Si oui, repondez avec: 1) Type de surface (garage, sous-sol, balcon...) 2) Superficie estimee en pi2 3) Votre adresse 4) Votre courriel. — Novus Epoxy`;
+  }
 
   return new NextResponse(
     `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${autoReply}</Message></Response>`,
