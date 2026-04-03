@@ -45,7 +45,7 @@ export function DashboardShell({ email, signOutAction, sidebar, children }: Dash
           </button>
         </div>
 
-        <div onClick={() => setOpen(false)}>
+        <div className="flex-1 overflow-y-auto" onClick={() => setOpen(false)}>
           {sidebar}
         </div>
 
