@@ -19,6 +19,7 @@ export interface ParsedProject {
   adresse: string | null;
   etat_plancher: string | null;
   couleur: string | null;
+  email: string | null;
   confidence: number; // 0-100
 }
 
@@ -110,9 +111,13 @@ export function parseProjectInfo(text: string): ParsedProject | null {
     }
   }
 
-  // If "commercial" detected as espace AND no other service, set service to commercial
-  if (type_espace === 'Commercial' && !type_service) {
-    type_service = 'commercial';
+  // Default service based on espace type if no explicit service mentioned
+  if (!type_service) {
+    if (type_espace === 'Commercial' || type_espace === 'Industriel' || type_espace === 'Entrepôt') {
+      type_service = 'commercial';
+    } else if (type_espace === 'Garage' || type_espace === 'Sous-sol' || type_espace === 'Balcon') {
+      type_service = 'flake'; // Most common residential service
+    }
   }
 
   // Superficie (pieds carrés)
@@ -183,6 +188,11 @@ export function parseProjectInfo(text: string): ParsedProject | null {
     }
   }
 
+  // Extract email if present
+  let email: string | null = null;
+  const emailMatch = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  if (emailMatch) email = emailMatch[0].toLowerCase();
+
   // Confidence scoring
   let confidence = 0;
   if (type_espace) confidence += 15;
@@ -191,10 +201,11 @@ export function parseProjectInfo(text: string): ParsedProject | null {
   if (adresse) confidence += 15;
   if (etat_plancher) confidence += 10;
   if (couleur) confidence += 10;
+  if (email) confidence += 5;
 
   if (confidence < 30) return null;
 
-  return { type_espace, type_service, superficie, adresse, etat_plancher, couleur, confidence };
+  return { type_espace, type_service, superficie, adresse, etat_plancher, couleur, email, confidence };
 }
 
 // ── Try to auto-create a quote from a client reply ──────────────────────
@@ -214,6 +225,12 @@ export async function tryCreateQuoteFromReply(
 
   const lead = leadRows[0] as { nom: string; email: string; telephone: string };
 
+  // Use email from SMS if lead has none
+  if (parsed.email && !lead.email) {
+    lead.email = parsed.email;
+    await query(`UPDATE crm_leads SET email = $1, updated_at = NOW() WHERE id = $2`, [parsed.email, leadId]).catch(() => {});
+  }
+
   // Check blacklists
   if (lead.email && BLACKLISTED_EMAILS.includes(lead.email.toLowerCase())) return null;
   const cleanPhone = (lead.telephone || '').replace(/\D/g, '').slice(-10);
@@ -222,8 +239,8 @@ export async function tryCreateQuoteFromReply(
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
 
-  // ── HIGH CONFIDENCE: auto-create quote ────────────────────────────────
-  if (parsed.confidence >= 50 && parsed.type_service && parsed.superficie) {
+  // ── AUTO-CREATE QUOTE — need at least a service + superficie ──────────
+  if (parsed.confidence >= 40 && parsed.type_service && parsed.superficie) {
     // Check active promotions
     let rabaisPct = 0;
     try {
