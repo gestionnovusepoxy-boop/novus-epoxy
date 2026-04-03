@@ -139,13 +139,15 @@ body {
 }
 
 /* AM events: stick to top of cell */
-.novus-calendar .fc .novus-am {
+.novus-calendar .fc .fc-daygrid-event-harness:has(.novus-am) {
   margin-bottom: auto !important;
+  margin-top: 0 !important;
 }
 
 /* PM events: stick to bottom of cell */
-.novus-calendar .fc .novus-pm {
+.novus-calendar .fc .fc-daygrid-event-harness:has(.novus-pm) {
   margin-top: auto !important;
+  margin-bottom: 0 !important;
 }
 
 .novus-calendar .fc .fc-event:hover {
