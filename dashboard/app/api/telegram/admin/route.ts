@@ -944,8 +944,8 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({ callback_query_id: cbId }),
     });
 
-    // approve_quote_123
-    if (cbData.startsWith('approve_quote_')) {
+    // approve_quote_123 — Step 1: approve and show send method choice
+    if (cbData.startsWith('approve_quote_') && !cbData.includes('_via_')) {
       const quoteId = parseInt(cbData.replace('approve_quote_', ''));
       try {
         const rows = await query('SELECT * FROM quotes WHERE id = $1', [quoteId]);
@@ -962,13 +962,59 @@ export async function POST(req: NextRequest) {
         // Approve the quote
         await query(`UPDATE quotes SET statut = 'approuve', approved_at = NOW() WHERE id = $1`, [quoteId]);
 
-        // Now send it to the client via the send logic
+        // Show send method buttons
+        const sendButtons = {
+          inline_keyboard: [
+            [
+              { text: '📧 Envoyer par Email', callback_data: `approve_quote_${quoteId}_via_email` },
+              { text: '📱 Envoyer par SMS', callback_data: `approve_quote_${quoteId}_via_sms` },
+            ],
+            [
+              { text: '📧+📱 Les deux', callback_data: `approve_quote_${quoteId}_via_both` },
+            ],
+          ],
+        };
+
+        await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: cbChatId,
+            text: `✅ Devis #${quoteId} approuve pour ${q.client_nom}!\n\nComment veux-tu l'envoyer?`,
+            reply_markup: sendButtons,
+          }),
+        });
+        return NextResponse.json({ ok: true });
+      } catch (err) {
+        console.error('[Telegram] approve error:', err);
+        await sendTelegram(cbChatId, `Erreur: ${err instanceof Error ? err.message : 'erreur'}`);
+        return NextResponse.json({ ok: true });
+      }
+    }
+
+    // approve_quote_123_via_email/sms/both — Step 2: actually send
+    if (cbData.match(/^approve_quote_\d+_via_(email|sms|both)$/)) {
+      const parts = cbData.match(/^approve_quote_(\d+)_via_(email|sms|both)$/);
+      if (!parts) return NextResponse.json({ ok: true });
+      const quoteId = parseInt(parts[1]);
+      const method = parts[2]; // email, sms, or both
+      try {
+        const rows = await query('SELECT * FROM quotes WHERE id = $1', [quoteId]);
+        const q = rows[0];
+        if (!q) {
+          await sendTelegram(cbChatId, `Devis #${quoteId} introuvable.`);
+          return NextResponse.json({ ok: true });
+        }
+
         const secretToken = q.secret_token as string;
+        const service = SERVICES[q.type_service as ServiceType];
+        const solde70 = formatMoney(Number(q.total) - Number(q.depot_requis));
+        const sendViaEmail = method === 'email' || method === 'both';
+        const sendViaSms = method === 'sms' || method === 'both';
+        const results: string[] = [];
 
-        if (q.client_email) {
-          const service = SERVICES[q.type_service as ServiceType];
-          const solde70 = formatMoney(Number(q.total) - Number(q.depot_requis));
-
+        // EMAIL
+        if (sendViaEmail && q.client_email) {
           const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:16px;background:#ffffff;">
 <h2 style="color:#1e293b;margin:0 0 12px;font-size:20px;">Soumission #${q.id}</h2>
@@ -997,25 +1043,31 @@ export async function POST(req: NextRequest) {
 </div>
 <p style="color:#475569;font-size:12px;">Questions? 581-307-2678 (Jason) ou 581-307-5983 (Luca)</p>
 </div></body></html>`;
-
           try {
             await sendEmail({ to: q.client_email as string, subject: `Soumission Novus Epoxy #${q.id}`, html });
-            await query(`UPDATE quotes SET statut = 'envoye', sent_at = NOW() WHERE id = $1`, [quoteId]);
-            await sendTelegram(cbChatId, `Devis #${quoteId} approuve et envoye a ${q.client_nom} (${q.client_email})`);
+            results.push(`📧 Email envoye a ${q.client_email}`);
           } catch {
-            await sendTelegram(cbChatId, `Devis #${quoteId} approuve mais erreur email. Va dans le dashboard pour envoyer manuellement.`);
+            results.push(`❌ Erreur email`);
           }
-        } else {
-          // No email — send by SMS if phone available
-          if (q.client_tel) {
-            const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${SERVICES[q.type_service as ServiceType]?.label ?? q.type_service}\n${q.superficie} pi2\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nPlanifier: https://novus-epoxy.vercel.app/reservation/${q.id}\n\nQuestions? 581-307-2678`;
-            await sendSMS(q.client_tel as string, smsMsg);
-            await query(`UPDATE quotes SET statut = 'envoye', sent_at = NOW() WHERE id = $1`, [quoteId]);
-            await sendTelegram(cbChatId, `Devis #${quoteId} approuve et envoye par SMS a ${q.client_nom} (${q.client_tel})`);
-          } else {
-            await sendTelegram(cbChatId, `Devis #${quoteId} approuve mais pas d'email ni telephone. Va dans le dashboard.`);
-          }
+        } else if (sendViaEmail && !q.client_email) {
+          results.push(`⚠️ Pas d'email pour ce client`);
         }
+
+        // SMS
+        if (sendViaSms && q.client_tel) {
+          const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${service?.label ?? q.type_service}\n${q.superficie} pi2\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nDetails: https://novus-epoxy.vercel.app/paiement/${q.id}\n\nQuestions? 581-307-2678`;
+          try {
+            await sendSMS(q.client_tel as string, smsMsg);
+            results.push(`📱 SMS envoye a ${q.client_tel}`);
+          } catch {
+            results.push(`❌ Erreur SMS`);
+          }
+        } else if (sendViaSms && !q.client_tel) {
+          results.push(`⚠️ Pas de telephone pour ce client`);
+        }
+
+        await query(`UPDATE quotes SET statut = 'envoye', sent_at = NOW() WHERE id = $1`, [quoteId]);
+        await sendTelegram(cbChatId, `✅ Devis #${quoteId} envoye a ${q.client_nom}!\n\n${results.join('\n')}`);
       } catch (err) {
         console.error('Approve quote error:', err);
         await sendTelegram(cbChatId, `Erreur: ${err instanceof Error ? err.message : String(err)}`);
