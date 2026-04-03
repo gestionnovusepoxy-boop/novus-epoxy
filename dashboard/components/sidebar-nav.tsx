@@ -32,6 +32,7 @@ const SECTIONS: NavSection[] = [
     links: [
       { href: '/dashboard/clients',  label: 'Clients',    icon: '\u{1F465}' },
       { href: '/dashboard/emails', label: 'Emails',       icon: '\u{1F4E7}' },
+      { href: '/dashboard/textos', label: 'Textos',       icon: '\u{1F4F1}' },
     ],
   },
   {

@@ -53,6 +53,15 @@ export async function sendSMS(to: string, body: string, fromOverride?: string, _
       return false;
     }
 
+    // Log SMS to database
+    try {
+      const { query: dbQuery } = await import('@/lib/db');
+      await dbQuery(
+        `INSERT INTO sms_logs (direction, from_number, to_number, message, statut) VALUES ('outbound', $1, $2, $3, 'sent')`,
+        [from, phone, body]
+      );
+    } catch { /* log failed — don't block send */ }
+
     return true;
   } catch (err) {
     console.error('Failed to send SMS:', err);

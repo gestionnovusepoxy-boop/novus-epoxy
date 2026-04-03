@@ -79,6 +79,14 @@ export async function POST(req: NextRequest) {
   const cleaned = from.replace(/[^0-9]/g, '');
   const last10 = cleaned.slice(-10);
 
+  // Log incoming SMS
+  try {
+    await query(
+      `INSERT INTO sms_logs (direction, from_number, to_number, message, statut) VALUES ('inbound', $1, $2, $3, 'received')`,
+      [from, process.env.TWILIO_PHONE_NUMBER || '', body]
+    );
+  } catch { /* log failed */ }
+
   // Check blacklist — ignore our own numbers
   if (BLACKLIST.includes(last10)) {
     return new NextResponse(
