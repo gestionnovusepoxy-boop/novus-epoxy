@@ -33,7 +33,11 @@ export async function GET(req: NextRequest) {
     const statut = b.statut as string;
 
     const isProvisoire = statut === 'en_attente';
-    const color = isProvisoire ? '#f59e0b' : '#3b82f6';
+    const isComplete = statut === 'complete' || statut === 'paye' || statut === 'facture';
+
+    // Color coding: green=complete, amber=provisoire, blue=confirmed active
+    const color1 = isComplete ? '#22c55e' : isProvisoire ? '#f59e0b' : '#3b82f6';
+    const color2 = isComplete ? '#16a34a' : isProvisoire ? '#d97706' : '#2563eb';
 
     const slot1 = (b.jour1_slot as string) === 'matin' ? { start: '08:00', end: '12:00' } : { start: '12:00', end: '16:00' };
     const slot2 = (b.jour2_slot as string) === 'matin' ? { start: '08:00', end: '12:00' } : { start: '12:00', end: '16:00' };
@@ -41,28 +45,29 @@ export async function GET(req: NextRequest) {
     const j1 = (b.jour1_date as Date).toISOString().split('T')[0];
     const j2 = (b.jour2_date as Date).toISOString().split('T')[0];
 
+    const statusLabel = isComplete ? ' ✓' : isProvisoire ? ' ?' : '';
     const extra = JSON.stringify({ type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut });
 
     return [
       {
         id: `booking-${b.id}-j1`,
-        title: `J1: ${nom} — ${service}`,
+        title: `J1: ${nom} — ${service}${statusLabel}`,
         start: `${j1}T${slot1.start}:00`,
         end: `${j1}T${slot1.end}:00`,
-        backgroundColor: color,
-        borderColor: color,
+        backgroundColor: color1,
+        borderColor: color1,
         extendedProps: extra,
-        editable: true,
+        editable: !isComplete,
       },
       {
         id: `booking-${b.id}-j2`,
-        title: `J2: ${nom} — ${service}`,
+        title: `J2: ${nom} — ${service}${statusLabel}`,
         start: `${j2}T${slot2.start}:00`,
         end: `${j2}T${slot2.end}:00`,
-        backgroundColor: isProvisoire ? '#d97706' : '#2563eb',
-        borderColor: isProvisoire ? '#d97706' : '#2563eb',
+        backgroundColor: color2,
+        borderColor: color2,
         extendedProps: extra,
-        editable: true,
+        editable: !isComplete,
       },
     ];
   });

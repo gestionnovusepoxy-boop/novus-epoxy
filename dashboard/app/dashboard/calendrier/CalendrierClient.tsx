@@ -114,9 +114,18 @@ function EventDetailModal({
                 </a>
               )}
               <div className="flex items-center gap-2 text-xs mt-2">
-                <span className={`px-2 py-1 rounded ${props.statut === 'en_attente' ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30' : 'bg-blue-500/20 text-blue-400 border border-blue-500/30'}`}>
-                  {props.statut === 'en_attente' ? 'Provisoire' : 'Confirmé'}
-                </span>
+                {(() => {
+                  const s = props.statut as string;
+                  const isComplete = s === 'complete' || s === 'paye' || s === 'facture';
+                  const isProvisoire = s === 'en_attente';
+                  const cls = isComplete
+                    ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                    : isProvisoire
+                    ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+                    : 'bg-blue-500/20 text-blue-400 border border-blue-500/30';
+                  const label = isComplete ? 'Complete' : isProvisoire ? 'Provisoire' : 'Confirme';
+                  return <span className={`px-2 py-1 rounded ${cls}`}>{label}</span>;
+                })()}
               </div>
               <a
                 href={`/dashboard/devis/${props.quoteId}`}

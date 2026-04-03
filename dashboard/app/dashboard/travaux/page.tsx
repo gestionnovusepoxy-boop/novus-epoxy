@@ -45,9 +45,13 @@ const SERVICE_LABEL: Record<string, string> = {
 };
 
 const STATUT_BADGE: Record<string, { label: string; cls: string }> = {
-  depot_paye: { label: 'Depot paye', cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
-  planifie:   { label: 'Planifie',   cls: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
-  complete:   { label: 'Complete',   cls: 'bg-green-500/20 text-green-300 border-green-500/30' },
+  approuve:   { label: 'Approuve',       cls: 'bg-blue-500/20 text-blue-300 border-blue-500/30' },
+  depot_paye: { label: 'Depot paye',     cls: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+  planifie:   { label: 'Planifie',       cls: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30' },
+  en_cours:   { label: 'En cours',       cls: 'bg-amber-500/20 text-amber-300 border-amber-500/30' },
+  complete:   { label: 'Complete',       cls: 'bg-green-500/20 text-green-300 border-green-500/30' },
+  facture:    { label: 'Facture',        cls: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
+  paye:       { label: 'Paye',           cls: 'bg-yellow-500/20 text-yellow-300 border-yellow-500/30' },
 };
 
 const CHECKLIST_ITEMS = [
