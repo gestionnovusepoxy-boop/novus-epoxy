@@ -44,7 +44,7 @@ const TOOLS = [
         client_tel: { type: 'string', description: 'Numero de telephone du client (10 chiffres)' },
         client_email: { type: 'string', description: 'Email du client (optionnel)', default: '' },
         client_adresse: { type: 'string', description: 'Adresse du client (optionnel)', default: '' },
-        type_service: { type: 'string', enum: ['flake', 'metallique', 'commercial'], description: 'Type de service epoxy' },
+        type_service: { type: 'string', enum: ['flake', 'metallique', 'couleur_unie', 'quartz', 'antiderapant', 'commercial', 'meulage'], description: 'Type de service epoxy (flake=flocon, couleur_unie=uni, metallique, quartz, antiderapant=balcon/escalier, commercial, meulage=diamant)' },
         superficie: { type: 'number', description: 'Superficie en pieds carres' },
         couleur_flake: { type: 'string', description: 'Couleur du flake Torginol (optionnel)', default: '' },
         notes: { type: 'string', description: 'Notes additionnelles (optionnel)', default: '' },
@@ -120,7 +120,7 @@ const TOOLS = [
     input_schema: {
       type: 'object',
       properties: {
-        type_service: { type: 'string', enum: ['flake', 'metallique', 'commercial'] },
+        type_service: { type: 'string', enum: ['flake', 'metallique', 'couleur_unie', 'quartz', 'antiderapant', 'commercial', 'meulage'] },
         superficie: { type: 'number', description: 'Superficie en pieds carres' },
       },
       required: ['type_service', 'superficie'],
@@ -912,13 +912,17 @@ TU PEUX:
 
 IMPORTANT: Ne JAMAIS envoyer les prix/tarifs par email aux prospects. Les prix sont donnes uniquement dans les soumissions officielles.
 
-SERVICES OFFERTS:
-- Planchers epoxy metallique (residentiel et commercial)
-- Planchers epoxy flake/flocon (garages, sous-sols, commerces)
-- Planchers epoxy commercial (cuisines, entrepots)
-- Planchers epoxy couleur unie
-- Revetement balcons et escaliers exterieurs (flake antiderapant)
-- Reparation beton / Auto-nivelant
+SERVICES OFFERTS (type_service entre parentheses):
+- Planchers epoxy flake/flocon (flake) — 8.50$/pi2
+- Planchers epoxy metallique (metallique) — 12.75$/pi2
+- Planchers epoxy couleur unie (couleur_unie) — 7.50$/pi2
+- Planchers epoxy quartz (quartz) — 11.00$/pi2
+- Revetement balcons/escaliers antiderapant (antiderapant) — 10.00$/pi2
+- Planchers epoxy commercial (commercial) — 15.00$/pi2
+- Meulage au diamant (meulage) — 3.50$/pi2
+
+IMPORTANT: Quand le client dit "couleur unie" ou "uni", utilise type_service="couleur_unie", PAS "flake".
+Quand le client dit "flocon" ou "flake", utilise type_service="flake".
 
 INFOS BUSINESS:
 - RBQ: 5861-8471-01
