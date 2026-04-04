@@ -256,6 +256,22 @@ const TOOLS = [
       required: [],
     },
   },
+  {
+    name: 'creer_rappel',
+    description: 'Cree un rappel/rendez-vous dans le calendrier du dashboard. Utilise quand Luca/Jason dit "rappel payer Bell le 12", "rdv estimation chez X le 15 avril", "rappel appeler client tel date". Supporte les rappels recurrents mensuels.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        titre: { type: 'string', description: 'Titre du rappel (ex: Payer Bell, Appeler M. Tremblay)' },
+        date: { type: 'string', description: 'Date au format YYYY-MM-DD' },
+        heure: { type: 'string', description: 'Heure au format HH:MM (optionnel, defaut 09:00)', default: '09:00' },
+        description: { type: 'string', description: 'Details/notes (optionnel)', default: '' },
+        recurrent_mensuel: { type: 'boolean', description: 'Si true, cree le rappel pour les 12 prochains mois au meme jour du mois', default: false },
+        couleur: { type: 'string', description: 'Couleur: jaune (#f59e0b), bleu (#3b82f6), vert (#22c55e), rouge (#ef4444), violet (#8b5cf6), cyan (#06b6d4)', default: '#06b6d4' },
+      },
+      required: ['titre', 'date'],
+    },
+  },
 ];
 
 // Execute tool calls
@@ -815,6 +831,56 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       return JSON.stringify({ projets: rows, total: rows.length });
     }
 
+    case 'creer_rappel': {
+      const titre = input.titre as string;
+      const date = input.date as string;
+      const heure = (input.heure as string) || '09:00';
+      const description = (input.description as string) || '';
+      const recurrent = input.recurrent_mensuel as boolean;
+      const couleur = (input.couleur as string) || '#06b6d4';
+
+      const events: { title: string; start: string; end: string }[] = [];
+
+      if (recurrent) {
+        // Create 12 monthly occurrences
+        const baseDate = new Date(date + 'T' + heure + ':00');
+        const dayOfMonth = baseDate.getDate();
+        for (let i = 0; i < 12; i++) {
+          const d = new Date(baseDate);
+          d.setMonth(d.getMonth() + i);
+          // Handle months with fewer days
+          if (d.getDate() !== dayOfMonth) d.setDate(0);
+          const startStr = d.toISOString();
+          const endD = new Date(d);
+          endD.setHours(endD.getHours() + 1);
+          events.push({ title: titre, start: startStr, end: endD.toISOString() });
+        }
+      } else {
+        const startStr = date + 'T' + heure + ':00';
+        const endD = new Date(startStr);
+        endD.setHours(endD.getHours() + 1);
+        events.push({ title: titre, start: startStr, end: endD.toISOString() });
+      }
+
+      let created = 0;
+      for (const ev of events) {
+        await query(
+          `INSERT INTO calendar_events (title, description, start_date, end_date, all_day, color, event_type, created_by)
+           VALUES ($1, $2, $3, $4, false, $5, 'rappel', 'telegram')`,
+          [ev.title, description || null, ev.start, ev.end, couleur]
+        );
+        created++;
+      }
+
+      return JSON.stringify({
+        ok: true,
+        message: recurrent
+          ? `Rappel recurrent cree: "${titre}" — ${created} occurrences (12 mois)`
+          : `Rappel cree: "${titre}" le ${date} a ${heure}`,
+        created,
+      });
+    }
+
     default:
       return JSON.stringify({ error: `Outil inconnu: ${name}` });
   }
@@ -830,6 +896,7 @@ TU PEUX:
 - Lister et voir les details des devis
 - Envoyer des SMS libres a des clients
 - Approuver des devis
+- Creer des rappels dans le calendrier (outil creer_rappel) — supporte les rappels recurrents mensuels
 - Voir les reservations a venir
 - Calculer des prix rapidement
 - Lire et resumer les emails recus (Gmail)
