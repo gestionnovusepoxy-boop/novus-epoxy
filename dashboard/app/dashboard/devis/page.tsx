@@ -69,6 +69,11 @@ function QuoteRow({ q, onUpdate }: { q: Quote; onUpdate: () => void }) {
   return (
     <tr className={`border-b border-slate-700 hover:bg-slate-700/50 transition ${deleting ? 'opacity-40' : ''}`}>
       <td className="px-4 py-3">
+        <Link href={`/dashboard/devis/${q.id}`} className="text-amber-400 hover:text-amber-300 text-sm font-bold">
+          #{q.id}
+        </Link>
+      </td>
+      <td className="px-4 py-3">
         <Link href={`/dashboard/devis/${q.id}`} className="hover:underline">
           <p className="text-white text-sm font-medium">{q.client_nom}</p>
           <p className="text-slate-400 text-xs">{q.client_email}</p>
@@ -161,6 +166,7 @@ function PageContent() {
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700 bg-slate-900/50">
+                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">#</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Client</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Service</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Superficie</th>
@@ -172,7 +178,7 @@ function PageContent() {
             </thead>
             <tbody>
               {data.length === 0 && (
-                <tr><td colSpan={7} className="text-center py-8 text-slate-500 text-sm">Aucun devis</td></tr>
+                <tr><td colSpan={8} className="text-center py-8 text-slate-500 text-sm">Aucun devis</td></tr>
               )}
               {data.map(q => <QuoteRow key={q.id} q={q} onUpdate={load} />)}
             </tbody>
