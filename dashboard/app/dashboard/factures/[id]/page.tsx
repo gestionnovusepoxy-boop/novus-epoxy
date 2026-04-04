@@ -41,7 +41,6 @@ interface Invoice {
   statut: InvoiceStatut; notes: string | null;
   date_emission: string; date_echeance: string | null;
   created_at: string; updated_at: string;
-  quote_id: number | null;
   contrat_signe_at: string | null; contrat_signature_nom: string | null; quote_token: string | null;
   payments: { id: number; type: string; montant: number; methode: string; reference: string | null; paid_at: string }[];
 }
