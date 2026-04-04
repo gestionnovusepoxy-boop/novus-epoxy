@@ -1125,7 +1125,7 @@ ${getServiceDescriptionHtml(q.type_service as string) ? `<div style="background:
 
         // SMS
         if (sendViaSms && q.client_tel) {
-          const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${service?.label ?? q.type_service}\n${q.superficie} pi2\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nDetails: https://novus-epoxy.vercel.app/paiement/${q.id}\n\nQuestions? 581-307-2678`;
+          const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${service?.label ?? q.type_service}\n${q.superficie} pi2\nSous-total: ${formatMoney(Number(q.sous_total))}\nTPS+TVQ: ${formatMoney(Number(q.tps) + Number(q.tvq))}\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nDetails: https://novus-epoxy.vercel.app/paiement/${q.id}\n\nQuestions? 581-307-2678`;
           try {
             await sendSMS(q.client_tel as string, smsMsg);
             results.push(`📱 SMS envoye a ${q.client_tel}`);
@@ -1444,7 +1444,8 @@ ${getServiceDescriptionHtml(q.type_service as string) ? `<div style="background:
                 inp.etat_plancher ? `🧱 ${inp.etat_plancher}` : '',
                 rabaisPct > 0 ? `🏷 Rabais ${rabaisPct}%` : '',
                 ``,
-                `💰 Total: ${formatMoney(calc.total)}`,
+                `💰 Sous-total: ${formatMoney(calc.sous_total)}`,
+                `💰 Total (taxes inc.): ${formatMoney(calc.total)}`,
                 `💳 Depot: ${formatMoney(calc.depot_requis)}`,
                 ``,
                 `⚠️ <b>En attente d'approbation</b>`,
