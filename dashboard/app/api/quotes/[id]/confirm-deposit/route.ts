@@ -191,9 +191,9 @@ ${calendarHtml}
       const numero = `NE-${yearStr}-${String(nextNum).padStart(3, '0')}`;
 
       const invRows = await query(
-        `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, sous_total, tps, tvq, total, depot_montant, final_montant, statut, date_emission)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'depot_recu',CURRENT_DATE) RETURNING id, numero`,
-        [numero, quoteId, clientId, quote.type_service, quote.superficie, quote.prix_pied_carre, quote.sous_total, quote.tps, quote.tvq, quote.total, depotMontant, Number(quote.total) - depotMontant]
+        `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant, statut, date_emission)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'depot_recu',CURRENT_DATE) RETURNING id, numero`,
+        [numero, quoteId, clientId, quote.type_service, quote.superficie, quote.prix_pied_carre, quote.rabais_pct ?? 0, quote.rabais_montant ?? 0, quote.sous_total, quote.tps, quote.tvq, quote.total, depotMontant, Number(quote.total) - depotMontant]
       );
       invoiceId = invRows[0].id as number;
 

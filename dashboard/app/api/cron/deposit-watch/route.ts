@@ -84,12 +84,13 @@ export async function GET(req: NextRequest) {
         const qd = quoteDetails[0];
 
         invoiceRows = await query(
-          `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, sous_total, tps, tvq, total, depot_montant, statut)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'en_cours')
+          `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, statut)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'en_cours')
            RETURNING id`,
           [
             numero, quoteId, clientId,
             qd.type_service, qd.superficie, qd.prix_pied_carre,
+            qd.rabais_pct ?? 0, qd.rabais_montant ?? 0,
             qd.sous_total, qd.tps, qd.tvq, qd.total, qd.depot_requis,
           ]
         );
