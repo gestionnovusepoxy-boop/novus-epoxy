@@ -491,6 +491,18 @@ function ProfitSection({ quoteId, total }: { quoteId: number; total: number }) {
           {formatMoney(profit)} ({margin}%)
         </span>
       </div>
+      {profit !== 0 && (
+        <div className="space-y-1 pt-1.5 mt-1 border-t border-slate-700/50">
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">Luca &amp; Jason <span className="text-slate-500">(70%)</span></span>
+            <span className={profit >= 0 ? 'text-green-400' : 'text-red-400'}>{formatMoney(profit * 0.7)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">Danny &amp; Brien <span className="text-slate-500">(30%)</span></span>
+            <span className={profit >= 0 ? 'text-green-400' : 'text-red-400'}>{formatMoney(profit * 0.3)}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
