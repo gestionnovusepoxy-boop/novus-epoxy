@@ -350,7 +350,7 @@ function DashboardContent() {
                     merged[key].count += s.count;
                   }
                   return Object.entries(merged).map(([key, s]) => (
-                    <div key={key} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
+                    <Link key={key} href={`/dashboard/crm?source=${key}`} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3 hover:border-slate-500 transition">
                       <div className="flex items-center gap-2">
                         <span className="text-lg">{s.icon}</span>
                         <div>
@@ -361,41 +361,41 @@ function DashboardContent() {
                       <div className="mt-2 w-full bg-slate-700 rounded-full h-1">
                         <div className="h-1 rounded-full" style={{ width: `${Math.min(100, (s.count / data.leads.total) * 100)}%`, backgroundColor: s.color }} />
                       </div>
-                    </div>
+                    </Link>
                   ));
                 })()}
               </div>
 
               {/* Other channels */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-700">
-                <div className="flex items-center gap-2 text-sm">
+                <Link href="/dashboard/conversations" className="flex items-center gap-2 text-sm hover:bg-slate-700/30 rounded-lg p-2 -m-2 transition">
                   <span className="text-lg">🤖</span>
                   <div>
                     <p className="text-white font-bold">{data.chatbot.conversations}</p>
                     <p className="text-slate-400 text-[10px]">Chatbot Nova</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
+                </Link>
+                <Link href="/dashboard/soumissions" className="flex items-center gap-2 text-sm hover:bg-slate-700/30 rounded-lg p-2 -m-2 transition">
                   <span className="text-lg">📋</span>
                   <div>
                     <p className="text-white font-bold">{data.submissions.total}</p>
                     <p className="text-slate-400 text-[10px]">Soumissions web</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
+                </Link>
+                <Link href="/dashboard/textos" className="flex items-center gap-2 text-sm hover:bg-slate-700/30 rounded-lg p-2 -m-2 transition">
                   <span className="text-lg">📱</span>
                   <div>
                     <p className="text-white font-bold">{data.sms.envoyes}</p>
                     <p className="text-slate-400 text-[10px]">SMS envoyes</p>
                   </div>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
+                </Link>
+                <Link href="/dashboard/textos" className="flex items-center gap-2 text-sm hover:bg-slate-700/30 rounded-lg p-2 -m-2 transition">
                   <span className="text-lg">💬</span>
                   <div>
                     <p className="text-white font-bold">{data.sms.recus}</p>
                     <p className="text-slate-400 text-[10px]">SMS recus</p>
                   </div>
-                </div>
+                </Link>
               </div>
             </div>
           </>

@@ -154,26 +154,87 @@ export async function autoHeal(): Promise<void> {
       );
     }
 
-    // Status report every 6h
+    // Full system health report every 6h
     const lastReport = await getCooldown('echo_last_report');
     if (Date.now() - lastReport >= 6 * 60 * 60 * 1000) {
       await setCooldown('echo_last_report');
 
-      const [leadCount, pendingProspect, pendingQuotes, activeJobs, emailsToday] = await Promise.all([
+      const checks: string[] = [];
+      const issues: string[] = [];
+
+      // 1. Database health
+      try {
+        await query(`SELECT 1`);
+        checks.push('✅ Base de donnees OK');
+      } catch { issues.push('❌ Base de donnees DOWN'); }
+
+      // 2. Twilio SMS
+      const twilioOk = !!(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_PHONE_NUMBER);
+      checks.push(twilioOk ? '✅ Twilio SMS configure' : '⚠️ Twilio non configure');
+
+      // 3. Gmail API
+      const gmailOk = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN);
+      checks.push(gmailOk ? '✅ Gmail API configure' : '⚠️ Gmail non configure');
+
+      // 4. Telegram bot
+      try {
+        const tRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getMe`);
+        checks.push(tRes.ok ? '✅ Telegram bot actif' : '❌ Telegram bot erreur');
+        if (!tRes.ok) issues.push('Telegram bot ne repond pas');
+      } catch { issues.push('❌ Telegram bot injoignable'); }
+
+      // 5. GHL/Champfields sync
+      const ghlOk = !!process.env.GHL_API_KEY;
+      checks.push(ghlOk ? '✅ GHL sync configure' : '⚠️ GHL non configure');
+
+      // 6. Vercel Blob (photos)
+      const blobOk = !!process.env.BLOB_READ_WRITE_TOKEN;
+      checks.push(blobOk ? '✅ Vercel Blob (photos) OK' : '⚠️ Blob non configure');
+
+      // 7. Claude AI
+      const aiOk = !!process.env.ANTHROPIC_API_KEY;
+      checks.push(aiOk ? '✅ Claude AI configure' : '⚠️ IA non configuree');
+
+      // 8. Business metrics
+      const [leadCount, pendingProspect, pendingQuotes, activeJobs, emailsToday, smsToday, recentErrors] = await Promise.all([
         query(`SELECT COUNT(*)::int AS c FROM crm_leads`),
         query(`SELECT COUNT(*)::int AS c FROM crm_leads WHERE statut = 'nouveau' AND prospect_sent_at IS NULL AND email IS NOT NULL AND email != ''`),
         query(`SELECT COUNT(*)::int AS c FROM quotes WHERE statut IN ('brouillon', 'en_attente', 'envoye')`),
         query(`SELECT COUNT(*)::int AS c FROM quotes WHERE statut IN ('depot_paye', 'planifie')`),
         query(`SELECT COUNT(*)::int AS c FROM email_logs WHERE created_at >= CURRENT_DATE`),
+        query(`SELECT COUNT(*)::int AS c FROM sms_logs WHERE created_at >= CURRENT_DATE`).catch(() => [{ c: 0 }]),
+        query(`SELECT COUNT(*)::int AS c FROM email_logs WHERE statut = 'error' AND created_at >= CURRENT_DATE - INTERVAL '1 day'`).catch(() => [{ c: 0 }]),
       ]);
 
+      // 9. Check cron health — last Aria run
+      const lastAria = await query(`SELECT value FROM kv_store WHERE key = 'aria_last_run'`).catch(() => []);
+      const ariaAge = lastAria[0]?.value ? Math.round((Date.now() - new Date(lastAria[0].value as string).getTime()) / 3600000) : -1;
+      if (ariaAge >= 0 && ariaAge <= 24) {
+        checks.push(`✅ Aria actif (dernier run: ${ariaAge}h)`);
+      } else if (ariaAge > 24) {
+        issues.push(`⚠️ Aria inactif depuis ${ariaAge}h`);
+      }
+
+      // 10. Revenue check
+      const revenue = await query(`SELECT COALESCE(SUM(CASE WHEN depot_paye THEN depot_montant ELSE 0 END) + SUM(CASE WHEN final_paye THEN final_montant ELSE 0 END), 0)::numeric AS total FROM invoices`);
+
+      const errorCount = Number(recentErrors[0]?.c || 0);
+      if (errorCount > 0) issues.push(`⚠️ ${errorCount} erreur(s) email dans les 24h`);
+
+      const status = issues.length === 0 ? '🟢 Tout fonctionne a 100%' : `🟡 ${issues.length} point(s) a verifier`;
+
       await notifyGroup(
-        `📊 <b>Echo — Rapport systeme</b>\n\n` +
-        `👥 ${leadCount[0]?.c || 0} leads total | ${pendingProspect[0]?.c || 0} en attente d'envoi\n` +
+        `📊 <b>Echo — Rapport systeme complet</b>\n\n` +
+        `<b>${status}</b>\n\n` +
+        `<b>Infrastructure:</b>\n${checks.join('\n')}\n` +
+        (issues.length > 0 ? `\n<b>Problemes:</b>\n${issues.join('\n')}\n` : '') +
+        `\n<b>Business:</b>\n` +
+        `👥 ${leadCount[0]?.c || 0} leads | ${pendingProspect[0]?.c || 0} en attente Aria\n` +
         `📝 ${pendingQuotes[0]?.c || 0} devis en attente\n` +
         `🔨 ${activeJobs[0]?.c || 0} travaux actifs\n` +
-        `📧 ${emailsToday[0]?.c || 0} emails envoyes aujourd'hui\n\n` +
-        `<i>Tout roule. Prochain rapport dans 6h.</i>`
+        `💰 ${Number(revenue[0]?.total || 0).toFixed(0)}$ encaisse total\n` +
+        `📧 ${emailsToday[0]?.c || 0} emails | 📱 ${smsToday[0]?.c || 0} SMS aujourd'hui\n\n` +
+        `<i>Prochain rapport dans 6h.</i>`
       );
     }
   } catch {
