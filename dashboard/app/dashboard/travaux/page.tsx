@@ -26,6 +26,8 @@ interface Travail {
   jour1_slot: string | null;
   jour2_slot: string | null;
   booking_statut: string | null;
+  invoice_id: number | null;
+  invoice_numero: string | null;
 }
 
 interface JobPhoto {
@@ -809,7 +811,15 @@ function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: bool
         </div>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
+        {job.invoice_id && (
+          <Link
+            href={`/dashboard/factures/${job.invoice_id}`}
+            className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-sm font-medium px-3 py-2 rounded-lg transition"
+          >
+            Facture {job.invoice_numero}
+          </Link>
+        )}
         <Link
           href={`/dashboard/devis/${job.id}`}
           className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium px-3 py-2 rounded-lg transition"
