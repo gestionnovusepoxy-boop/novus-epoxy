@@ -331,7 +331,7 @@ function DashboardContent() {
                 <span className="text-slate-400 text-xs">{data.leads.total} leads au total</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-                {data.lead_sources.map(s => {
+                {(() => {
                   const labels: Record<string, { name: string; icon: string; color: string }> = {
                     jason: { name: 'Import Jason', icon: '👷', color: '#f59e0b' },
                     cloud: { name: 'Champfields/GHL', icon: '☁️', color: '#3b82f6' },
@@ -339,24 +339,31 @@ function DashboardContent() {
                     'google-maps': { name: 'Google Maps', icon: '📍', color: '#ef4444' },
                     houzz: { name: 'Houzz', icon: '🏠', color: '#8b5cf6' },
                     cms: { name: 'Site web', icon: '🌐', color: '#06b6d4' },
-                    'site-web': { name: 'Formulaire', icon: '📋', color: '#06b6d4' },
+                    'site-web': { name: 'Site web', icon: '🌐', color: '#06b6d4' },
                   };
-                  const info = labels[s.source] || { name: s.source, icon: '📌', color: '#64748b' };
-                  return (
-                    <div key={s.source} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
+                  // Merge cms + site-web into one
+                  const merged: Record<string, { name: string; icon: string; color: string; count: number }> = {};
+                  for (const s of data.lead_sources) {
+                    const key = s.source === 'site-web' ? 'cms' : s.source;
+                    const info = labels[key] || { name: s.source, icon: '📌', color: '#64748b' };
+                    if (!merged[key]) merged[key] = { ...info, count: 0 };
+                    merged[key].count += s.count;
+                  }
+                  return Object.entries(merged).map(([key, s]) => (
+                    <div key={key} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
                       <div className="flex items-center gap-2">
-                        <span className="text-lg">{info.icon}</span>
+                        <span className="text-lg">{s.icon}</span>
                         <div>
                           <p className="text-white text-lg font-bold">{s.count}</p>
-                          <p className="text-slate-400 text-[10px]">{info.name}</p>
+                          <p className="text-slate-400 text-[10px]">{s.name}</p>
                         </div>
                       </div>
                       <div className="mt-2 w-full bg-slate-700 rounded-full h-1">
-                        <div className="h-1 rounded-full" style={{ width: `${Math.min(100, (s.count / data.leads.total) * 100)}%`, backgroundColor: info.color }} />
+                        <div className="h-1 rounded-full" style={{ width: `${Math.min(100, (s.count / data.leads.total) * 100)}%`, backgroundColor: s.color }} />
                       </div>
                     </div>
-                  );
-                })}
+                  ));
+                })()}
               </div>
 
               {/* Other channels */}
