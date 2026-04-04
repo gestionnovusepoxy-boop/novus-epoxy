@@ -21,6 +21,7 @@ interface Expense {
   id: number; date_depense: string; fournisseur: string; description: string | null;
   categorie: string; montant_ht: number; tps: number; tvq: number; montant_ttc: number;
   methode: string | null; reconciled: boolean; created_at: string; receipt_url: string | null;
+  quote_id: number | null; notes: string | null;
 }
 
 interface ScanResult {
@@ -548,8 +549,31 @@ function PageContent() {
                         </button>
                       )}
                       <div>
-                        <p className="text-white text-xs sm:text-sm font-medium">{exp.fournisseur}</p>
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-white text-xs sm:text-sm font-medium">{exp.fournisseur}</p>
+                          {exp.quote_id && (
+                            <a href={`/dashboard/devis/${exp.quote_id}`} className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded hover:bg-blue-500/30 transition">
+                              P#{exp.quote_id}
+                            </a>
+                          )}
+                        </div>
                         {exp.description && <p className="text-slate-400 text-xs">{exp.description}</p>}
+                        {exp.notes && <p className="text-amber-400/70 text-[10px] italic mt-0.5">{exp.notes}</p>}
+                        <button
+                          onClick={() => {
+                            const note = prompt('Note interne (pas envoyee au comptable):', exp.notes || '');
+                            if (note !== null) {
+                              fetch('/api/expenses', {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ id: exp.id, notes: note }),
+                              }).then(() => load());
+                            }
+                          }}
+                          className="text-[10px] text-slate-600 hover:text-slate-400 transition mt-0.5"
+                        >
+                          {exp.notes ? 'Modifier note' : '+ Note'}
+                        </button>
                       </div>
                     </div>
                   </td>

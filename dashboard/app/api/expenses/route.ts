@@ -72,3 +72,16 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json(rows[0], { status: 201 });
 }
+
+// PATCH — update notes (internal only, not exported)
+export async function PATCH(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+
+  const body = await req.json();
+  const { id, notes } = body;
+  if (!id) return NextResponse.json({ error: 'ID requis' }, { status: 400 });
+
+  await query(`UPDATE expenses SET notes = $1, updated_at = NOW() WHERE id = $2`, [notes || null, id]);
+  return NextResponse.json({ ok: true });
+}
