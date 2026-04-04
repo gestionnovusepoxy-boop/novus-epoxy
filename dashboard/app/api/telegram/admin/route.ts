@@ -1087,7 +1087,9 @@ export async function POST(req: NextRequest) {
 ${getServiceDescriptionHtml(q.type_service as string) ? `<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:6px;padding:12px;margin:0 0 12px;"><h3 style="color:#1e293b;margin:0 0 8px;font-size:15px;">Description des travaux</h3>${getServiceDescriptionHtml(q.type_service as string)}</div>` : ''}
 <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;">
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Service</td><td style="padding:6px 0;text-align:right;font-weight:600;">${service?.label ?? q.type_service}</td></tr>
-<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Superficie</td><td style="padding:6px 0;text-align:right;">${q.superficie} pi2</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Superficie</td><td style="padding:6px 0;text-align:right;">${q.superficie} pi²</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Prix/pi²</td><td style="padding:6px 0;text-align:right;">${formatMoney(Number(q.prix_pied_carre))}</td></tr>
+${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#16a34a;font-size:14px;font-weight:600;">Rabais ${q.rabais_pct}% 🎉</td><td style="padding:6px 0;text-align:right;font-size:14px;color:#16a34a;font-weight:600;">-${formatMoney(Number(q.rabais_montant))}</td></tr>` : ''}
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">Sous-total</td><td style="padding:6px 0;text-align:right;">${formatMoney(Number(q.sous_total))}</td></tr>
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">TPS (5%)</td><td style="padding:6px 0;text-align:right;">${formatMoney(Number(q.tps))}</td></tr>
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:6px 0;color:#64748b;font-size:14px;">TVQ (9,975%)</td><td style="padding:6px 0;text-align:right;">${formatMoney(Number(q.tvq))}</td></tr>
@@ -1125,7 +1127,8 @@ ${getServiceDescriptionHtml(q.type_service as string) ? `<div style="background:
 
         // SMS
         if (sendViaSms && q.client_tel) {
-          const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${service?.label ?? q.type_service}\n${q.superficie} pi2\nSous-total: ${formatMoney(Number(q.sous_total))}\nTPS+TVQ: ${formatMoney(Number(q.tps) + Number(q.tvq))}\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nDetails: https://novus-epoxy.vercel.app/paiement/${q.id}\n\nQuestions? 581-307-2678`;
+          const rabaisLine = Number(q.rabais_pct) > 0 ? `\nRabais ${q.rabais_pct}%: -${formatMoney(Number(q.rabais_montant))}` : '';
+          const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${service?.label ?? q.type_service}\n${q.superficie} pi² x ${formatMoney(Number(q.prix_pied_carre))}/pi²${rabaisLine}\nSous-total: ${formatMoney(Number(q.sous_total))}\nTPS+TVQ: ${formatMoney(Number(q.tps) + Number(q.tvq))}\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nDetails: https://novus-epoxy.vercel.app/paiement/${q.id}?token=${encodeURIComponent(secretToken)}\n\nQuestions? 581-307-2678`;
           try {
             await sendSMS(q.client_tel as string, smsMsg);
             results.push(`📱 SMS envoye a ${q.client_tel}`);
