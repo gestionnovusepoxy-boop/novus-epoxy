@@ -283,12 +283,11 @@ function CreateEventModal({
           </div>
 
           {!isAllDay && (
-            <div>
-              <label className="block text-slate-400 text-xs mb-1">Plage horaire</label>
+            <div className="space-y-2">
               <div className="flex gap-2">
                 {[
-                  { label: 'AM (8h-12h)', value: 'am' },
-                  { label: 'PM (12h-16h)', value: 'pm' },
+                  { label: 'AM', value: 'am' },
+                  { label: 'PM', value: 'pm' },
                 ].map(slot => {
                   const currentHour = parseInt(start.split('T')[1]?.split(':')[0] || '8');
                   const isAm = currentHour < 12;
@@ -316,6 +315,26 @@ function CreateEventModal({
                     </button>
                   );
                 })}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-slate-400 text-[10px] mb-0.5">Heure debut</label>
+                  <input
+                    type="time"
+                    value={start.split('T')[1]?.slice(0, 5) || '08:00'}
+                    onChange={e => setStart(start.split('T')[0] + 'T' + e.target.value + ':00')}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-400 text-[10px] mb-0.5">Heure fin</label>
+                  <input
+                    type="time"
+                    value={end.split('T')[1]?.slice(0, 5) || '12:00'}
+                    onChange={e => setEnd(end.split('T')[0] + 'T' + e.target.value + ':00')}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-amber-500"
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -493,6 +512,19 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
             className="px-4 py-2 bg-amber-500 text-black rounded-lg text-sm font-bold hover:bg-amber-400 transition"
           >
             + Nouveau
+          </button>
+          <button
+            onClick={() => {
+              const tomorrow = new Date();
+              tomorrow.setDate(tomorrow.getDate() + 1);
+              tomorrow.setHours(9, 0, 0, 0);
+              const end = new Date(tomorrow);
+              end.setHours(10, 0, 0, 0);
+              setShowCreate({ start: tomorrow.toISOString(), end: end.toISOString(), allDay: false });
+            }}
+            className="px-4 py-2 bg-cyan-600 text-white rounded-lg text-sm font-bold hover:bg-cyan-500 transition"
+          >
+            + Rappel
           </button>
           <button
             onClick={() => setShowSync(!showSync)}
