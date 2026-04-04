@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 
 type Statut = 'nouveau' | 'offre_envoyee' | 'contacte' | 'devis_envoye' | 'rdv_pris' | 'ferme' | 'gagne';
 type Temperature = 'chaud' | 'tiede' | 'froid';
@@ -316,6 +317,8 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
 }
 
 export default function CrmClient() {
+  const searchParams = useSearchParams();
+  const initialSource = searchParams.get('source') || '';
   const [leads, setLeads]     = useState<Lead[]>([]);
   const [total, setTotal]     = useState(0);
   const [stats, setStats]     = useState({ chaud: 0, tiede: 0, froid: 0 });
@@ -324,7 +327,7 @@ export default function CrmClient() {
   const [type, setType]       = useState('');
   const [tempFilter, setTempFilter] = useState('');
   const [search, setSearch]   = useState('');
-  const [sourceFilter, setSourceFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState(initialSource);
   const [sources, setSources] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
