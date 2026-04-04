@@ -34,6 +34,7 @@ interface Invoice {
   id: number; numero: string; quote_id: number; client_id: number;
   client_nom: string; client_email: string; client_tel: string | null; client_adresse: string | null;
   type_service: string; superficie: number; prix_pied_carre: number;
+  rabais_pct: number; rabais_montant: number;
   sous_total: number; tps: number; tvq: number; total: number;
   depot_montant: number; depot_paye: boolean; depot_paye_at: string | null; depot_methode: string | null;
   final_montant: number; final_paye: boolean; final_paye_at: string | null; final_methode: string | null;
@@ -165,6 +166,16 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
         <div className="space-y-3 text-sm">
           <div className="flex justify-between text-slate-300">
             <span>{service.label} x {inv.superficie} pi² @ {formatMoney(Number(inv.prix_pied_carre))}/pi²</span>
+            <span>{formatMoney(Number(inv.prix_pied_carre) * Number(inv.superficie))}</span>
+          </div>
+          {Number(inv.rabais_pct) > 0 && (
+            <div className="flex justify-between text-green-400 font-semibold">
+              <span>Rabais {inv.rabais_pct}%</span>
+              <span>-{formatMoney(Number(inv.rabais_montant))}</span>
+            </div>
+          )}
+          <div className="flex justify-between text-slate-300">
+            <span>Sous-total</span>
             <span>{formatMoney(Number(inv.sous_total))}</span>
           </div>
           <div className="flex justify-between text-slate-400"><span>TPS (5%)</span><span>{formatMoney(Number(inv.tps))}</span></div>
