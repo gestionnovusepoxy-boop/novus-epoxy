@@ -60,7 +60,9 @@ const TYPE_LABEL: Record<string, string> = {
 const DAY_LABELS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
 
 function getWeekRange(): [string, string] {
-  const now = new Date();
+  // Use Eastern time to avoid UTC date shift at night
+  const nowStr = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+  const now = new Date(nowStr + 'T12:00:00');
   const day = now.getDay();
   const diff = day === 0 ? 6 : day - 1;
   const mon = new Date(now);
