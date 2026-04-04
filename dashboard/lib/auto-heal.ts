@@ -85,8 +85,16 @@ async function healGmailWatch(): Promise<string | null> {
 async function healEmailScan(): Promise<string | null> {
   try {
     // Don't try to fix email scan if Google token is broken — needs manual re-auth
-    const tokenBroken = await query(`SELECT value FROM kv_store WHERE key = 'google_token_broken'`).catch(() => []);
-    if (tokenBroken.length > 0 && tokenBroken[0]?.value === 'true') return null;
+    // Auto-clear the flag after 24h to allow retry (token may have been refreshed)
+    const tokenBroken = await query(`SELECT value, updated_at FROM kv_store WHERE key = 'google_token_broken'`).catch(() => []);
+    if (tokenBroken.length > 0 && tokenBroken[0]?.value === 'true') {
+      const brokenAge = tokenBroken[0]?.updated_at
+        ? (Date.now() - new Date(tokenBroken[0].updated_at as string).getTime()) / 3600000
+        : 999;
+      if (brokenAge < 24) return null; // Still within cooldown
+      // Clear the flag and retry
+      await query(`DELETE FROM kv_store WHERE key = 'google_token_broken'`).catch(() => {});
+    }
 
     const rows = await query(`SELECT value FROM kv_store WHERE key = 'last_email_scan'`);
     const lastScan = rows?.[0]?.value as string | undefined;
@@ -105,7 +113,7 @@ async function healEmailScan(): Promise<string | null> {
       const body = await res.text().catch(() => '');
       if (body.includes('invalid_grant')) {
         await query(
-          `INSERT INTO kv_store (key, value) VALUES ('google_token_broken', 'true') ON CONFLICT (key) DO UPDATE SET value = 'true'`
+          `INSERT INTO kv_store (key, value, updated_at) VALUES ('google_token_broken', 'true', NOW()) ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = NOW()`
         ).catch(() => {});
         return 'Google OAuth expire — email scan desactive. Faut re-connecter Gmail.';
       }

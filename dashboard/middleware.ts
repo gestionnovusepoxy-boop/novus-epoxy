@@ -1,14 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 // Note: Arcjet moved to API routes (lib/arcjet.ts) — Edge Function size limit on Hobby plan
-// Rate limiting in-memory (per-endpoint limits)
+// Rate limiting in-memory (per-endpoint limits) with automatic cleanup
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+const MAX_RATE_LIMIT_ENTRIES = 10_000;
 
 function isRateLimited(key: string, maxRequests: number, windowMs: number): boolean {
   const now   = Date.now();
   const entry = rateLimitMap.get(key);
 
   if (!entry || now > entry.resetAt) {
+    // Cleanup expired entries when map gets large
+    if (rateLimitMap.size > MAX_RATE_LIMIT_ENTRIES) {
+      for (const [k, v] of rateLimitMap) {
+        if (now > v.resetAt) rateLimitMap.delete(k);
+      }
+    }
     rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
     return false;
   }
