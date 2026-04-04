@@ -45,8 +45,12 @@ const LABEL: Record<InvoiceStatut, string> = {
 
 const SERVICE_LABEL: Record<string, string> = {
   flake: 'Flocon',
-  metallique: 'Metallique',
+  metallique: 'Métallique',
+  couleur_unie: 'Couleur unie',
+  quartz: 'Quartz',
+  antiderapant: 'Antidérapant',
   commercial: 'Commercial',
+  meulage: 'Meulage diamant',
 };
 
 function InvoiceRow({ inv }: { inv: InvoiceRow }) {

@@ -36,7 +36,11 @@ const LABEL: Record<QuoteStatut, string> = {
 const SERVICE_LABEL: Record<string, string> = {
   flake: 'Flocon',
   metallique: 'Métallique',
+  couleur_unie: 'Couleur unie',
+  quartz: 'Quartz',
+  antiderapant: 'Antidérapant',
   commercial: 'Commercial',
+  meulage: 'Meulage diamant',
 };
 
 const PROTECTED_STATUTS: QuoteStatut[] = ['depot_paye', 'planifie', 'complete'];
@@ -79,7 +83,7 @@ function QuoteRow({ q, onUpdate }: { q: Quote; onUpdate: () => void }) {
           <p className="text-slate-400 text-xs">{q.client_email}</p>
         </Link>
       </td>
-      <td className="px-4 py-3 text-slate-300 text-sm">{SERVICE_LABEL[q.type_service]}</td>
+      <td className="px-4 py-3 text-slate-300 text-sm">{SERVICE_LABEL[q.type_service] ?? q.type_service}</td>
       <td className="px-4 py-3 text-slate-300 text-sm">{q.superficie} pi²</td>
       <td className="px-4 py-3 text-white text-sm font-medium">{formatMoney(Number(q.total))}</td>
       <td className="px-4 py-3">

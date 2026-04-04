@@ -18,7 +18,7 @@ interface Invoice {
   id: number; numero: string; total: number; statut: string; depot_paye: boolean; final_paye: boolean; created_at: string;
 }
 
-const SERVICE_LABEL: Record<string, string> = { flake: 'Flocon', metallique: 'Metallique', commercial: 'Commercial' };
+const SERVICE_LABEL: Record<string, string> = { flake: 'Flocon', metallique: 'Métallique', couleur_unie: 'Couleur unie', quartz: 'Quartz', antiderapant: 'Antidérapant', commercial: 'Commercial', meulage: 'Meulage diamant' };
 
 export default function ClientDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);

@@ -16,8 +16,12 @@ interface QuoteOption {
 
 const SERVICE_LABEL: Record<string, string> = {
   flake: 'Flocon',
-  metallique: 'Metallique',
+  metallique: 'Métallique',
+  couleur_unie: 'Couleur unie',
+  quartz: 'Quartz',
+  antiderapant: 'Antidérapant',
   commercial: 'Commercial',
+  meulage: 'Meulage diamant',
 };
 
 export default function NouvelleFacturePage() {

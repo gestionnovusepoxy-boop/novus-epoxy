@@ -29,8 +29,12 @@ interface QuoteData {
 
 const SERVICE_LABELS: Record<string, string> = {
   flake: 'Flocon (Flake)',
-  metallique: 'Metallique',
+  metallique: 'Métallique',
+  couleur_unie: 'Couleur unie',
+  quartz: 'Quartz',
+  antiderapant: 'Antidérapant',
   commercial: 'Commercial',
+  meulage: 'Meulage diamant',
 };
 
 function formatMoney(n: number) {
