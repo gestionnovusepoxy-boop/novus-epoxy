@@ -721,7 +721,7 @@ export default function CrmClient() {
       )}
 
       <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-x-auto">
-        <table className="w-full min-w-[900px]">
+        <table className="w-full min-w-[700px]">
           <thead>
             <tr className="border-b border-slate-700 bg-slate-900/50">
               {['', 'Nom', 'Téléphone', 'Email', 'Service', 'Ville', 'Température', 'Statut', 'Date', ''].map((h, i) => (

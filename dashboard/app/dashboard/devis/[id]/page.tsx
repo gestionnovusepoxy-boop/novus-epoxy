@@ -223,7 +223,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
   const service = SERVICES[quote.type_service as ServiceType];
 
   return (
-    <div className="p-6 max-w-3xl space-y-6">
+    <div className="p-3 sm:p-6 max-w-3xl space-y-4 sm:space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <button onClick={() => router.push('/dashboard/devis')} className="text-slate-400 hover:text-white text-sm mb-2 block transition">
@@ -263,9 +263,9 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
 
       {/* Edit mode */}
       {editing ? (
-        <div className="bg-slate-800 border border-blue-500/30 rounded-xl p-6 space-y-4">
+        <div className="bg-slate-800 border border-blue-500/30 rounded-xl p-3 sm:p-6 space-y-4">
           <h3 className="text-blue-400 text-xs font-medium uppercase tracking-wider">Modifier le devis</h3>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="text-slate-500 text-xs mb-1 block">Nom</label>
               <input value={editForm.client_nom} onChange={e => setEditForm(f => ({ ...f, client_nom: e.target.value }))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />

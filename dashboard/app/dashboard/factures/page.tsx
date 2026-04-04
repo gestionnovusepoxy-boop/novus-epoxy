@@ -106,7 +106,7 @@ function PageContent() {
 
   return (
     <PollingProvider onRefresh={load}>
-      <div className="p-6 space-y-5">
+      <div className="p-3 sm:p-6 space-y-4 sm:space-y-5">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold text-white">Factures</h2>
           <div className="flex items-center gap-3">
@@ -126,7 +126,7 @@ function PageContent() {
             placeholder="Rechercher client ou numero..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1); }}
-            className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-64"
+            className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500 w-full sm:w-64"
           />
           <select
             value={statut}
@@ -138,7 +138,7 @@ function PageContent() {
           </select>
         </div>
 
-        <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+        <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr className="border-b border-slate-700 bg-slate-900/50">

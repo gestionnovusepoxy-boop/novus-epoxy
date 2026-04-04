@@ -145,7 +145,7 @@ function DashboardContent() {
         <h2 className="text-xl sm:text-2xl font-bold text-white">Vue d&apos;ensemble</h2>
 
         {!data && (
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
             {Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3 animate-pulse">
                 <div className="h-3 w-16 bg-slate-700 rounded" />
@@ -158,7 +158,7 @@ function DashboardContent() {
         {data && (
           <>
             {/* Row 1: Financial KPIs */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <KpiCard
                 label="Encaisse"
                 value={fmt(data.financier.encaisse)}
@@ -200,8 +200,8 @@ function DashboardContent() {
                   <h3 className="text-white font-semibold text-sm">Leads CRM</h3>
                   <Link href="/dashboard/crm" className="text-amber-400 text-xs hover:text-amber-300">Voir CRM</Link>
                 </div>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-3 text-center">
+                <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                  <div className="bg-red-500/10 border border-red-500/20 rounded-lg p-2 sm:p-3 text-center">
                     <p className="text-2xl font-bold text-red-400">{data.leads.chauds}</p>
                     <p className="text-[10px] text-slate-400 uppercase mt-1">Chauds</p>
                   </div>
