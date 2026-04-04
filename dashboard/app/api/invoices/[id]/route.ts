@@ -9,8 +9,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const rows = await query(
-    `SELECT inv.*, c.nom AS client_nom, c.email AS client_email, c.telephone AS client_tel, c.adresse AS client_adresse
-     FROM invoices inv JOIN clients c ON c.id = inv.client_id
+    `SELECT inv.*, c.nom AS client_nom, c.email AS client_email, c.telephone AS client_tel, c.adresse AS client_adresse,
+            q.contrat_signe_at, q.contrat_signature_nom, q.contrat_signature_image, q.secret_token AS quote_token
+     FROM invoices inv
+     JOIN clients c ON c.id = inv.client_id
+     LEFT JOIN quotes q ON q.id = inv.quote_id
      WHERE inv.id = $1`,
     [parseInt(id)],
   );

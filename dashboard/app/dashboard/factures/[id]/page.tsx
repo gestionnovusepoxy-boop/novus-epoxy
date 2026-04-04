@@ -41,6 +41,8 @@ interface Invoice {
   statut: InvoiceStatut; notes: string | null;
   date_emission: string; date_echeance: string | null;
   created_at: string; updated_at: string;
+  quote_id: number | null;
+  contrat_signe_at: string | null; contrat_signature_nom: string | null; quote_token: string | null;
   payments: { id: number; type: string; montant: number; methode: string; reference: string | null; paid_at: string }[];
 }
 
@@ -186,8 +188,30 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
+      {/* Contrat */}
+      {inv.quote_id && (
+        <div className={`rounded-xl p-6 border ${inv.contrat_signe_at ? 'bg-green-500/5 border-green-500/30' : 'bg-slate-800 border-slate-700'}`}>
+          <h3 className="text-xs font-medium uppercase tracking-wider mb-3 text-slate-400">Contrat</h3>
+          {inv.contrat_signe_at ? (
+            <div className="space-y-2">
+              <p className="text-green-400 font-semibold">Signé par {inv.contrat_signature_nom ?? 'Client'}</p>
+              <p className="text-slate-400 text-xs">{formatDate(inv.contrat_signe_at)}</p>
+              <a
+                href={`/contrat/${inv.quote_id}${inv.quote_token ? `?token=${encodeURIComponent(inv.quote_token)}` : ''}`}
+                target="_blank"
+                className="inline-block mt-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+              >
+                Voir le contrat signé
+              </a>
+            </div>
+          ) : (
+            <p className="text-slate-500 text-sm">Pas encore signé</p>
+          )}
+        </div>
+      )}
+
       {/* Paiements */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className={`rounded-xl p-6 border ${inv.depot_paye ? 'bg-green-500/5 border-green-500/30' : 'bg-slate-800 border-slate-700'}`}>
           <h3 className="text-xs font-medium uppercase tracking-wider mb-3 text-slate-400">Depot 30%</h3>
           <p className="text-2xl font-bold text-white">{formatMoney(Number(inv.depot_montant))}</p>
