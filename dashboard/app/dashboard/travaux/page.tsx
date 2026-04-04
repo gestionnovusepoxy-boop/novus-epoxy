@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { PollingProvider } from '@/components/polling-provider';
 import { formatMoney } from '@/lib/pricing';
 import Link from 'next/link';
@@ -557,7 +558,10 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-white font-semibold text-base">{job.client_nom}</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded font-mono">Projet #{job.id}</span>
+            <h3 className="text-white font-semibold text-base">{job.client_nom}</h3>
+          </div>
           {job.client_tel && (
             <a href={`tel:${job.client_tel}`} className="text-amber-400 text-sm hover:underline">
               {job.client_tel}
@@ -693,14 +697,24 @@ function Section({ title, jobs, onRefresh }: { title: string; jobs: Travail[]; o
 
 /* ─── Page ─── */
 /* ─── Completed Job Card (read-only) ─── */
-function CompletedJobCard({ job }: { job: Travail }) {
-  const [expanded, setExpanded] = useState(false);
+function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: boolean }) {
+  const [expanded, setExpanded] = useState(autoExpand ?? false);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (autoExpand && cardRef.current) {
+      cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [autoExpand]);
 
   return (
-    <div className="bg-slate-800/60 border border-slate-700/50 rounded-xl p-5 space-y-3">
+    <div ref={cardRef} className={`bg-slate-800/60 border rounded-xl p-5 space-y-3 ${autoExpand ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-slate-700/50'}`}>
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="text-white font-semibold text-base">{job.client_nom}</h3>
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded font-mono">Projet #{job.id}</span>
+            <h3 className="text-white font-semibold text-base">{job.client_nom}</h3>
+          </div>
           {job.client_adresse && (
             <p className="text-slate-500 text-sm">{job.client_adresse}</p>
           )}
@@ -731,7 +745,7 @@ function CompletedJobCard({ job }: { job: Travail }) {
         onClick={() => setExpanded(!expanded)}
         className="w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-semibold text-sm py-3 px-4 rounded-lg border border-amber-500/30 transition"
       >
-        {expanded ? '▾ Masquer rapport' : '▸ Voir rapport du projet'}
+        {expanded ? `▾ Masquer rapport projet #${job.id}` : `▸ Voir rapport projet #${job.id}`}
       </button>
 
       {expanded && (
@@ -756,8 +770,11 @@ function CompletedJobCard({ job }: { job: Travail }) {
 }
 
 function PageContent() {
+  const searchParams = useSearchParams();
+  const projetParam = searchParams.get('projet');
   const [data, setData] = useState<Travail[]>([]);
   const [tab, setTab] = useState<'actifs' | 'termines'>('actifs');
+  const [focusProjet, setFocusProjet] = useState<number | null>(projetParam ? parseInt(projetParam) : null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/travaux');
@@ -765,6 +782,14 @@ function PageContent() {
     const json = await res.json();
     setData(json.data ?? []);
   }, []);
+
+  // Auto-switch tab if focused project is in completed
+  useEffect(() => {
+    if (focusProjet && data.length > 0) {
+      const job = data.find(j => j.id === focusProjet);
+      if (job?.statut === 'complete') setTab('termines');
+    }
+  }, [focusProjet, data]);
 
   // Split active vs completed
   const activeJobs = data.filter(j => j.statut !== 'complete');
@@ -829,7 +854,7 @@ function PageContent() {
             )}
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {completedJobs.map(job => (
-                <CompletedJobCard key={job.id} job={job} />
+                <CompletedJobCard key={job.id} job={job} autoExpand={focusProjet === job.id} />
               ))}
             </div>
           </>
