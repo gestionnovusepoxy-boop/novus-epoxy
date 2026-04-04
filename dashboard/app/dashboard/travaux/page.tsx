@@ -15,6 +15,9 @@ interface Travail {
   client_adresse: string | null;
   type_service: string;
   superficie: number;
+  sous_total: number;
+  tps: number;
+  tvq: number;
   total: number;
   depot_requis: number;
   statut: string;
@@ -479,7 +482,7 @@ function ExpensesSection({ quoteId }: { quoteId: number }) {
 }
 
 /* ─── Profit Section ─── */
-function ProfitSection({ quoteId, total }: { quoteId: number; total: number }) {
+function ProfitSection({ quoteId, sousTotal, tps, tvq }: { quoteId: number; sousTotal: number; tps: number; tvq: number }) {
   const [totalHeures, setTotalHeures] = useState(0);
   const [totalSalaires, setTotalSalaires] = useState(0);
   const [totalDepenses, setTotalDepenses] = useState(0);
@@ -504,15 +507,15 @@ function ProfitSection({ quoteId, total }: { quoteId: number; total: number }) {
   }, [quoteId]);
 
   const totalCouts = totalSalaires + totalDepenses;
-  const profit = total - totalCouts;
-  const margin = total > 0 ? Math.round((profit / total) * 100) : 0;
+  const profit = sousTotal - totalCouts;
+  const margin = sousTotal > 0 ? Math.round((profit / sousTotal) * 100) : 0;
 
   return (
     <div className={`rounded-lg p-3 space-y-1.5 ${profit >= 0 ? 'bg-green-950/30 border border-green-800/30' : 'bg-red-950/30 border border-red-800/30'}`}>
       <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Profit du projet</h4>
       <div className="flex items-center justify-between text-sm">
-        <span className="text-slate-400">Revenu</span>
-        <span className="text-white font-medium">{formatMoney(total)}</span>
+        <span className="text-slate-400">Revenu <span className="text-slate-600">(avant taxes)</span></span>
+        <span className="text-white font-medium">{formatMoney(sousTotal)}</span>
       </div>
       <div className="flex items-center justify-between text-sm">
         <span className="text-slate-400">Main d&apos;oeuvre ({totalHeures}h)</span>
@@ -685,7 +688,7 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
           <HoursSection quoteId={job.id} />
           <ExpensesSection quoteId={job.id} />
           <ChecklistSection quoteId={job.id} onChecklistChange={setCheckedItems} />
-          <ProfitSection quoteId={job.id} total={Number(job.total)} />
+          <ProfitSection quoteId={job.id} sousTotal={Number(job.sous_total)} tps={Number(job.tps)} tvq={Number(job.tvq)} />
         </div>
       )}
 
@@ -802,7 +805,7 @@ function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: bool
           <PhotoSection quoteId={job.id} />
           <HoursSection quoteId={job.id} />
           <ExpensesSection quoteId={job.id} />
-          <ProfitSection quoteId={job.id} total={Number(job.total)} />
+          <ProfitSection quoteId={job.id} sousTotal={Number(job.sous_total)} tps={Number(job.tps)} tvq={Number(job.tvq)} />
         </div>
       )}
 
