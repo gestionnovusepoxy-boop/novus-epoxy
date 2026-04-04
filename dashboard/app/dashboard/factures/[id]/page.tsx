@@ -188,25 +188,23 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Contrat */}
+      {/* Contrat signé */}
       {inv.quote_id && (
-        <div className={`rounded-xl p-6 border ${inv.contrat_signe_at ? 'bg-green-500/5 border-green-500/30' : 'bg-slate-800 border-slate-700'}`}>
+        <div className="rounded-xl p-6 border bg-green-500/5 border-green-500/30">
           <h3 className="text-xs font-medium uppercase tracking-wider mb-3 text-slate-400">Contrat</h3>
-          {inv.contrat_signe_at ? (
-            <div className="space-y-2">
-              <p className="text-green-400 font-semibold">Signé par {inv.contrat_signature_nom ?? 'Client'}</p>
-              <p className="text-slate-400 text-xs">{formatDate(inv.contrat_signe_at)}</p>
-              <a
-                href={`/contrat/${inv.quote_id}${inv.quote_token ? `?token=${encodeURIComponent(inv.quote_token)}` : ''}`}
-                target="_blank"
-                className="inline-block mt-2 bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
-              >
-                Voir le contrat signé
-              </a>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-green-400 font-semibold">Signé par {inv.contrat_signature_nom ?? inv.client_nom}</p>
+              {inv.contrat_signe_at && <p className="text-slate-400 text-xs">{formatDate(inv.contrat_signe_at)}</p>}
             </div>
-          ) : (
-            <p className="text-slate-500 text-sm">Pas encore signé</p>
-          )}
+            <a
+              href={`/contrat/${inv.quote_id}${inv.quote_token ? `?token=${encodeURIComponent(inv.quote_token)}` : ''}`}
+              target="_blank"
+              className="bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+            >
+              Voir le contrat
+            </a>
+          </div>
         </div>
       )}
 
