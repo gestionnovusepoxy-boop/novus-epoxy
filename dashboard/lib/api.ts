@@ -178,7 +178,7 @@ export function fetchQuote(id: number): Promise<Quote> {
 
 export async function createQuote(data: {
   client_nom: string; client_email: string; client_tel?: string; client_adresse?: string;
-  type_service: ServiceType; superficie: number; etat_plancher?: string; notes?: string;
+  type_service: ServiceType; superficie: number; couleur_flake?: string; etat_plancher?: string; notes?: string;
   submission_id?: number; rabais_pct?: number;
 }): Promise<Quote> {
   return apiFetch('/api/quotes', { method: 'POST', body: JSON.stringify(data) });
