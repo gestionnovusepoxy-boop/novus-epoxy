@@ -113,6 +113,7 @@ function isThisWeek(dateStr: string): boolean {
 function PhotoSection({ quoteId, onPhotosChange }: { quoteId: number; onPhotosChange?: (counts: { avant: number; apres: number }) => void }) {
   const [photos, setPhotos] = useState<JobPhoto[]>([]);
   const [uploading, setUploading] = useState<'avant' | 'apres' | null>(null);
+  const [viewingPhoto, setViewingPhoto] = useState<{ url: string; label: string } | null>(null);
   const avantRef = useRef<HTMLInputElement>(null);
   const apresRef = useRef<HTMLInputElement>(null);
 
@@ -190,7 +191,8 @@ function PhotoSection({ quoteId, onPhotosChange }: { quoteId: number; onPhotosCh
                 <img
                   src={p.url}
                   alt={p.filename}
-                  className="w-16 h-16 object-cover rounded border border-slate-600"
+                  className="w-16 h-16 object-cover rounded border border-slate-600 cursor-pointer hover:border-amber-500 transition"
+                  onClick={() => setViewingPhoto({ url: p.url, label: `Avant — ${p.filename}` })}
                 />
                 <button
                   onClick={() => handleDelete(p.id)}
@@ -235,7 +237,8 @@ function PhotoSection({ quoteId, onPhotosChange }: { quoteId: number; onPhotosCh
                 <img
                   src={p.url}
                   alt={p.filename}
-                  className="w-16 h-16 object-cover rounded border border-slate-600"
+                  className="w-16 h-16 object-cover rounded border border-slate-600 cursor-pointer hover:border-green-500 transition"
+                  onClick={() => setViewingPhoto({ url: p.url, label: `Apres — ${p.filename}` })}
                 />
                 <button
                   onClick={() => handleDelete(p.id)}
@@ -251,6 +254,17 @@ function PhotoSection({ quoteId, onPhotosChange }: { quoteId: number; onPhotosCh
           </div>
         </div>
       </div>
+      {viewingPhoto && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setViewingPhoto(null)}>
+          <div className="relative max-w-4xl w-full max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between w-full mb-3">
+              <h3 className="text-white font-bold text-lg">{viewingPhoto.label}</h3>
+              <button onClick={() => setViewingPhoto(null)} className="w-10 h-10 bg-slate-800 hover:bg-slate-700 text-white rounded-full flex items-center justify-center text-xl transition">&times;</button>
+            </div>
+            <img src={viewingPhoto.url} alt={viewingPhoto.label} className="max-h-[80vh] w-auto rounded-xl border border-slate-700 object-contain" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -390,11 +404,12 @@ function HoursSection({ quoteId }: { quoteId: number }) {
 }
 
 /* ─── Expenses Section ─── */
-interface ExpenseEntry { id: number; fournisseur: string; montant_ttc: number; categorie: string; date_depense: string; description: string | null }
+interface ExpenseEntry { id: number; fournisseur: string; montant_ttc: number; categorie: string; date_depense: string; description: string | null; receipt_url: string | null }
 
 function ExpensesSection({ quoteId }: { quoteId: number }) {
   const [expenses, setExpenses] = useState<ExpenseEntry[]>([]);
   const [totalDepenses, setTotalDepenses] = useState(0);
+  const [viewingReceipt, setViewingReceipt] = useState<{ url: string; fournisseur: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -414,30 +429,52 @@ function ExpensesSection({ quoteId }: { quoteId: number }) {
   };
 
   return (
-    <div className="bg-slate-900/50 rounded-lg p-3 space-y-2">
-      <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
-        Depenses du projet — {expenses.length} facture{expenses.length !== 1 ? 's' : ''}
-      </h4>
-      {expenses.length > 0 ? (
-        <div className="space-y-1">
-          {expenses.map(e => (
-            <div key={e.id} className="flex items-center justify-between text-sm">
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-slate-300 truncate">{e.fournisseur}</span>
-                <span className="text-slate-600 text-xs">{CAT_LABEL[e.categorie] || e.categorie}</span>
+    <>
+      <div className="bg-slate-900/50 rounded-lg p-3 space-y-2">
+        <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">
+          Depenses du projet — {expenses.length} facture{expenses.length !== 1 ? 's' : ''}
+        </h4>
+        {expenses.length > 0 ? (
+          <div className="space-y-1">
+            {expenses.map(e => (
+              <div key={e.id} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  {e.receipt_url && (
+                    <button
+                      onClick={() => setViewingReceipt({ url: e.receipt_url!, fournisseur: e.fournisseur })}
+                      className="flex-shrink-0 w-6 h-6 rounded bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 hover:bg-amber-500/30 transition"
+                      title="Voir la facture"
+                    >
+                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>
+                    </button>
+                  )}
+                  <span className="text-slate-300 truncate">{e.fournisseur}</span>
+                  <span className="text-slate-600 text-xs">{CAT_LABEL[e.categorie] || e.categorie}</span>
+                </div>
+                <span className="text-white font-medium whitespace-nowrap">{formatMoney(Number(e.montant_ttc))}</span>
               </div>
-              <span className="text-white font-medium whitespace-nowrap">{formatMoney(Number(e.montant_ttc))}</span>
+            ))}
+            <div className="flex items-center justify-between text-sm border-t border-slate-700 pt-1.5 mt-1">
+              <span className="text-slate-400 font-medium">Total depenses</span>
+              <span className="text-red-400 font-bold">{formatMoney(totalDepenses)}</span>
             </div>
-          ))}
-          <div className="flex items-center justify-between text-sm border-t border-slate-700 pt-1.5 mt-1">
-            <span className="text-slate-400 font-medium">Total depenses</span>
-            <span className="text-red-400 font-bold">{formatMoney(totalDepenses)}</span>
+          </div>
+        ) : (
+          <p className="text-slate-600 text-xs">Aucune depense enregistree</p>
+        )}
+      </div>
+      {viewingReceipt && (
+        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4" onClick={() => setViewingReceipt(null)}>
+          <div className="relative max-w-3xl w-full max-h-[90vh] flex flex-col items-center" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between w-full mb-3">
+              <h3 className="text-white font-bold text-lg">Facture — {viewingReceipt.fournisseur}</h3>
+              <button onClick={() => setViewingReceipt(null)} className="w-10 h-10 bg-slate-800 hover:bg-slate-700 text-white rounded-full flex items-center justify-center text-xl transition">&times;</button>
+            </div>
+            <img src={viewingReceipt.url} alt={`Facture ${viewingReceipt.fournisseur}`} className="max-h-[80vh] w-auto rounded-xl border border-slate-700 object-contain" />
           </div>
         </div>
-      ) : (
-        <p className="text-slate-600 text-xs">Aucune depense enregistree</p>
       )}
-    </div>
+    </>
   );
 }
 
