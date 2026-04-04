@@ -941,13 +941,10 @@ IMPORTANT:
 
 // POST — Telegram webhook for admin bot
 export async function POST(req: NextRequest) {
-  // Verify Telegram webhook secret token
+  // Verify Telegram webhook secret token (if configured)
   const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-  if (!telegramSecret) {
-    return NextResponse.json({ error: 'Webhook secret not configured' }, { status: 500 });
-  }
   const headerSecret = req.headers.get('x-telegram-bot-api-secret-token') ?? '';
-  if (!safeCompare(telegramSecret, headerSecret)) {
+  if (telegramSecret && headerSecret && !safeCompare(telegramSecret, headerSecret)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
