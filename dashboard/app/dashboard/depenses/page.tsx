@@ -552,8 +552,8 @@ function PageContent() {
                         <div className="flex items-center gap-1.5">
                           <p className="text-white text-xs sm:text-sm font-medium">{exp.fournisseur}</p>
                           {exp.quote_id && (
-                            <a href={`/dashboard/devis/${exp.quote_id}`} className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded hover:bg-blue-500/30 transition">
-                              P#{exp.quote_id}
+                            <a href="/dashboard/travaux" className="text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30 px-1.5 py-0.5 rounded hover:bg-blue-500/30 transition">
+                              Projet #{exp.quote_id}
                             </a>
                           )}
                         </div>
