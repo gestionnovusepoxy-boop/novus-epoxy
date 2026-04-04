@@ -99,6 +99,24 @@ export async function GET() {
     FROM submissions
   `);
 
+  // 10. Lead sources breakdown
+  const leadSources = await query(`
+    SELECT source, COUNT(*)::int AS count
+    FROM crm_leads
+    GROUP BY source ORDER BY count DESC
+  `);
+
+  // 11. Chatbot conversations
+  const chatbot = await query(`SELECT COUNT(*)::int AS count FROM conversations`);
+
+  // 12. SMS stats
+  const smsStats = await query(`
+    SELECT
+      COUNT(CASE WHEN direction = 'outbound' THEN 1 END)::int AS envoyes,
+      COUNT(CASE WHEN direction = 'inbound' THEN 1 END)::int AS recus
+    FROM sms_logs
+  `).catch(() => [{ envoyes: 0, recus: 0 }]);
+
   return NextResponse.json({
     financier: {
       encaisse,
@@ -128,5 +146,8 @@ export async function GET() {
     },
     expenses_by_cat: expByCat.map(e => ({ categorie: e.categorie, total: Number(e.total) })),
     submissions: submissions[0],
+    lead_sources: leadSources.map(s => ({ source: s.source as string || 'inconnu', count: Number(s.count) })),
+    chatbot: { conversations: Number(chatbot[0].count) },
+    sms: smsStats[0],
   });
 }

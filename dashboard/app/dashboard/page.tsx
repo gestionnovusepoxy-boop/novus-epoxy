@@ -40,6 +40,9 @@ interface OverviewData {
   };
   expenses_by_cat: { categorie: string; total: number }[];
   submissions: { total: number; nouveaux: number };
+  lead_sources: { source: string; count: number }[];
+  chatbot: { conversations: number };
+  sms: { envoyes: number; recus: number };
 }
 
 /* ─── KPI Card ─── */
@@ -321,20 +324,70 @@ function DashboardContent() {
               </div>
             </div>
 
-            {/* Submissions from website */}
-            <div className="bg-slate-800 border border-slate-700 rounded-xl p-5">
+            {/* Sources & Canaux */}
+            <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-4">
               <div className="flex items-center justify-between">
-                <h3 className="text-white font-semibold text-sm">Soumissions site web</h3>
-                <Link href="/dashboard/soumissions" className="text-amber-400 text-xs hover:text-amber-300">Voir tout</Link>
+                <h3 className="text-white font-semibold text-sm">Sources des leads</h3>
+                <span className="text-slate-400 text-xs">{data.leads.total} leads au total</span>
               </div>
-              <div className="flex gap-6 mt-3">
-                <div>
-                  <p className="text-xl font-bold text-white">{data.submissions.total}</p>
-                  <p className="text-slate-400 text-xs">Total recues</p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                {data.lead_sources.map(s => {
+                  const labels: Record<string, { name: string; icon: string; color: string }> = {
+                    jason: { name: 'Import Jason', icon: '👷', color: '#f59e0b' },
+                    cloud: { name: 'Champfields/GHL', icon: '☁️', color: '#3b82f6' },
+                    homestars: { name: 'HomeStars', icon: '⭐', color: '#22c55e' },
+                    'google-maps': { name: 'Google Maps', icon: '📍', color: '#ef4444' },
+                    houzz: { name: 'Houzz', icon: '🏠', color: '#8b5cf6' },
+                    cms: { name: 'Site web', icon: '🌐', color: '#06b6d4' },
+                    'site-web': { name: 'Formulaire', icon: '📋', color: '#06b6d4' },
+                  };
+                  const info = labels[s.source] || { name: s.source, icon: '📌', color: '#64748b' };
+                  return (
+                    <div key={s.source} className="bg-slate-900/50 border border-slate-700 rounded-lg p-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-lg">{info.icon}</span>
+                        <div>
+                          <p className="text-white text-lg font-bold">{s.count}</p>
+                          <p className="text-slate-400 text-[10px]">{info.name}</p>
+                        </div>
+                      </div>
+                      <div className="mt-2 w-full bg-slate-700 rounded-full h-1">
+                        <div className="h-1 rounded-full" style={{ width: `${Math.min(100, (s.count / data.leads.total) * 100)}%`, backgroundColor: info.color }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Other channels */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2 border-t border-slate-700">
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-lg">🤖</span>
+                  <div>
+                    <p className="text-white font-bold">{data.chatbot.conversations}</p>
+                    <p className="text-slate-400 text-[10px]">Chatbot Nova</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xl font-bold text-amber-400">{data.submissions.nouveaux}</p>
-                  <p className="text-slate-400 text-xs">Nouvelles</p>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-lg">📋</span>
+                  <div>
+                    <p className="text-white font-bold">{data.submissions.total}</p>
+                    <p className="text-slate-400 text-[10px]">Soumissions web</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-lg">📱</span>
+                  <div>
+                    <p className="text-white font-bold">{data.sms.envoyes}</p>
+                    <p className="text-slate-400 text-[10px]">SMS envoyes</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="text-lg">💬</span>
+                  <div>
+                    <p className="text-white font-bold">{data.sms.recus}</p>
+                    <p className="text-slate-400 text-[10px]">SMS recus</p>
+                  </div>
                 </div>
               </div>
             </div>
