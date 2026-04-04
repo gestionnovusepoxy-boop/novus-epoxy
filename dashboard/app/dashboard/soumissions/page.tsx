@@ -40,7 +40,7 @@ function DetailPanel({ s, onClose, onUpdate }: { s: Submission; onClose: () => v
       >
         <div className="sticky top-0 bg-slate-800 border-b border-slate-700 px-6 py-4 flex items-center justify-between z-10">
           <h3 className="text-lg font-bold text-white">Soumission #{s.id}</h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-2xl leading-none">&times;</button>
+          <button onClick={onClose} className="w-10 h-10 flex items-center justify-center rounded-full bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white text-xl transition">&times;</button>
         </div>
 
         <div className="p-6 space-y-5">
