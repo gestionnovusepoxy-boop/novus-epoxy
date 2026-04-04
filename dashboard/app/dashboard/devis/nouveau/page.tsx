@@ -21,6 +21,7 @@ export default function NouveauDevisPage() {
     client_adresse: searchParams.get('ville') ?? '',
     type_service: validService,
     superficie: searchParams.get('superficie') ?? '',
+    couleur_flake: '',
     etat_plancher: '',
     notes: searchParams.get('notes') ?? '',
     rabais_pct: 20,
@@ -46,6 +47,7 @@ export default function NouveauDevisPage() {
         client_adresse: form.client_adresse || undefined,
         type_service: form.type_service,
         superficie: sup,
+        couleur_flake: form.couleur_flake || undefined,
         etat_plancher: form.etat_plancher || undefined,
         notes: form.notes || undefined,
         rabais_pct: form.rabais_pct || undefined,
@@ -126,6 +128,14 @@ export default function NouveauDevisPage() {
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
               />
             </div>
+          </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">Couleur / Fini</label>
+            <input
+              value={form.couleur_flake} onChange={e => update('couleur_flake', e.target.value)}
+              placeholder="Ex: Night Fall, Or/Gold, Gris, Charcoal..."
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"
+            />
           </div>
           <div>
             <label className="block text-sm text-slate-400 mb-1">Etat du plancher</label>
