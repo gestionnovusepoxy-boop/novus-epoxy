@@ -334,12 +334,12 @@ function DashboardContent() {
                 {(() => {
                   const labels: Record<string, { name: string; icon: string; color: string }> = {
                     jason: { name: 'Import Jason', icon: '👷', color: '#f59e0b' },
-                    cloud: { name: 'Champfields/GHL', icon: '☁️', color: '#3b82f6' },
+                    cloud: { name: 'Facebook Ads', icon: '📘', color: '#1877f2' },
                     homestars: { name: 'HomeStars', icon: '⭐', color: '#22c55e' },
                     'google-maps': { name: 'Google Maps', icon: '📍', color: '#ef4444' },
                     houzz: { name: 'Houzz', icon: '🏠', color: '#8b5cf6' },
-                    cms: { name: 'Site web', icon: '🌐', color: '#06b6d4' },
-                    'site-web': { name: 'Site web', icon: '🌐', color: '#06b6d4' },
+                    cms: { name: 'Formulaire site web', icon: '🌐', color: '#06b6d4' },
+                    'site-web': { name: 'Formulaire site web', icon: '🌐', color: '#06b6d4' },
                   };
                   // Merge cms + site-web into one
                   const merged: Record<string, { name: string; icon: string; color: string; count: number }> = {};
