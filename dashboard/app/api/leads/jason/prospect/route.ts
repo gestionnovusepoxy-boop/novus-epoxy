@@ -315,8 +315,8 @@ export async function POST(req: NextRequest) {
       try {
         const result = await sendProspectEmail({ to: lead.email, subject, html });
         await query(
-          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, 'sent')`,
-          [result.id, lead.email, subject],
+          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut, html_body, direction) VALUES ($1, $2, $3, 'sent', $4, 'outbound')`,
+          [result.id, lead.email, subject, html],
         ).catch(() => {});
         alreadySentEmails.add(lead.email.toLowerCase());
         emailsSent++;

@@ -598,16 +598,17 @@ export async function GET(req: NextRequest) {
     const isAdmin = fromEmail.toLowerCase().includes('gestionnovusepoxy');
     console.log(`[Email Scan] Processing: from=${fromEmail} isJasonShop=${isJasonShop} isAdmin=${isAdmin} subject=${subject.slice(0, 50)}`);
 
-    // Skip ALL emails FROM jason@novusepoxy.shop — these are our own prospect emails (BCC copies)
-    if (isJasonShop) continue;
-
-    // Allow admin emails through for lead imports, skip other internal emails
-    if (!isAdmin && fromEmail.includes('novusepoxy')) continue;
-
     // === LEAD IMPORT VIA EMAIL ===
     // When Jason or admin sends a list of leads by email, auto-import into CRM + prospect
-    // Detect by sender (jason@novusepoxy.shop, gestionnovusepoxy) OR by subject containing "ARIA" + "LEAD"
-    const isLeadEmail = isJasonShop || isAdmin || (subject.toUpperCase().includes('ARIA') && subject.toUpperCase().includes('LEAD'));
+    // Check BEFORE skipping — CSV attachments from Jason should be processed
+    const hasLeadSubject = subject.toUpperCase().includes('ARIA') || subject.toUpperCase().includes('LEAD') || subject.toUpperCase().includes('CSV') || subject.toUpperCase().includes('IMPORT');
+    const isLeadEmail = isAdmin || (isJasonShop && hasLeadSubject) || hasLeadSubject;
+
+    // Skip jason@novusepoxy.shop BCC copies — BUT only if it's NOT a lead import email
+    if (isJasonShop && !isLeadEmail) continue;
+
+    // Allow admin emails through for lead imports, skip other internal emails
+    if (!isAdmin && !isJasonShop && fromEmail.includes('novusepoxy')) continue;
     if (isLeadEmail) {
       // Get body text
       let jasonBody = '';

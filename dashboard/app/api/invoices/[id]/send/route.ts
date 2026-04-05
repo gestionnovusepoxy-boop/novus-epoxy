@@ -148,8 +148,8 @@ ${paymentLink ? `<div style="text-align:center;margin:0 0 16px;"><a href="${paym
   }
 
   await query(
-    `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1, $2, $3, $4)`,
-    [emailData.id, sendTo, subject, 'sent'],
+    `INSERT INTO email_logs (resend_id, destinataire, sujet, statut, html_body, direction) VALUES ($1, $2, $3, $4, $5, 'outbound')`,
+    [emailData.id, sendTo, subject, 'sent', html],
   );
 
   await query(`UPDATE invoices SET statut = 'envoyee' WHERE id = $1 AND statut = 'brouillon'`, [parseInt(id)]);
