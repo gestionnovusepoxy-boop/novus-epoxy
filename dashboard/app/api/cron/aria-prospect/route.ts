@@ -9,7 +9,7 @@ export const maxDuration = 60;
 
 async function sendTelegram(text: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_GROUP_CHAT_ID ?? process.env.TELEGRAM_ADMIN_CHAT_IDS?.split(',')[0];
+  const chatId = process.env.TELEGRAM_GROUP_CHAT_ID ?? process.env.TELEGRAM_ADMIN_CHAT_IDS?.split(',').find(id => id.trim().startsWith('-')) ?? process.env.TELEGRAM_ADMIN_CHAT_IDS?.split(',')[0];
   if (!token || !chatId) return;
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',
@@ -66,14 +66,49 @@ export async function GET(req: NextRequest) {
   );
   const remainingCount = (remaining[0]?.c as number) || 0;
 
-  // Notify group only if something was sent
+  // Get deliverability stats for today
+  const todayStats = await query(`
+    SELECT
+      COUNT(*)::int as total,
+      COUNT(CASE WHEN statut = 'delivered' THEN 1 END)::int as delivered,
+      COUNT(CASE WHEN statut = 'opened' THEN 1 END)::int as opened,
+      COUNT(CASE WHEN statut = 'clicked' THEN 1 END)::int as clicked,
+      COUNT(CASE WHEN statut = 'bounced' THEN 1 END)::int as bounced,
+      COUNT(CASE WHEN statut = 'complained' THEN 1 END)::int as complained
+    FROM email_logs WHERE created_at >= CURRENT_DATE
+  `).catch(() => [{ total: 0, delivered: 0, opened: 0, clicked: 0, bounced: 0, complained: 0 }]);
+  const st = todayStats[0];
+  const delivRate = Number(st.total) > 0 ? Math.round(Number(st.delivered) / Number(st.total) * 100) : 0;
+  const openRate = Number(st.total) > 0 ? Math.round(Number(st.opened) / Number(st.total) * 100) : 0;
+
+  // Total leads stats
+  const totalLeads = await query(`SELECT COUNT(*)::int as c FROM crm_leads`).catch(() => [{ c: 0 }]);
+  const totalContacted = await query(`SELECT COUNT(*)::int as c FROM crm_leads WHERE prospect_sent_at IS NOT NULL`).catch(() => [{ c: 0 }]);
+
+  // Notify group with detailed report
   if (emailsSent > 0 || smsSent > 0) {
+    const progressBar = remainingCount > 0
+      ? `${'█'.repeat(Math.round((Number(totalContacted[0].c) / Number(totalLeads[0].c)) * 20))}${'░'.repeat(20 - Math.round((Number(totalContacted[0].c) / Number(totalLeads[0].c)) * 20))}`
+      : '████████████████████';
+    const progressPct = Number(totalLeads[0].c) > 0 ? Math.round(Number(totalContacted[0].c) / Number(totalLeads[0].c) * 100) : 100;
+
     await sendTelegram(
-      `🤖 <b>Aria — Envoi prospect</b>\n\n` +
+      `🤖 <b>Aria — Rapport d'envoi</b>\n\n` +
+      `<b>Ce batch:</b>\n` +
       `📧 ${emailsSent} emails envoyes\n` +
       (smsSent > 0 ? `📱 ${smsSent} SMS envoyes\n` : '') +
-      `📊 ${remainingCount} leads en attente\n\n` +
-      (remainingCount > 0 ? `<i>Prochain envoi dans 10 min.</i>` : `<i>Tous les leads ont ete contactes!</i>`)
+      `\n<b>Aujourd'hui:</b>\n` +
+      `📨 ${st.total} emails envoyes au total\n` +
+      `✅ ${st.delivered} livres (${delivRate}%)\n` +
+      `👀 ${st.opened} ouverts (${openRate}%)\n` +
+      `🖱 ${st.clicked} cliques\n` +
+      (Number(st.bounced) > 0 ? `❌ ${st.bounced} bounces\n` : '') +
+      (Number(st.complained) > 0 ? `⚠️ ${st.complained} spam\n` : '') +
+      `\n<b>Progression:</b>\n` +
+      `${progressBar} ${progressPct}%\n` +
+      `👥 ${totalContacted[0].c}/${totalLeads[0].c} leads contactes\n` +
+      `📊 ${remainingCount} en attente\n\n` +
+      (remainingCount > 0 ? `<i>⏭ Prochain envoi dans 10 min.</i>` : `🎉 <b>Tous les leads ont ete contactes!</b>`)
     );
   }
 
