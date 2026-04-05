@@ -317,44 +317,8 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Send email — PAUSED until April 7 for domain warmup (novusepoxy.shop)
-    // After April 7: re-enable with warmup (20/day week1, 50/day week2, 100/day week3)
-    const EMAIL_RESUME_DATE = new Date('2026-04-07T12:00:00Z'); // Monday April 7
-    const emailsEnabled = now >= EMAIL_RESUME_DATE;
-    if (emailsEnabled && emailsSent < 2 && lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
-      const dailyCount = await query(
-        `SELECT COUNT(*)::int as c FROM email_logs WHERE created_at >= CURRENT_DATE AND direction = 'outbound'`
-      ).catch(() => [{ c: 0 }]);
-      const todayEmails = (dailyCount[0]?.c as number) || 0;
-      const DAILY_EMAIL_LIMIT = 20; // Warmup: increase gradually over weeks
-      if (todayEmails < DAILY_EMAIL_LIMIT) {
-      const nomComplet = lead.nom.trim().slice(0, 40);
-      const subject = isCommercial
-        ? `${nomComplet} — Partenariat planchers époxy`
-        : isFacebookLead
-          ? `${prenom}, votre soumission gratuite — Novus Epoxy`
-          : `${nomComplet} — Votre projet en époxy`;
-
-      const html = isCommercial
-        ? buildCommercialHtml(prenom, photos)
-        : isFacebookLead
-          ? buildFacebookLeadHtml(prenom, photos)
-          : buildResidentialHtml(prenom, project, photos);
-
-      try {
-        const result = await sendProspectEmail({ to: lead.email, subject, html });
-        await query(
-          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut, html_body, direction) VALUES ($1, $2, $3, 'sent', $4, 'outbound')`,
-          [result.id, lead.email, subject, html],
-        ).catch(() => {});
-        alreadySentEmails.add(lead.email.toLowerCase());
-        emailsSent++;
-        contacted = true;
-      } catch (err) {
-        console.error(`[Prospect] FAIL ${lead.email}:`, err instanceof Error ? err.message : err);
-      }
-      } // end daily limit check
-    }
+    // 1. Emails — DÉSACTIVÉ jusqu'à nouvel ordre (domain warmup)
+    // Luca décidera quand réactiver
 
     // 2. SMS — send to all leads with phone
     const shouldSMS = lead.telephone?.trim();
