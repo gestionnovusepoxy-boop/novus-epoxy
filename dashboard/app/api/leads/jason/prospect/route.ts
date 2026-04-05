@@ -317,8 +317,10 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Send email
-    if (lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
+    // 1. Send email — PAUSED for domain warmup (novusepoxy.shop reputation recovery)
+    // TODO: Re-enable emails with warmup schedule (20/day week1, 50/day week2, 100/day week3)
+    const EMAIL_PAUSED = true;
+    if (!EMAIL_PAUSED && lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
       const nomComplet = lead.nom.trim().slice(0, 40);
       const subject = isCommercial
         ? `${nomComplet} — Partenariat planchers époxy`
@@ -346,8 +348,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. SMS — Facebook leads: ALWAYS send (email + SMS combo). Others: only if no email.
-    const shouldSMS = lead.telephone?.trim() && (isFacebookLead || !contacted);
+    // 2. SMS — send to all leads with phone (emails paused for warmup)
+    const shouldSMS = lead.telephone?.trim();
     if (shouldSMS) {
       try {
         const smsText = isFacebookLead
