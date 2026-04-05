@@ -59,10 +59,18 @@ function buildResidentialHtml(prenom: string, project: string, photos: { url: st
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
+  <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 12px;">
+    Joyeuses Pâques de la part de toute l'équipe Novus Epoxy!
+  </p>
+  <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
+    <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">Promotion du mois d'avril</p>
+    <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">20% de rabais sur tous nos services!</p>
+    <p style="color:#78716c;font-size:12px;margin:4px 0 0;">Offre valide jusqu'au 30 avril 2026</p>
+  </div>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
     C'est Jason de Novus Epoxy! On se spécialise en planchers époxy haut de gamme dans la région de Québec.
     ${project ? `J'ai vu que vous pourriez être intéressé par <strong>${project}</strong>.` : 'On aimerait vous montrer ce qu\'on fait.'}
-    Voici quelques-unes de nos réalisations récentes :
+    Profitez de notre rabais de 20% ce mois-ci pour transformer vos planchers!
   </p>
   <p style="color:#1e293b;font-weight:700;font-size:15px;margin:0 0 12px;">Nos réalisations :</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
@@ -114,6 +122,12 @@ function buildCommercialHtml(prenom: string, photos: { url: string; caption: str
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
+  <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;">Joyeuses Pâques!</p>
+  <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
+    <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">Promotion Avril</p>
+    <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">20% de rabais sur tous nos services!</p>
+    <p style="color:#78716c;font-size:12px;margin:4px 0 0;">Offre valide jusqu'au 30 avril 2026</p>
+  </div>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
     Je me presente, <strong>Jason</strong>, de Novus Epoxy. On travaille avec plusieurs entrepreneurs dans la région de Québec et on cherche à bâtir des <strong>partenariats solides</strong>.
   </p>
@@ -161,8 +175,14 @@ function buildFacebookLeadHtml(prenom: string, photos: { url: string; caption: s
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom}!</p>
+  <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;">Joyeuses Pâques!</p>
+  <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
+    <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">Promotion Avril</p>
+    <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">20% de rabais!</p>
+    <p style="color:#78716c;font-size:12px;margin:4px 0 0;">Valide jusqu'au 30 avril 2026</p>
+  </div>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
-    Merci d'avoir demandé votre <strong>soumission gratuite</strong>! On est ravis de votre intérêt.
+    Merci d'avoir demandé votre <strong>soumission gratuite</strong>! On est ravis de votre intérêt. Profitez de notre rabais de 20% en avril!
     Pour préparer votre soumission personnalisée rapidement, on a besoin de quelques détails :
   </p>
   <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:20px;margin:0 0 20px;">
