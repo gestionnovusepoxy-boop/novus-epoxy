@@ -85,7 +85,7 @@ function QuoteRow({ q, onUpdate }: { q: Quote; onUpdate: () => void }) {
       </td>
       <td className="px-4 py-3 text-slate-300 text-sm">{SERVICE_LABEL[q.type_service] ?? q.type_service}</td>
       <td className="px-4 py-3 text-slate-300 text-sm">{q.superficie} pi²</td>
-      <td className="px-4 py-3 text-white text-sm font-medium">{formatMoney(Number(q.total))}</td>
+      <td className="px-4 py-3 text-white text-sm font-medium">{formatMoney(Number(q.sous_total))}</td>
       <td className="px-4 py-3">
         <select
           value={q.statut}
@@ -174,7 +174,7 @@ function PageContent() {
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Client</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Service</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Superficie</th>
-                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Total</th>
+                <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Sous-total</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Statut</th>
                 <th className="text-left px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider">Date</th>
                 <th className="w-10"></th>
