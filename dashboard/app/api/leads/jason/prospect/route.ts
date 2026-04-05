@@ -317,11 +317,37 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Emails — DÉSACTIVÉ jusqu'à nouvel ordre (domain warmup)
-    // Luca décidera quand réactiver
+    // 1. Send email
+    if (lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
+      const nomComplet = lead.nom.trim().slice(0, 40);
+      const subject = isCommercial
+        ? `${nomComplet} — Partenariat planchers époxy`
+        : isFacebookLead
+          ? `${prenom}, votre soumission gratuite — Novus Epoxy`
+          : `${nomComplet} — Votre projet en époxy`;
 
-    // 2. SMS — send to all leads with phone
-    const shouldSMS = lead.telephone?.trim();
+      const html = isCommercial
+        ? buildCommercialHtml(prenom, photos)
+        : isFacebookLead
+          ? buildFacebookLeadHtml(prenom, photos)
+          : buildResidentialHtml(prenom, project, photos);
+
+      try {
+        const result = await sendProspectEmail({ to: lead.email, subject, html });
+        await query(
+          `INSERT INTO email_logs (resend_id, destinataire, sujet, statut, html_body, direction) VALUES ($1, $2, $3, 'sent', $4, 'outbound')`,
+          [result.id, lead.email, subject, html],
+        ).catch(() => {});
+        alreadySentEmails.add(lead.email.toLowerCase());
+        emailsSent++;
+        contacted = true;
+      } catch (err) {
+        console.error(`[Prospect] FAIL ${lead.email}:`, err instanceof Error ? err.message : err);
+      }
+    }
+
+    // 2. SMS — Facebook leads: ALWAYS send (email + SMS combo). Others: only if no email.
+    const shouldSMS = lead.telephone?.trim() && (isFacebookLead || !contacted);
     if (shouldSMS) {
       try {
         const smsText = isFacebookLead
