@@ -7,7 +7,7 @@ import { sendSMS } from '@/lib/sms';
 export const maxDuration = 60; // Allow up to 60s for large batches
 
 // Jason's Twilio number for prospection SMS
-const JASON_TWILIO = '+15817095940';
+// SMS sent from TWILIO_PHONE_NUMBER env var
 
 // Portfolio photo picker (same logic as Hunter)
 interface PortfolioPhoto { id: number; titre: string; type_service: string; description: string | null; photos: string[] }
@@ -228,13 +228,11 @@ export async function POST(req: NextRequest) {
   // === RATE LIMITING: max 100 per call, staggered via Resend scheduled_at ===
   const MAX_BATCH = 100; // API calls are instant (just scheduling), Resend delivers spaced out
 
-  // Respect business hours: no outreach before 8h or after 18h Quebec time
+  // Respect business hours: no outreach before 8h or after 21h Quebec time
   const now = new Date();
-  const utcHour = now.getUTCHours();
-  const quebecOffset = -4; // EDT
-  const quebecHour = (utcHour + quebecOffset + 24) % 24;
-  if (quebecHour < 8 || quebecHour >= 20) {
-    return NextResponse.json({ ok: true, emails: 0, queued: leadIds.length, message: `Hors heures (8h-20h). Il est ${quebecHour}h.` });
+  const quebecHour = parseInt(now.toLocaleString('en-US', { timeZone: 'America/Toronto', hour: 'numeric', hour12: false }));
+  if (quebecHour < 8 || quebecHour >= 21) {
+    return NextResponse.json({ ok: true, emails: 0, queued: leadIds.length, message: `Hors heures (${quebecHour}h). Prochain envoi a 8h.` });
   }
 
   // === DEDUP: load ALL emails ever sent ===
