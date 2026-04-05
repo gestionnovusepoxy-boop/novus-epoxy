@@ -317,10 +317,11 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Send email — warmup mode: max 20 emails/day to build domain reputation
-    // Check how many emails sent today before each send
-    if (emailsSent < 2 && lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
-      // Check daily email count (warmup limit)
+    // 1. Send email — PAUSED until April 7 for domain warmup (novusepoxy.shop)
+    // After April 7: re-enable with warmup (20/day week1, 50/day week2, 100/day week3)
+    const EMAIL_RESUME_DATE = new Date('2026-04-07T12:00:00Z'); // Monday April 7
+    const emailsEnabled = now >= EMAIL_RESUME_DATE;
+    if (emailsEnabled && emailsSent < 2 && lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
       const dailyCount = await query(
         `SELECT COUNT(*)::int as c FROM email_logs WHERE created_at >= CURRENT_DATE AND direction = 'outbound'`
       ).catch(() => [{ c: 0 }]);
