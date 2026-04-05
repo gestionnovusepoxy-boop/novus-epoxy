@@ -317,10 +317,16 @@ export async function POST(req: NextRequest) {
 
     let contacted = false;
 
-    // 1. Send email — PAUSED for domain warmup (novusepoxy.shop reputation recovery)
-    // TODO: Re-enable emails with warmup schedule (20/day week1, 50/day week2, 100/day week3)
-    const EMAIL_PAUSED = true;
-    if (!EMAIL_PAUSED && lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
+    // 1. Send email — warmup mode: max 20 emails/day to build domain reputation
+    // Check how many emails sent today before each send
+    if (emailsSent < 2 && lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
+      // Check daily email count (warmup limit)
+      const dailyCount = await query(
+        `SELECT COUNT(*)::int as c FROM email_logs WHERE created_at >= CURRENT_DATE AND direction = 'outbound'`
+      ).catch(() => [{ c: 0 }]);
+      const todayEmails = (dailyCount[0]?.c as number) || 0;
+      const DAILY_EMAIL_LIMIT = 20; // Warmup: increase gradually over weeks
+      if (todayEmails < DAILY_EMAIL_LIMIT) {
       const nomComplet = lead.nom.trim().slice(0, 40);
       const subject = isCommercial
         ? `${nomComplet} — Partenariat planchers époxy`
@@ -346,9 +352,10 @@ export async function POST(req: NextRequest) {
       } catch (err) {
         console.error(`[Prospect] FAIL ${lead.email}:`, err instanceof Error ? err.message : err);
       }
+      } // end daily limit check
     }
 
-    // 2. SMS — send to all leads with phone (emails paused for warmup)
+    // 2. SMS — send to all leads with phone
     const shouldSMS = lead.telephone?.trim();
     if (shouldSMS) {
       try {
