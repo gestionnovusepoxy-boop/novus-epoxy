@@ -197,7 +197,7 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
               {inv.contrat_signe_at && <p className="text-slate-400 text-xs">{formatDate(inv.contrat_signe_at)}</p>}
             </div>
             <a
-              href={`/contrat/${inv.quote_id}${inv.quote_token ? `?token=${encodeURIComponent(inv.quote_token)}` : ''}`}
+              href={`/api/quotes/${inv.quote_id}/contract`}
               target="_blank"
               className="bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
             >
