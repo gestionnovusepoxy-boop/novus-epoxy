@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { formatDate } from '@/lib/utils';
 import { SERVICES, formatMoney, type ServiceType } from '@/lib/pricing';
 
@@ -188,21 +189,31 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
       </div>
 
       {/* Contrat signé */}
+      {/* Liens admin — contrat + projet (pas visible pour le client) */}
       {inv.quote_id && (
-        <div className="rounded-xl p-6 border bg-green-500/5 border-green-500/30">
-          <h3 className="text-xs font-medium uppercase tracking-wider mb-3 text-slate-400">Contrat</h3>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-green-400 font-semibold">Signé par {inv.contrat_signature_nom ?? inv.client_nom}</p>
-              {inv.contrat_signe_at && <p className="text-slate-400 text-xs">{formatDate(inv.contrat_signe_at)}</p>}
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="rounded-xl p-5 border bg-green-500/5 border-green-500/30">
+            <h3 className="text-xs font-medium uppercase tracking-wider mb-2 text-slate-400">Contrat</h3>
+            <p className="text-green-400 font-semibold text-sm">Signé par {inv.contrat_signature_nom ?? inv.client_nom}</p>
+            {inv.contrat_signe_at && <p className="text-slate-500 text-xs mb-3">{formatDate(inv.contrat_signe_at)}</p>}
             <a
               href={`/api/quotes/${inv.quote_id}/contract`}
               target="_blank"
-              className="bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+              className="inline-block bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
             >
               Voir le contrat
             </a>
+          </div>
+          <div className="rounded-xl p-5 border bg-blue-500/5 border-blue-500/30">
+            <h3 className="text-xs font-medium uppercase tracking-wider mb-2 text-slate-400">Projet</h3>
+            <p className="text-blue-400 font-semibold text-sm">Devis #{inv.quote_id}</p>
+            <p className="text-slate-500 text-xs mb-3">Heures, dépenses, photos, profit</p>
+            <Link
+              href={`/dashboard/travaux?projet=${inv.quote_id}`}
+              className="inline-block bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+            >
+              Voir le projet
+            </Link>
           </div>
         </div>
       )}
