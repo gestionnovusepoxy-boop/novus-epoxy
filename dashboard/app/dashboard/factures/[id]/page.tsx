@@ -188,10 +188,9 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Contrat signé */}
-      {/* Liens admin — contrat + projet (pas visible pour le client) */}
+      {/* Contrat + Projet */}
       {inv.quote_id && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           <div className="rounded-xl p-5 border bg-green-500/5 border-green-500/30">
             <h3 className="text-xs font-medium uppercase tracking-wider mb-2 text-slate-400">Contrat</h3>
             <p className="text-green-400 font-semibold text-sm">Signé par {inv.contrat_signature_nom ?? inv.client_nom}</p>
@@ -210,7 +209,7 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
             <p className="text-slate-500 text-xs mb-3">Heures, dépenses, photos, profit</p>
             <Link
               href={`/dashboard/travaux?projet=${inv.quote_id}`}
-              className="inline-block bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+              className="inline-block bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
             >
               Voir le projet
             </Link>
