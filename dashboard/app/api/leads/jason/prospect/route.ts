@@ -346,8 +346,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. SMS — Facebook leads: ALWAYS send (email + SMS combo). Others: only if no email.
-    const shouldSMS = lead.telephone?.trim() && (isFacebookLead || !contacted);
+    // 2. SMS — send to ALL leads with phone number
+    const shouldSMS = lead.telephone?.trim();
     if (shouldSMS) {
       try {
         const smsText = isFacebookLead
