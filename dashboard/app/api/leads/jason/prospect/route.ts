@@ -251,7 +251,7 @@ export async function POST(req: NextRequest) {
   // Respect business hours: no outreach before 8h or after 21h Quebec time
   const now = new Date();
   const quebecHour = parseInt(now.toLocaleString('en-US', { timeZone: 'America/Toronto', hour: 'numeric', hour12: false }));
-  if (quebecHour < 8 || quebecHour >= 21) {
+  if (quebecHour < 8 || quebecHour >= 20) {
     return NextResponse.json({ ok: true, emails: 0, queued: leadIds.length, message: `Hors heures (${quebecHour}h). Prochain envoi a 8h.` });
   }
 
