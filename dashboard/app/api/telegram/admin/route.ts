@@ -1116,7 +1116,7 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
 <p style="color:#475569;font-size:12px;">Questions? 581-307-2678 (Jason) ou 581-307-5983 (Luca)</p>
 </div></body></html>`;
           try {
-            const emailResult = await sendEmail({ to: q.client_email as string, subject: `Soumission Novus Epoxy #${q.id}`, html, via: 'gmail' });
+            const emailResult = await sendEmail({ to: q.client_email as string, subject: `Soumission Novus Epoxy #${q.id}`, html, via: 'resend' });
             if (emailResult.id && emailResult.id.startsWith('gmail-') || emailResult.id) {
               results.push(`📧 Email envoye a ${q.client_email} (via Gmail, visible dans Messages envoyes)`);
             } else {
