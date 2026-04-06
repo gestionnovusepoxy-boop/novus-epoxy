@@ -1,5 +1,7 @@
 // Novus Epoxy - Site fixes (nav links, smooth scroll, OG tags, form accents)
 (function() {
+  if (window.__novusSiteFixesLoaded) return;
+  window.__novusSiteFixesLoaded = true;
   // Fix gallery page — replace broken images with correct Blob portfolio photos
   var BLOB = 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/';
   var galleryPhotos = [

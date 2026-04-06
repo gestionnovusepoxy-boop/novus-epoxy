@@ -1,5 +1,7 @@
 // Novus Epoxy - Custom contact form handler with email fallback
 (function() {
+  if (window.__novusFormHandlerLoaded) return;
+  window.__novusFormHandlerLoaded = true;
   var form = document.getElementById("novus-contact-form");
   if (!form) return;
 

@@ -48,16 +48,5 @@
     },
   };
 
-  // Auto-load form handler + site fixes if on novusepoxy.ca
-  if (location.hostname.indexOf('novusepoxy.ca') !== -1) {
-    var BASE = 'https://novus-epoxy.vercel.app';
-    var s1 = document.createElement('script');
-    s1.src = BASE + '/form-handler.js';
-    s1.defer = true;
-    document.head.appendChild(s1);
-    var s2 = document.createElement('script');
-    s2.src = BASE + '/site-fixes.js';
-    s2.defer = true;
-    document.head.appendChild(s2);
-  }
+
 })();
