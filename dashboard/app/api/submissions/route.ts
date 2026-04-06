@@ -293,6 +293,21 @@ export async function POST(req: NextRequest) {
   );
   const submissionId = (submissionRows[0] as { id: number }).id;
 
+  // Also insert into crm_leads so Aria can follow up
+  await db(
+    `INSERT INTO crm_leads (nom, telephone, email, service, ville, source, statut, temperature, notes)
+     VALUES ($1, $2, $3, $4, $5, 'site_web', 'nouveau', 'chaud', $6)
+     ON CONFLICT DO NOTHING`,
+    [
+      body.nom.slice(0, 120),
+      body.telephone?.slice(0, 30) ?? null,
+      body.email.slice(0, 255).toLowerCase(),
+      body.service?.slice(0, 80) ?? null,
+      body.ville?.slice(0, 120) ?? null,
+      [body.service, body.surface_estimee ? `${body.surface_estimee} pi²` : null, body.type_projet, body.adresse].filter(Boolean).join(' — '),
+    ]
+  ).catch(() => {}); // Don't fail if duplicate
+
   // Try to auto-create a draft quote if we have enough info
   let quoteId: number | null = null;
   let quoteTotal: string | null = null;
