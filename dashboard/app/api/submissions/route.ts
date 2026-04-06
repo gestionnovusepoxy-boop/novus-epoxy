@@ -328,8 +328,8 @@ export async function POST(req: NextRequest) {
       quoteDepot = formatMoney(calc.depot_requis);
 
       const rows = await db(
-        `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, prix_pied_carre, sous_total, tps, tvq, total, depot_requis, submission_id, statut)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'brouillon')
+        `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis, submission_id, statut)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,'brouillon')
          RETURNING id`,
         [
           body.nom.slice(0, 120),
@@ -339,6 +339,8 @@ export async function POST(req: NextRequest) {
           serviceType,
           surfaceNum,
           calc.prix_pied_carre,
+          calc.rabais_pct,
+          calc.rabais_montant,
           calc.sous_total,
           calc.tps,
           calc.tvq,
