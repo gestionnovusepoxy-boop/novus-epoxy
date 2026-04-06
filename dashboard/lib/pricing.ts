@@ -16,7 +16,10 @@ export const TPS_RATE = 0.05;
 export const TVQ_RATE = 0.09975;
 export const DEPOT_RATE = 0.30;
 
-export function calculateQuote(type: ServiceType, superficie: number, rabais_pct = 0) {
+// Promotion avril 2026 — 20% rabais automatique (désactiver fin avril)
+const PROMO_DEFAULT_RABAIS = 20;
+
+export function calculateQuote(type: ServiceType, superficie: number, rabais_pct = PROMO_DEFAULT_RABAIS) {
   const prix = SERVICES[type].prix;
   const sousTotalBrut = Math.round(prix * superficie * 100) / 100;
   const rabaisMontant = Math.round(sousTotalBrut * (rabais_pct / 100) * 100) / 100;
