@@ -19,9 +19,6 @@ async function sendTelegram(text: string) {
 }
 
 export async function GET(req: NextRequest) {
-  // KILL SWITCH — Aria paused by Luca. Remove this to re-enable.
-  return NextResponse.json({ ok: true, paused: true, message: 'Aria en pause' });
-
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.replace('Bearer ', '');
   const cronSecret = process.env.CRON_SECRET ?? '';
