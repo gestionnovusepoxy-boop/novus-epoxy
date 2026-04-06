@@ -59,9 +59,6 @@ function buildResidentialHtml(prenom: string, project: string, photos: { url: st
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
-  <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 12px;">
-    Joyeuses Pâques de la part de toute l'équipe Novus Epoxy!
-  </p>
   <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
     <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">Promotion du mois d'avril</p>
     <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">20% de rabais sur tous nos services!</p>
@@ -122,7 +119,7 @@ function buildCommercialHtml(prenom: string, photos: { url: string; caption: str
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
-  <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;">Joyeuses Pâques!</p>
+  <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;"></p>
   <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
     <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">Promotion Avril</p>
     <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">20% de rabais sur tous nos services!</p>
@@ -175,7 +172,7 @@ function buildFacebookLeadHtml(prenom: string, photos: { url: string; caption: s
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom}!</p>
-  <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;">Joyeuses Pâques!</p>
+  <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;"></p>
   <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
     <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">Promotion Avril</p>
     <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">20% de rabais!</p>
