@@ -6,6 +6,7 @@ export const SERVICES = {
   antiderapant:  { label: 'Antidérapant',    prix: 10.00 },
   commercial:    { label: 'Commercial',      prix: 15.00 },
   meulage:       { label: 'Meulage au diamant', prix: 3.50 },
+  autonivelant:  { label: 'Auto-nivelant / Réparation béton', prix: 3.25 },
 } as const;
 
 // Note: les prix peuvent varier si les travaux sont a plus de 65 km de distance
