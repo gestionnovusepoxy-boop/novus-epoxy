@@ -1295,15 +1295,102 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
             else if (caption.includes('google')) source = 'google_ads';
             else if (caption.includes('facebook') || caption.includes('meta')) source = 'facebook';
 
-            // Step 1: Import leads (WITHOUT auto-prospect to avoid timeout)
-            const result = await executeTool('importer_leads_liste', { liste: csvText, source });
-            const parsed = JSON.parse(result);
+            // Smart CSV parsing: detect headers and parse directly (no AI needed for structured CSVs)
+            const csvLines = csvText.split('\n').filter((l: string) => l.trim());
+            const header = csvLines[0]?.toLowerCase() || '';
+            const hasHeaders = header.includes('email') || header.includes('phone') || header.includes('business') || header.includes('nom') || header.includes('contact');
 
-            // Step 2: Send summary IMMEDIATELY (before prospect emails)
-            const importes = parsed.importes ?? 0;
-            const ignores = parsed.ignores ?? 0;
-            const total = parsed.total_detectes ?? 0;
-            const prospectEmails = Number((parsed.prospect as Record<string, unknown>)?.emails ?? 0);
+            let importes = 0;
+            let ignores = 0;
+            let total = 0;
+            const insertedIds: number[] = [];
+
+            if (hasHeaders && csvLines.length > 1) {
+              // Direct CSV parsing — no AI, handles thousands of rows
+              const headers = csvLines[0].split(',').map((h: string) => h.trim().toLowerCase().replace(/"/g, ''));
+              const findCol = (...names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)));
+              const colBusiness = findCol('business', 'entreprise', 'company', 'nom');
+              const colContact = findCol('contact', 'prenom', 'first');
+              const colEmail = findCol('email', 'courriel', 'e-mail');
+              const colPhone = findCol('phone', 'telephone', 'tel');
+              const colCity = findCol('city', 'ville');
+              const colProvince = findCol('province', 'state', 'prov');
+              const colIndustry = findCol('industry', 'industrie', 'category', 'categorie');
+
+              // Load existing emails/phones for dedup
+              const existingEmails = new Set<string>();
+              const existingPhones = new Set<string>();
+              const emRows = await query('SELECT LOWER(email) as e FROM crm_leads WHERE email IS NOT NULL');
+              emRows.forEach((r: Record<string, unknown>) => existingEmails.add(r.e as string));
+              const phRows = await query("SELECT regexp_replace(telephone, '[^0-9]', '', 'g') as p FROM crm_leads WHERE telephone IS NOT NULL");
+              phRows.forEach((r: Record<string, unknown>) => { const p = (r.p as string).slice(-10); if (p.length === 10) existingPhones.add(p); });
+
+              // Owner emails to skip
+              const SKIP_EMAILS = ['gestionnovusepoxy@gmail.com', 'lanthierj6@gmail.com', 'luca.hayes1994@gmail.com'];
+
+              for (let i = 1; i < csvLines.length; i++) {
+                // Simple CSV split (handles basic quoting)
+                const cols = csvLines[i].match(/("([^"]*)"|[^,]*)/g)?.map((c: string) => c.replace(/^"|"$/g, '').trim()) || [];
+                const nom = (colBusiness >= 0 ? cols[colBusiness] : '') || (colContact >= 0 ? cols[colContact] : '') || '';
+                const email = (colEmail >= 0 ? cols[colEmail] : '')?.toLowerCase().trim() || '';
+                const phoneRaw = colPhone >= 0 ? cols[colPhone] : '';
+                const phone = (phoneRaw || '').replace(/[^0-9+]/g, '').replace(/^\+?1?(\d{10})$/, '$1').slice(-10);
+                const city = (colCity >= 0 ? cols[colCity] : '') || '';
+                const province = (colProvince >= 0 ? cols[colProvince] : '') || '';
+                const industry = (colIndustry >= 0 ? cols[colIndustry] : '') || '';
+
+                if (!nom || nom.length < 2) continue;
+                if (!email && phone.length < 10) continue; // Need at least email or phone
+                if (SKIP_EMAILS.includes(email)) continue;
+                total++;
+
+                // Dedup check
+                if (email && existingEmails.has(email)) { ignores++; continue; }
+                if (phone.length === 10 && existingPhones.has(phone)) { ignores++; continue; }
+
+                // Score temperature
+                let score = 0;
+                if (email) score += 2;
+                if (phone.length === 10) score += 2;
+                if (city) score += 1;
+                const temp = score >= 4 ? 'chaud' : score >= 2 ? 'tiede' : 'froid';
+                const type = industry.includes('commercial') || industry.includes('auto_dealer') ? 'commercial' : 'residentiel';
+                const notes = [industry, province, city].filter(Boolean).join(' — ');
+
+                try {
+                  const r = await query(
+                    'INSERT INTO crm_leads (nom, telephone, email, ville, source, statut, temperature, type, notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+                    [nom.slice(0, 120), phone.length === 10 ? phone : null, email || null, city.slice(0, 120) || null, source, 'nouveau', temp, type, notes.slice(0, 500) || null]
+                  );
+                  insertedIds.push((r[0] as { id: number }).id);
+                  importes++;
+                  if (email) existingEmails.add(email);
+                  if (phone.length === 10) existingPhones.add(phone);
+                } catch { ignores++; }
+              }
+            } else {
+              // Freeform text — use AI parsing (existing importer_leads_liste)
+              const result = await executeTool('importer_leads_liste', { liste: csvText, source });
+              const parsed = JSON.parse(result);
+              importes = parsed.importes ?? 0;
+              ignores = parsed.ignores ?? 0;
+              total = parsed.total_detectes ?? 0;
+            }
+
+            // Auto-prospect imported leads
+            let prospectEmails = 0;
+            if (insertedIds.length > 0) {
+              try {
+                const baseUrl = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+                const pRes = await fetch(`${baseUrl}/api/leads/jason/prospect`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ADMIN_API_KEY ?? '' },
+                  body: JSON.stringify({ leadIds: insertedIds.slice(0, 50) }),
+                });
+                const pData = await pRes.json().catch(() => ({}));
+                prospectEmails = Number((pData as Record<string, unknown>).emails ?? 0);
+              } catch { /* prospect in background via cron */ }
+            }
 
             const lines = [
               `🤖 <b>Aria — Importation terminee!</b>`,
