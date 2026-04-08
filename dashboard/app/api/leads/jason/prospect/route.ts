@@ -12,12 +12,18 @@ export const maxDuration = 60; // Allow up to 60s for large batches
 // Portfolio photo picker (same logic as Hunter)
 interface PortfolioPhoto { id: number; titre: string; type_service: string; description: string | null; photos: string[] }
 
+const IMAGE_EXTENSIONS = /\.(jpg|jpeg|png|webp|gif|bmp|svg)$/i;
+
 async function loadPortfolio(): Promise<PortfolioPhoto[]> {
   const rows = await query(
     `SELECT id, titre, type_service, description, photos FROM portfolio WHERE array_length(photos, 1) > 0 ORDER BY featured DESC, created_at DESC`,
     [],
   );
-  return rows as unknown as PortfolioPhoto[];
+  // Filter photos to only include images (no .mov, .mp4, etc.)
+  return (rows as unknown as PortfolioPhoto[]).map(p => ({
+    ...p,
+    photos: p.photos.filter(url => IMAGE_EXTENSIONS.test(url)),
+  })).filter(p => p.photos.length > 0);
 }
 
 function pickPhotos(portfolio: PortfolioPhoto[], notes: string, service: string, type: string): { url: string; caption: string }[] {
