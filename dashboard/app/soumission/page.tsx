@@ -78,7 +78,7 @@ function SoumissionForm() {
   if (done) {
     return (
       <div className="min-h-screen bg-[#0f172a] flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl p-8 max-w-md w-full text-center shadow-2xl">
+        <div className="bg-white rounded-2xl p-8 max-w-lg w-full text-center shadow-2xl">
           <div className="text-6xl mb-4">🎉</div>
           <h2 className="text-2xl font-bold text-gray-900 mb-2">Merci!</h2>
           <p className="text-gray-600 mb-4">
@@ -98,29 +98,30 @@ function SoumissionForm() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0f172a]">
-      {/* Header */}
-      <div className="bg-[#0f172a] pt-6 pb-4 px-4 text-center">
-        <img src="/logo-email.jpg" alt="Novus Epoxy" className="w-16 h-16 rounded-xl mx-auto mb-3" />
-        <h1 className="text-amber-400 text-xl font-bold">Novus Epoxy</h1>
-        <p className="text-slate-400 text-xs mt-1">Planchers epoxy haut de gamme — Quebec</p>
-      </div>
+    <div className="min-h-screen bg-[#0f172a] flex flex-col items-center">
+      <div className="w-full max-w-lg">
+        {/* Header */}
+        <div className="bg-[#0f172a] pt-6 md:pt-10 pb-4 px-4 text-center">
+          <img src="/logo-email.jpg" alt="Novus Epoxy" className="w-16 h-16 md:w-20 md:h-20 rounded-xl mx-auto mb-3" />
+          <h1 className="text-amber-400 text-xl md:text-2xl font-bold">Novus Epoxy</h1>
+          <p className="text-slate-400 text-xs md:text-sm mt-1">Planchers epoxy haut de gamme — Quebec</p>
+        </div>
 
-      {/* Promo banner */}
-      <div className="mx-4 mb-4 bg-amber-400 rounded-xl p-3 text-center">
-        <p className="text-[#0f172a] font-extrabold text-lg">20% de rabais en avril!</p>
-        <p className="text-[#0f172a]/70 text-xs">Soumission gratuite en moins d'une heure</p>
-      </div>
+        {/* Promo banner */}
+        <div className="mx-4 mb-4 bg-amber-400 rounded-xl p-3 md:p-4 text-center">
+          <p className="text-[#0f172a] font-extrabold text-lg md:text-xl">20% de rabais en avril!</p>
+          <p className="text-[#0f172a]/70 text-xs md:text-sm">Soumission gratuite en moins d'une heure</p>
+        </div>
 
-      {/* Progress bar */}
-      <div className="mx-4 mb-4 flex gap-1">
-        {[0,1,2,3,4].map(i => (
-          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all ${i <= step ? 'bg-amber-400' : 'bg-slate-700'}`} />
-        ))}
-      </div>
+        {/* Progress bar */}
+        <div className="mx-4 mb-4 flex gap-1">
+          {[0,1,2,3,4].map(i => (
+            <div key={i} className={`h-1.5 md:h-2 flex-1 rounded-full transition-all ${i <= step ? 'bg-amber-400' : 'bg-slate-700'}`} />
+          ))}
+        </div>
 
-      {/* Steps */}
-      <div className="px-4 pb-8">
+        {/* Steps */}
+        <div className="px-4 pb-8">
         {/* Step 0: Service */}
         {step === 0 && (
           <div className="space-y-3">
@@ -133,7 +134,7 @@ function SoumissionForm() {
                   className={`p-3 rounded-xl text-left transition-all border-2 ${
                     form.service === s.value
                       ? 'bg-amber-400/20 border-amber-400 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 active:bg-slate-700'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-500 active:bg-slate-600'
                   }`}
                 >
                   <span className="text-2xl">{s.icon}</span>
@@ -157,7 +158,7 @@ function SoumissionForm() {
                   className={`p-4 rounded-xl text-center transition-all border-2 ${
                     form.type_projet === e.value
                       ? 'bg-amber-400/20 border-amber-400 text-white'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 active:bg-slate-700'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-500 active:bg-slate-600'
                   }`}
                 >
                   <span className="text-3xl">{e.icon}</span>
@@ -181,7 +182,7 @@ function SoumissionForm() {
                   className={`p-3 rounded-xl font-bold transition-all border-2 ${
                     form.surface_estimee === v
                       ? 'bg-amber-400/20 border-amber-400 text-amber-400'
-                      : 'bg-slate-800 border-slate-700 text-slate-300 active:bg-slate-700'
+                      : 'bg-slate-800 border-slate-700 text-slate-300 hover:bg-slate-700 hover:border-slate-500 active:bg-slate-600'
                   }`}
                 >
                   {v} pi²
@@ -298,6 +299,7 @@ function SoumissionForm() {
             <span>✅ 15 ans exp.</span>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
