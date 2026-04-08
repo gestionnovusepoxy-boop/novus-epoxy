@@ -293,20 +293,41 @@ export async function POST(req: NextRequest) {
   );
   const submissionId = (submissionRows[0] as { id: number }).id;
 
+  // Detect source: utm_source from Facebook ads, or referrer, or default
+  const utmSource = body.utm_source?.toLowerCase?.() ?? '';
+  const utmMedium = body.utm_medium?.toLowerCase?.() ?? '';
+  const referrer = (body.referrer ?? '').toLowerCase();
+  const leadSource = utmSource.includes('facebook') || utmSource.includes('fb') || utmMedium === 'paid'
+    ? 'facebook-ad'
+    : utmSource.includes('google')
+      ? 'google-ad'
+      : referrer.includes('facebook.com') || referrer.includes('fb.com')
+        ? 'facebook-organic'
+        : 'site_web';
+
   // Also insert into crm_leads so Aria can follow up
-  await db(
+  const notesParts = [body.service, body.surface_estimee ? `${body.surface_estimee} pi²` : null, body.type_projet, body.adresse].filter(Boolean).join(' — ');
+  const crmResult = await db(
     `INSERT INTO crm_leads (nom, telephone, email, service, ville, source, statut, temperature, notes)
-     VALUES ($1, $2, $3, $4, $5, 'site_web', 'nouveau', 'chaud', $6)
-     ON CONFLICT DO NOTHING`,
+     VALUES ($1, $2, $3, $4, $5, $6, 'nouveau', 'chaud', $7)
+     ON CONFLICT (email) DO UPDATE SET
+       telephone = COALESCE(NULLIF(crm_leads.telephone, ''), EXCLUDED.telephone),
+       service = COALESCE(EXCLUDED.service, crm_leads.service),
+       ville = COALESCE(EXCLUDED.ville, crm_leads.ville),
+       notes = crm_leads.notes || E'\n' || EXCLUDED.notes,
+       temperature = 'chaud',
+       updated_at = NOW()
+     RETURNING id`,
     [
       body.nom.slice(0, 120),
       body.telephone?.slice(0, 30) ?? null,
       body.email.slice(0, 255).toLowerCase(),
       body.service?.slice(0, 80) ?? null,
       body.ville?.slice(0, 120) ?? null,
-      [body.service, body.surface_estimee ? `${body.surface_estimee} pi²` : null, body.type_projet, body.adresse].filter(Boolean).join(' — '),
+      leadSource,
+      notesParts || `Soumission #${submissionId}`,
     ]
-  ).catch(() => {}); // Don't fail if duplicate
+  ).catch(() => []); // Don't fail
 
   // Try to auto-create a draft quote if we have enough info
   let quoteId: number | null = null;
