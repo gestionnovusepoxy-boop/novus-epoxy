@@ -2,6 +2,27 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { put, del } from '@vercel/blob';
+import { writeFile, mkdir } from 'fs/promises';
+import path from 'path';
+
+async function uploadFile(file: File, blobPath: string, localDir: string): Promise<string> {
+  // Try Vercel Blob first
+  try {
+    const blob = await put(blobPath, file, { access: 'public', addRandomSuffix: false });
+    return blob.url;
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.warn('Blob upload failed, falling back to local:', msg);
+  }
+
+  // Fallback: save to public directory
+  const filename = path.basename(blobPath);
+  const publicDir = path.join(process.cwd(), 'public', localDir);
+  await mkdir(publicDir, { recursive: true });
+  const buffer = Buffer.from(await file.arrayBuffer());
+  await writeFile(path.join(publicDir, filename), buffer);
+  return `/${localDir}/${filename}`;
+}
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -50,16 +71,13 @@ export async function POST(req: NextRequest) {
   const ext = photo.name.split('.').pop() ?? 'jpg';
   const blobName = `travaux/${quoteId}/${type}-${Date.now()}.${ext}`;
 
-  const blob = await put(blobName, photo, {
-    access: 'public',
-    addRandomSuffix: false,
-  });
+  const url = await uploadFile(photo, blobName, `travaux/${quoteId}`);
 
   const rows = await query(
     `INSERT INTO job_photos (quote_id, type, url, filename)
      VALUES ($1, $2, $3, $4)
      RETURNING *`,
-    [parseInt(quoteId), type, blob.url, photo.name]
+    [parseInt(quoteId), type, url, photo.name]
   );
 
   return NextResponse.json(rows[0], { status: 201 });

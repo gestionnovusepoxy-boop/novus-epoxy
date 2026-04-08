@@ -39,7 +39,12 @@ function pickPhotos(portfolio: PortfolioPhoto[], notes: string, service: string,
   });
   scored.sort((a, b) => b.score - a.score);
   let picks = scored.slice(0, 4);
-  return picks.map(p => ({ url: p.photos[0], caption: p.titre }));
+  const baseUrl = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+  return picks.map(p => {
+    const raw = p.photos[0];
+    const url = raw.startsWith('/') ? `${baseUrl}${raw}` : raw;
+    return { url, caption: p.titre };
+  });
 }
 
 function getPrenom(nom: string): string {

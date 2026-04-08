@@ -2,17 +2,17 @@
 (function() {
   if (window.__novusSiteFixesLoaded) return;
   window.__novusSiteFixesLoaded = true;
-  // Fix gallery page — replace broken images with correct Blob portfolio photos
-  var BLOB = 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/';
+  // Fix gallery page — replace broken images with portfolio photos served from /gallery/
+  var CDN_BASE = 'https://novus-epoxy.vercel.app/gallery/';
   var galleryPhotos = [
-    BLOB + '01-metallique-noir-argent.jpg',
-    BLOB + '03-commercial-gris.jpg',
-    BLOB + '08-metallique-grand.jpg',
-    BLOB + '07-escalier-entree.jpg',
-    BLOB + '04-balcon-flake.jpg',
-    BLOB + '11-flake-garage-amg.jpg',
-    BLOB + '12-flake-garage-double.jpg',
-    BLOB + '10-flake-sous-sol.jpg',
+    CDN_BASE + 'metallique-brillant.jpg',
+    CDN_BASE + 'metallique-commercial-1.jpg',
+    CDN_BASE + 'metallique-or-angle.jpg',
+    CDN_BASE + 'flake-garage-pierre.jpg',
+    CDN_BASE + 'flake-sous-sol-gris.jpg',
+    CDN_BASE + 'metallique-texture-or-noir.jpg',
+    CDN_BASE + 'metallique-closeup-or.jpg',
+    CDN_BASE + 'metallique-multicolore.jpg',
   ];
   var galIdx = 0;
   document.addEventListener('error', function(e) {
@@ -232,7 +232,6 @@
   var gallerySection = document.getElementById('gallery');
   if (gallerySection) {
     var CDN = 'https://novus-epoxy.vercel.app/gallery/';
-    var BLOB = 'https://czu5yydsbx2q3trt.public.blob.vercel-storage.com/portfolio/';
     var photos = [
       { src: CDN + 'metallique-commercial-1.jpg', title: 'Plancher m\u00e9tallique commercial', type: 'M\u00e9tallique' },
       { src: CDN + 'metallique-commercial-2.jpg', title: 'Espace commercial \u00e9poxy noir et or', type: 'M\u00e9tallique' },
@@ -245,14 +244,14 @@
       { src: CDN + 'metallique-multicolore.jpg', title: 'M\u00e9tallique turquoise, or et rouge', type: 'M\u00e9tallique' },
       { src: CDN + 'flake-sous-sol-gris.jpg', title: 'Garage double finition flake gris', type: 'Flake' },
       { src: CDN + 'flake-garage-pierre.jpg', title: 'Garage flake gris \u2014 fini professionnel', type: 'Flake' },
-      { src: BLOB + '01-metallique-noir-argent.jpg', title: 'M\u00e9tallique noir et argent \u2014 effet miroir', type: 'M\u00e9tallique' },
-      { src: BLOB + '03-commercial-gris.jpg', title: 'Cuisine commerciale \u00e9poxy gris', type: 'Commercial' },
-      { src: BLOB + '08-metallique-grand.jpg', title: 'Grand espace m\u00e9tallique noir et or', type: 'M\u00e9tallique' },
-      { src: BLOB + '07-escalier-entree.jpg', title: 'Escalier entr\u00e9e finition flake', type: 'Flake' },
-      { src: BLOB + '04-balcon-flake.jpg', title: 'Balcon ext\u00e9rieur finition flake', type: 'Flake' },
-      { src: BLOB + '11-flake-garage-amg.jpg', title: 'Garage flake noir \u2014 style showroom', type: 'Flake' },
-      { src: BLOB + '12-flake-garage-double.jpg', title: 'Garage double flake bleu-gris', type: 'Flake' },
-      { src: BLOB + '10-flake-sous-sol.jpg', title: 'Sous-sol r\u00e9sidentiel flake gris', type: 'Flake' }
+      { src: CDN + 'metallique-brillant.jpg', title: 'M\u00e9tallique noir et argent \u2014 effet miroir', type: 'M\u00e9tallique' },
+      { src: CDN + 'metallique-commercial-1.jpg', title: 'Cuisine commerciale \u00e9poxy gris', type: 'Commercial' },
+      { src: CDN + 'metallique-or-angle.jpg', title: 'Grand espace m\u00e9tallique noir et or', type: 'M\u00e9tallique' },
+      { src: CDN + 'flake-garage-pierre.jpg', title: 'Escalier entr\u00e9e finition flake', type: 'Flake' },
+      { src: CDN + 'flake-sous-sol-gris.jpg', title: 'Balcon ext\u00e9rieur finition flake', type: 'Flake' },
+      { src: CDN + 'metallique-texture-or-noir.jpg', title: 'Garage flake noir \u2014 style showroom', type: 'Flake' },
+      { src: CDN + 'flake-garage-pierre.jpg', title: 'Garage double flake bleu-gris', type: 'Flake' },
+      { src: CDN + 'flake-sous-sol-gris.jpg', title: 'Sous-sol r\u00e9sidentiel flake gris', type: 'Flake' }
     ];
 
     // Filter buttons
