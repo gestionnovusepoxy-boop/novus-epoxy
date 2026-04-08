@@ -770,17 +770,19 @@ export async function GET(req: NextRequest) {
                   tempCounts[t]++;
                 }
 
-                // Notify Telegram with detailed report
-                for (const chatId of ADMIN_CHAT_IDS()) {
-                  await sendTelegram(chatId,
-                    `📥 <b>Aria — CSV traite</b>\n\n` +
-                    `📊 <b>${imported}</b> leads importes dans le CRM\n` +
-                    (skipped > 0 ? `⏭️ ${skipped} doublons ignores\n` : '') +
-                    `🔥 ${tempCounts.chaud} chauds | 🟡 ${tempCounts.tiede} tiedes | 🔵 ${tempCounts.froid} froids\n` +
-                    `📧 Source: ${fromEmail}\n` +
-                    (prospectResult ? `\n🚀 <b>${(prospectResult as Record<string, unknown>).sent ?? 0} offres envoyees</b>\n` : '') +
-                    `\n🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`,
-                  );
+                // Notify Telegram only when leads were actually imported
+                if (imported > 0) {
+                  for (const chatId of ADMIN_CHAT_IDS()) {
+                    await sendTelegram(chatId,
+                      `📥 <b>Aria — CSV traite</b>\n\n` +
+                      `📊 <b>${imported}</b> leads importes dans le CRM\n` +
+                      (skipped > 0 ? `⏭️ ${skipped} doublons ignores\n` : '') +
+                      `🔥 ${tempCounts.chaud} chauds | 🟡 ${tempCounts.tiede} tiedes | 🔵 ${tempCounts.froid} froids\n` +
+                      `📧 Source: ${fromEmail}\n` +
+                      (prospectResult ? `\n🚀 <b>${(prospectResult as Record<string, unknown>).sent ?? 0} offres envoyees</b>\n` : '') +
+                      `\n🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`,
+                    );
+                  }
                 }
               }
             }
