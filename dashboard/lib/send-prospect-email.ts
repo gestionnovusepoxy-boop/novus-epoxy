@@ -37,11 +37,13 @@ export async function sendProspectEmail({
   }
 
   const body: Record<string, unknown> = {
-    from: 'Novus Epoxy <jason@novusepoxy.shop>',
+    from: 'Luca de Novus Epoxy <jason@novusepoxy.shop>',
     to,
     subject,
     reply_to: replyTo ?? 'gestionnovusepoxy@gmail.com',
-    bcc: ['gestionnovusepoxy@gmail.com'],
+    headers: {
+      'X-Entity-Ref-ID': `novus-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    },
   };
   if (text) body.text = text;
   if (html) body.html = html;

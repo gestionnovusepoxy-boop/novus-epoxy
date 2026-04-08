@@ -5,7 +5,25 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
-        source: '/(.*)',
+        // Portfolio images: long cache, no frame restrictions (for email clients)
+        source: '/portfolio/:path*',
+        headers: [
+          { key: 'Cache-Control',              value: 'public, max-age=31536000, immutable' },
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+          { key: 'X-Content-Type-Options',     value: 'nosniff' },
+        ],
+      },
+      {
+        // Logo for emails
+        source: '/logo-email.jpg',
+        headers: [
+          { key: 'Cache-Control',              value: 'public, max-age=31536000, immutable' },
+          { key: 'Access-Control-Allow-Origin', value: '*' },
+        ],
+      },
+      {
+        // Everything else: security headers
+        source: '/((?!portfolio|logo-email).*)',
         headers: [
           { key: 'X-Frame-Options',            value: 'DENY' },
           { key: 'X-Content-Type-Options',     value: 'nosniff' },

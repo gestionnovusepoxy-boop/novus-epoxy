@@ -321,32 +321,64 @@ export async function POST(req: NextRequest) {
     const project = lead.service || lead.notes?.split('—')[0] || '';
     const isCommercial = lead.type === 'commercial';
     const isFacebookLead = (lead.source ?? '').toLowerCase().includes('ghl') || (lead.source ?? '').toLowerCase().includes('facebook');
-    const photos = portfolio.length > 0
-      ? pickPhotos(portfolio, lead.notes ?? '', lead.service ?? '', lead.type ?? 'residentiel')
-      : [];
+    const ville = lead.ville || 'Québec';
 
     let contacted = false;
 
-    // 1. Send email
+    // 1. Send email — conversational plain text + minimal HTML (bypasses Promotions tab)
     if (lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
-      const nomComplet = lead.nom.trim().slice(0, 40);
-      const subject = isCommercial
-        ? `${nomComplet} — Partenariat planchers époxy`
+      // Subject line variants — short, personal, no promo words
+      const subjectVariants = isCommercial
+        ? [
+            `${prenom}, question rapide`,
+            `${prenom} — planchers époxy pour ${lead.nom.split(' ').slice(-1)[0] || 'votre entreprise'}`,
+            `Question pour ${lead.nom.trim().slice(0, 30)}`,
+          ]
         : isFacebookLead
-          ? `${prenom}, votre soumission gratuite — Novus Epoxy`
-          : `${nomComplet} — Votre projet en époxy`;
+          ? [
+            `${prenom}, merci pour votre demande`,
+            `${prenom} — votre soumission Novus Epoxy`,
+          ]
+          : [
+            `${prenom}, question rapide`,
+            `${prenom} — idée pour votre espace`,
+            `Question pour ${lead.nom.trim().slice(0, 30)}`,
+          ];
+      const subject = subjectVariants[Math.floor(Math.random() * subjectVariants.length)];
 
-      const html = isCommercial
-        ? buildCommercialHtml(prenom, photos)
+      // Plain text body — conversational, <100 words, 1 question
+      const textVariants = isCommercial
+        ? [
+            `Bonjour ${prenom},\n\nJe suis Luca de Novus Epoxy. On fait des planchers en époxy commercial et résidentiel dans la région de ${ville}.\n\nJ'ai vu ${lead.nom.trim()} et je me demandais — est-ce que vous avez déjà considéré un plancher en époxy pour vos espaces?\n\nOn travaille avec plusieurs entrepreneurs du coin. Licence RBQ, +1000 projets.\n\nSi ça vous intéresse, répondez à ce courriel ou appelez-moi.\n\nLuca\nNovus Epoxy\n581-307-5983`,
+            `Bonjour ${prenom},\n\nLuca de Novus Epoxy ici. On installe des planchers époxy haut de gamme pour les entreprises dans votre secteur.\n\nOn cherche des partenaires dans la région de ${ville} — est-ce que c'est quelque chose qui pourrait vous intéresser?\n\nPas de pression, juste curieux.\n\nLuca\n581-307-5983`,
+          ]
         : isFacebookLead
-          ? buildFacebookLeadHtml(prenom, photos)
-          : buildResidentialHtml(prenom, project, photos);
+          ? [
+            `Bonjour ${prenom},\n\nMerci pour votre demande! Pour préparer votre soumission rapidement, j'aurais besoin de quelques infos:\n\n1. Type d'espace (garage, sous-sol, balcon)?\n2. Superficie approximative?\n3. Type de fini souhaité?\n4. Adresse des travaux?\n\nRépondez à ce courriel ou appelez-moi au 581-307-5983.\n\nLuca\nNovus Epoxy`,
+          ]
+          : [
+            `Bonjour ${prenom},\n\nJe suis Luca de Novus Epoxy. On fait des planchers en époxy haut de gamme dans la région de ${ville}.\n\n${project ? `J'ai vu que vous pourriez être intéressé par ${project} — ` : ''}est-ce que c'est quelque chose qui vous intéresserait?\n\nOn peut préparer une soumission gratuite en moins d'une heure. Licence RBQ, +1000 projets.\n\nLuca\nNovus Epoxy\n581-307-5983`,
+            `Bonjour ${prenom},\n\nLuca de Novus Epoxy. On installe des planchers époxy dans le coin de ${ville}.\n\nEst-ce que vous avez un projet de plancher en tête? On fait garage, sous-sol, balcon, commercial.\n\nSi oui, répondez ici ou appelez-moi.\n\nLuca\n581-307-5983`,
+          ];
+      const text = textVariants[Math.floor(Math.random() * textVariants.length)];
+
+      // Minimal HTML — same content as plain text, just with basic formatting
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
+<div style="font-family:Arial,sans-serif;font-size:14px;color:#333;max-width:600px;">
+${text.split('\n').map(line => line.trim() ? `<p style="margin:0 0 8px;">${line}</p>` : '').join('\n')}
+</div></body></html>`;
 
       try {
-        const result = await sendProspectEmail({ to: lead.email, subject, html });
+        const result = await sendProspectEmail({
+          to: lead.email,
+          subject,
+          html,
+          text,
+          idempotencyKey: `prospect-${lead.id}-${Date.now()}`,
+        });
         await query(
           `INSERT INTO email_logs (resend_id, destinataire, sujet, statut, html_body, direction) VALUES ($1, $2, $3, 'sent', $4, 'outbound')`,
-          [result.id, lead.email, subject, html],
+          [result.id, lead.email, subject, text],
         ).catch(() => {});
         alreadySentEmails.add(lead.email.toLowerCase());
         emailsSent++;
