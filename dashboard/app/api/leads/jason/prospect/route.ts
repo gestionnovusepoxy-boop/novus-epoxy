@@ -27,19 +27,39 @@ async function loadPortfolio(): Promise<PortfolioPhoto[]> {
 }
 
 function pickPhotos(portfolio: PortfolioPhoto[], notes: string, service: string, type: string): { url: string; caption: string }[] {
-  const text = `${notes} ${service}`.toLowerCase();
-  const scored = portfolio.map(p => {
-    const searchable = `${p.titre} ${p.description ?? ''} ${p.type_service}`.toLowerCase();
-    let score = 0;
-    if (type === 'commercial' && (p.type_service === 'commercial' || p.type_service === 'metallique')) score += 3;
-    if (type === 'residentiel' && p.type_service === 'flake') score += 1;
-    const keywords = text.split(/[\s,\-\/]+/).filter(w => w.length > 3);
-    for (const kw of keywords) { if (searchable.includes(kw)) score += 2; }
-    return { ...p, score };
-  });
-  scored.sort((a, b) => b.score - a.score);
-  let picks = scored.slice(0, 4);
   const baseUrl = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+
+  // Dedupe by photo URL to avoid showing the same image twice
+  const seen = new Set<string>();
+  const unique = portfolio.filter(p => {
+    const url = p.photos[0];
+    if (seen.has(url)) return false;
+    seen.add(url);
+    return true;
+  });
+
+  // Pick diverse mix: 1 per type_service, prioritize relevance
+  const byType: Record<string, PortfolioPhoto[]> = {};
+  for (const p of unique) {
+    const t = p.type_service || 'autre';
+    if (!byType[t]) byType[t] = [];
+    byType[t].push(p);
+  }
+
+  const picks: PortfolioPhoto[] = [];
+  // Priority order based on lead type
+  const order = type === 'commercial'
+    ? ['commercial', 'metallique', 'flake', 'autre']
+    : ['flake', 'metallique', 'commercial', 'autre'];
+
+  for (const t of order) {
+    if (picks.length >= 2) break;
+    const items = byType[t];
+    if (items?.length) {
+      picks.push(items[Math.floor(Math.random() * items.length)]);
+    }
+  }
+
   return picks.map(p => {
     const raw = p.photos[0];
     const url = raw.startsWith('/') ? `${baseUrl}${raw}` : raw;
