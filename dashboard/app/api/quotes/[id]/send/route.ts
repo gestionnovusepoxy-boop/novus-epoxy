@@ -132,7 +132,6 @@ ${Number(quote.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><
       to: quote.client_email as string,
       subject,
       html,
-      via: 'gmail',
     });
   } catch (err) {
     console.error('Gmail send error:', err);

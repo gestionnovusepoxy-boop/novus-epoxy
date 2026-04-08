@@ -1138,7 +1138,7 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
 </div></body></html>`;
           const emailSubject = `Soumission Novus Epoxy #${q.id}`;
           try {
-            const emailResult = await sendEmail({ to: q.client_email as string, subject: emailSubject, html, via: 'gmail' });
+            const emailResult = await sendEmail({ to: q.client_email as string, subject: emailSubject, html });
             emailSent = true;
             // Log dans email_logs pour visibilite dans le dashboard
             await query(

@@ -2,9 +2,9 @@ import { google } from 'googleapis';
 
 /**
  * Sends system emails (devis, contrats, replies Aria, etc.)
- * Primary: Resend (info@novusepoxy.shop) — Pro plan 50k/month
- * Fallback: Gmail API if Resend fails
- * Reply-To: gestionnovusepoxy@gmail.com (Aria monitors)
+ * Primary: Gmail (gestionnovusepoxy@gmail.com) — visible dans Messages envoyés
+ * Fallback: Resend si Gmail fail
+ * Resend uniquement pour prospection Aria (via: 'resend')
  */
 export async function sendEmail({
   to,
@@ -19,24 +19,23 @@ export async function sendEmail({
   replyTo?: string;
   via?: 'gmail' | 'resend';
 }): Promise<{ id: string }> {
-  // Primary: Resend (fiable, pas de OAuth issues)
-  // Gmail en fallback seulement si explicitement demandé et fonctionnel
-  if (via === 'gmail') {
+  // Resend seulement si explicitement demandé (prospection Aria)
+  if (via === 'resend') {
     try {
-      return await sendViaGmail({ to, subject, html, replyTo });
+      return await sendViaResend({ to, subject, html, replyTo });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
-      return sendViaResend({ to, subject, html, replyTo });
+      console.log(`[sendEmail] Resend failed (${msg.slice(0, 100)}), fallback Gmail`);
+      return sendViaGmail({ to, subject, html, replyTo });
     }
   }
-  // Default: Resend
+  // Default: Gmail (gestionnovusepoxy@gmail.com)
   try {
-    return await sendViaResend({ to, subject, html, replyTo });
+    return await sendViaGmail({ to, subject, html, replyTo });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.log(`[sendEmail] Resend failed (${msg.slice(0, 100)}), fallback Gmail`);
-    return sendViaGmail({ to, subject, html, replyTo });
+    console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
+    return sendViaResend({ to, subject, html, replyTo });
   }
 }
 
