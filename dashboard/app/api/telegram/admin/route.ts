@@ -1102,6 +1102,7 @@ export async function POST(req: NextRequest) {
         const results: string[] = [];
 
         // EMAIL
+        let emailSent = false;
         if (sendViaEmail && q.client_email) {
           const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:16px;background:#ffffff;">
@@ -1135,13 +1136,16 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
 </div>
 <p style="color:#475569;font-size:12px;">Questions? 581-307-2678 (Jason) ou 581-307-5983 (Luca)</p>
 </div></body></html>`;
+          const emailSubject = `Soumission Novus Epoxy #${q.id}`;
           try {
-            const emailResult = await sendEmail({ to: q.client_email as string, subject: `Soumission Novus Epoxy #${q.id}`, html, via: 'resend' });
-            if (emailResult.id && emailResult.id.startsWith('gmail-') || emailResult.id) {
-              results.push(`📧 Email envoye a ${q.client_email} (via Gmail, visible dans Messages envoyes)`);
-            } else {
-              results.push(`⚠️ Email envoye mais non confirme dans Gmail`);
-            }
+            const emailResult = await sendEmail({ to: q.client_email as string, subject: emailSubject, html, via: 'gmail' });
+            emailSent = true;
+            // Log dans email_logs pour visibilite dans le dashboard
+            await query(
+              `INSERT INTO email_logs (resend_id, destinataire, sujet, submission_id) VALUES ($1, $2, $3, $4)`,
+              [emailResult.id, q.client_email, emailSubject, null],
+            );
+            results.push(`📧 Email envoye a ${q.client_email}`);
           } catch (emailErr) {
             const errMsg = emailErr instanceof Error ? emailErr.message : 'erreur';
             results.push(`❌ Erreur email: ${errMsg.slice(0, 80)}`);
@@ -1151,11 +1155,13 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
         }
 
         // SMS
+        let smsSent = false;
         if (sendViaSms && q.client_tel) {
           const rabaisLine = Number(q.rabais_pct) > 0 ? `\nRabais ${q.rabais_pct}%: -${formatMoney(Number(q.rabais_montant))}` : '';
           const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${service?.label ?? q.type_service}\n${q.superficie} pi² x ${formatMoney(Number(q.prix_pied_carre))}/pi²${rabaisLine}\nSous-total: ${formatMoney(Number(q.sous_total))}\nTPS+TVQ: ${formatMoney(Number(q.tps) + Number(q.tvq))}\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nDetails: https://novus-epoxy.vercel.app/paiement/${q.id}?token=${encodeURIComponent(secretToken)}\n\nQuestions? 581-307-2678`;
           try {
             await sendSMS(q.client_tel as string, smsMsg);
+            smsSent = true;
             results.push(`📱 SMS envoye a ${q.client_tel}`);
           } catch {
             results.push(`❌ Erreur SMS`);
@@ -1164,8 +1170,13 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
           results.push(`⚠️ Pas de telephone pour ce client`);
         }
 
-        await query(`UPDATE quotes SET statut = 'envoye', sent_at = NOW() WHERE id = $1`, [quoteId]);
-        await sendTelegram(cbChatId, `✅ Devis #${quoteId} envoye a ${q.client_nom}!\n\n${results.join('\n')}`);
+        // Marquer envoye SEULEMENT si au moins un canal a reussi
+        if (emailSent || smsSent) {
+          await query(`UPDATE quotes SET statut = 'envoye', sent_at = NOW() WHERE id = $1`, [quoteId]);
+          await sendTelegram(cbChatId, `✅ Devis #${quoteId} envoye a ${q.client_nom}!\n\n${results.join('\n')}`);
+        } else {
+          await sendTelegram(cbChatId, `❌ Devis #${quoteId} NON envoye — tous les canaux ont echoue:\n\n${results.join('\n')}\n\nLe statut reste "${q.statut}". Reessayez ou envoyez depuis le dashboard.`);
+        }
       } catch (err) {
         console.error('Approve quote error:', err);
         await sendTelegram(cbChatId, `Erreur: ${err instanceof Error ? err.message : String(err)}`);
