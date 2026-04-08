@@ -21,10 +21,12 @@ function emptyTwiml(): NextResponse {
 }
 
 export async function POST(req: NextRequest) {
-  try {
-    // EMERGENCY: return empty TwiML to stop all auto-replies and loops
-    return emptyTwiml();
+  // EMERGENCY: return empty TwiML to stop all auto-replies and loops
+  return emptyTwiml();
+}
 
+export async function _POST_DISABLED(req: NextRequest) {
+  try {
     const formData = await req.formData();
     const from = formData.get('From') as string | null;
     const body = formData.get('Body') as string | null;
