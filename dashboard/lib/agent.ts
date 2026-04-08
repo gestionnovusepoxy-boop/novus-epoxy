@@ -198,13 +198,13 @@ IMPORTANT:
 
 interface ConversationContext {
   conversationId: number;
-  channel: 'web' | 'messenger' | 'email' | 'telegram';
+  channel: 'web' | 'messenger' | 'email' | 'telegram' | 'sms';
   visitorId: string;
 }
 
 // Get or create a conversation
 export async function getOrCreateConversation(
-  channel: 'web' | 'messenger' | 'email' | 'telegram',
+  channel: 'web' | 'messenger' | 'email' | 'telegram' | 'sms',
   visitorId: string
 ): Promise<number> {
   // Check for existing active conversation
