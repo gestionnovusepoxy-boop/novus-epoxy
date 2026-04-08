@@ -52,7 +52,7 @@
     'Avantages': '#advantages',
     'R\u00e9alisations': '#gallery',
     'Realisations': '#gallery',
-    'Contact': '#contact'
+    'Contact': '#ghl-form'
   };
 
   document.querySelectorAll('a').forEach(function(a) {
@@ -82,6 +82,23 @@
       }
     });
   });
+
+  // Au chargement: si l'URL a #ghl-form, scroller direct sur le formulaire
+  function scrollToFormOnLoad() {
+    if (location.hash === '#ghl-form' || location.hash === '#contact') {
+      var section = document.getElementById('ghl-form');
+      if (!section) return;
+      var formEl = section.querySelector('#novus-contact-form, form, #novus-form-wrapper');
+      var target = formEl || section;
+      var rect = target.getBoundingClientRect();
+      window.scrollTo({ top: window.pageYOffset + rect.top - 40, behavior: 'smooth' });
+    }
+  }
+  if (document.readyState === 'complete') {
+    setTimeout(scrollToFormOnLoad, 300);
+  } else {
+    window.addEventListener('load', function() { setTimeout(scrollToFormOnLoad, 300); });
+  }
 
   // Fix form dropdown accents
   var accentMap = {
