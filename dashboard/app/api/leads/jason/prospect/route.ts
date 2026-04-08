@@ -296,9 +296,11 @@ export async function POST(req: NextRequest) {
     if (emailsSent >= MAX_BATCH) { skipped++; continue; }
     if (lead.prospect_sent_at) { skipped++; continue; }
 
-    // BLACKLIST check
-    const phone10 = (lead.telephone ?? '').replace(/\D/g, '').slice(-10);
-    if (BLACKLIST_PHONES.includes(phone10) || BLACKLIST_EMAILS.includes((lead.email ?? '').toLowerCase())) { skipped++; continue; }
+    // BLACKLIST check — normalize phone to last 10 digits, compare stripped
+    const rawPhone = (lead.telephone ?? '').replace(/\D/g, '');
+    const phone10 = rawPhone.slice(-10);
+    const emailLower = (lead.email ?? '').toLowerCase().trim();
+    if (BLACKLIST_PHONES.some(bp => phone10 === bp || rawPhone === bp || rawPhone.endsWith(bp)) || BLACKLIST_EMAILS.includes(emailLower)) { skipped++; continue; }
 
     // === ATOMIC LOCK: claim this lead in DB FIRST, before any send ===
     // If another process already claimed it, UPDATE returns 0 rows → skip
@@ -349,18 +351,30 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // 2. SMS — send to ALL leads with phone number
+    // 2. SMS — send to ALL leads with phone number (with dedup check)
     const shouldSMS = lead.telephone?.trim();
-    if (shouldSMS) {
-      try {
-        const smsText = isFacebookLead
-          ? `Bonjour ${prenom}! Merci pour votre demande de soumission chez Novus Epoxy. Pour la préparer, j'ai besoin de quelques infos:\n\n1. Type d'espace (garage, sous-sol, balcon)?\n2. Combien de pieds carrés?\n3. Quel fini (flocon, métallique, couleur unie)?\n4. Adresse des travaux?\n\nRépondez ici ou appelez-nous: 581-307-2678\n\n— Luca, Novus Epoxy`
-          : `Bonjour ${prenom}, c'est Novus Epoxy! On fait des planchers époxy haut de gamme dans la région de Québec. Soumission gratuite, licence RBQ. Appelez-nous au 581-307-2678 ou visitez novusepoxy.ca`;
-        await sendSMS(lead.telephone!, smsText);
-        smsSent++;
-        contacted = true;
-      } catch (err) {
-        console.error(`[Jason Prospect] SMS failed for ${lead.nom}:`, err);
+    if (shouldSMS && !BLACKLIST_PHONES.includes(phone10)) {
+      // DEDUP: check sms_logs if this number was already texted
+      // sms_logs stores to_number in +1XXXXXXXXXX format, so check both formats
+      const smsPhone10 = lead.telephone!.replace(/\D/g, '').slice(-10);
+      const smsPhoneE164 = '+1' + smsPhone10;
+      const alreadyTexted = await query(
+        `SELECT id FROM sms_logs WHERE to_number = $1 OR to_number = $2 OR to_number LIKE $3 LIMIT 1`,
+        [smsPhoneE164, smsPhone10, '%' + smsPhone10],
+      );
+      if (alreadyTexted.length > 0) {
+        console.log(`[Jason Prospect] SMS dedup skip: ${lead.nom} (${phone10}) already in sms_logs`);
+      } else {
+        try {
+          const smsText = isFacebookLead
+            ? `Bonjour ${prenom}! Merci pour votre demande de soumission chez Novus Epoxy. Pour la préparer, j'ai besoin de quelques infos:\n\n1. Type d'espace (garage, sous-sol, balcon)?\n2. Combien de pieds carrés?\n3. Quel fini (flocon, métallique, couleur unie)?\n4. Adresse des travaux?\n\nRépondez ici ou appelez-nous: 581-307-2678\n\n— Luca, Novus Epoxy`
+            : `Bonjour ${prenom}, c'est Novus Epoxy! On fait des planchers époxy haut de gamme dans la région de Québec. Soumission gratuite, licence RBQ. Appelez-nous au 581-307-2678 ou visitez novusepoxy.ca`;
+          await sendSMS(lead.telephone!, smsText);
+          smsSent++;
+          contacted = true;
+        } catch (err) {
+          console.error(`[Jason Prospect] SMS failed for ${lead.nom}:`, err);
+        }
       }
     }
 

@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
   const pending = await query(
     `SELECT id FROM crm_leads WHERE statut = 'nouveau' AND prospect_sent_at IS NULL AND (
       (email IS NOT NULL AND email != '') OR (telephone IS NOT NULL AND telephone != '')
-    ) ORDER BY id LIMIT 50`
+    ) ORDER BY id LIMIT 10`
   );
 
   if (pending.length === 0) {
@@ -88,8 +88,8 @@ export async function GET(req: NextRequest) {
   const totalLeads = await query(`SELECT COUNT(*)::int as c FROM crm_leads`).catch(() => [{ c: 0 }]);
   const totalContacted = await query(`SELECT COUNT(*)::int as c FROM crm_leads WHERE prospect_sent_at IS NOT NULL`).catch(() => [{ c: 0 }]);
 
-  // Notify group with detailed report
-  if (emailsSent > 0 || smsSent > 0) {
+  // Notify group ONLY when all leads are done (single summary, not every batch)
+  if ((emailsSent > 0 || smsSent > 0) && remainingCount === 0) {
     const progressBar = remainingCount > 0
       ? `${'█'.repeat(Math.round((Number(totalContacted[0].c) / Number(totalLeads[0].c)) * 20))}${'░'.repeat(20 - Math.round((Number(totalContacted[0].c) / Number(totalLeads[0].c)) * 20))}`
       : '████████████████████';
