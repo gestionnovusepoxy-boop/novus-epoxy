@@ -84,20 +84,29 @@
   });
 
   // Au chargement: si l'URL a #ghl-form, scroller direct sur le formulaire
+  // Scroll plusieurs fois pour contrer le scroll natif du browser qui remonte
   function scrollToFormOnLoad() {
     if (location.hash === '#ghl-form' || location.hash === '#contact') {
       var section = document.getElementById('ghl-form');
       if (!section) return;
       var formEl = section.querySelector('#novus-contact-form, form, #novus-form-wrapper');
       var target = formEl || section;
-      var rect = target.getBoundingClientRect();
-      window.scrollTo({ top: window.pageYOffset + rect.top - 40, behavior: 'smooth' });
+      function doScroll() {
+        var rect = target.getBoundingClientRect();
+        window.scrollTo({ top: window.pageYOffset + rect.top - 40 });
+      }
+      // Enlever le hash pour empêcher le browser de re-scroller
+      history.replaceState(null, '', location.pathname + location.search);
+      doScroll();
+      setTimeout(doScroll, 100);
+      setTimeout(doScroll, 400);
+      setTimeout(doScroll, 800);
     }
   }
   if (document.readyState === 'complete') {
-    setTimeout(scrollToFormOnLoad, 300);
+    setTimeout(scrollToFormOnLoad, 200);
   } else {
-    window.addEventListener('load', function() { setTimeout(scrollToFormOnLoad, 300); });
+    window.addEventListener('load', function() { setTimeout(scrollToFormOnLoad, 200); });
   }
 
   // Fix form dropdown accents
