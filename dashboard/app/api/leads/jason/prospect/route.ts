@@ -369,16 +369,16 @@ export async function POST(req: NextRequest) {
       // Plain text body — conversational, <100 words, 1 question
       const textVariants = isCommercial
         ? [
-            `Bonjour ${prenom},\n\nJe suis Luca de Novus Epoxy. On fait des planchers en époxy commercial et résidentiel dans la région de ${ville}.\n\nJ'ai vu ${lead.nom.trim()} et je me demandais — est-ce que vous avez déjà considéré un plancher en époxy pour vos espaces?\n\nOn travaille avec plusieurs entrepreneurs du coin. Licence RBQ, +1000 projets.\n\nSi ça vous intéresse, répondez à ce courriel ou appelez-moi.\n\nLuca\nNovus Epoxy\n581-307-5983`,
-            `Bonjour ${prenom},\n\nLuca de Novus Epoxy ici. On installe des planchers époxy haut de gamme pour les entreprises dans votre secteur.\n\nOn cherche des partenaires dans la région de ${ville} — est-ce que c'est quelque chose qui pourrait vous intéresser?\n\nPas de pression, juste curieux.\n\nLuca\n581-307-5983`,
+            `Bonjour ${prenom},\n\nJe suis Luca de Novus Epoxy. On fait des planchers en époxy commercial et résidentiel dans la région de ${ville}.\n\nJ'ai vu ${lead.nom.trim()} et je me demandais — est-ce que vous avez déjà considéré un plancher en époxy pour vos espaces?\n\nOn travaille avec plusieurs entrepreneurs du coin. Licence RBQ, +1000 projets.\n\nSi ça vous intéresse, répondez à ce courriel ou appelez-moi.\n\nLuca — 581-307-5983\nJason — 581-307-2678\nNovus Epoxy`,
+            `Bonjour ${prenom},\n\nLuca de Novus Epoxy ici. On installe des planchers époxy haut de gamme pour les entreprises dans votre secteur.\n\nOn cherche des partenaires dans la région de ${ville} — est-ce que c'est quelque chose qui pourrait vous intéresser?\n\nPas de pression, juste curieux.\n\nLuca — 581-307-5983\nJason — 581-307-2678\nNovus Epoxy`,
           ]
         : isFacebookLead
           ? [
             `Bonjour ${prenom},\n\nMerci pour votre demande! Pour préparer votre soumission rapidement, j'aurais besoin de quelques infos:\n\n1. Type d'espace (garage, sous-sol, balcon)?\n2. Superficie approximative?\n3. Type de fini souhaité?\n4. Adresse des travaux?\n\nRépondez à ce courriel ou appelez-moi au 581-307-5983.\n\nLuca\nNovus Epoxy`,
           ]
           : [
-            `Bonjour ${prenom},\n\nJe suis Luca de Novus Epoxy. On fait des planchers en époxy haut de gamme dans la région de ${ville}.\n\n${project ? `J'ai vu que vous pourriez être intéressé par ${project} — ` : ''}est-ce que c'est quelque chose qui vous intéresserait?\n\nOn peut préparer une soumission gratuite en moins d'une heure. Licence RBQ, +1000 projets.\n\nLuca\nNovus Epoxy\n581-307-5983`,
-            `Bonjour ${prenom},\n\nLuca de Novus Epoxy. On installe des planchers époxy dans le coin de ${ville}.\n\nEst-ce que vous avez un projet de plancher en tête? On fait garage, sous-sol, balcon, commercial.\n\nSi oui, répondez ici ou appelez-moi.\n\nLuca\n581-307-5983`,
+            `Bonjour ${prenom},\n\nJe suis Luca de Novus Epoxy. On fait des planchers en époxy haut de gamme dans la région de ${ville}.\n\n${project ? `J'ai vu que vous pourriez être intéressé par ${project} — ` : ''}est-ce que c'est quelque chose qui vous intéresserait?\n\nOn peut préparer une soumission gratuite en moins d'une heure. Licence RBQ, +1000 projets.\n\nLuca — 581-307-5983\nJason — 581-307-2678\nNovus Epoxy`,
+            `Bonjour ${prenom},\n\nLuca de Novus Epoxy. On installe des planchers époxy dans le coin de ${ville}.\n\nEst-ce que vous avez un projet de plancher en tête? On fait garage, sous-sol, balcon, commercial.\n\nSi oui, répondez ici ou appelez-moi.\n\nLuca — 581-307-5983\nJason — 581-307-2678\nNovus Epoxy`,
           ];
       const text = textVariants[Math.floor(Math.random() * textVariants.length)];
 

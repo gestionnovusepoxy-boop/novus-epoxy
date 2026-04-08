@@ -19,9 +19,6 @@ async function sendTelegram(text: string) {
 }
 
 export async function GET(req: NextRequest) {
-  // EMERGENCY STOP — all outbound paused until images fixed and Luca approves
-  return NextResponse.json({ ok: true, message: 'Envois suspendus — en attente approbation', emails: 0, sms: 0 });
-
   const authHeader = req.headers.get('authorization') ?? '';
   const token = authHeader.replace('Bearer ', '');
   const cronSecret = process.env.CRON_SECRET ?? '';
