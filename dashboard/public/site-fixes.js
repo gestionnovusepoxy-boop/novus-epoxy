@@ -52,7 +52,7 @@
     'Avantages': '#advantages',
     'R\u00e9alisations': '#gallery',
     'Realisations': '#gallery',
-    'Contact': '#ghl-form'
+    'Contact': '#contact'
   };
 
   document.querySelectorAll('a').forEach(function(a) {
@@ -65,9 +65,19 @@
   // Smooth scroll for all anchor links
   document.querySelectorAll('a[href^="#"]').forEach(function(a) {
     a.addEventListener('click', function(e) {
-      var target = document.querySelector(this.getAttribute('href'));
+      var href = this.getAttribute('href');
+      var target = document.querySelector(href);
       if (target) {
         e.preventDefault();
+        // Pour la section contact, scroller direct sur le formulaire (pas le titre)
+        if (href === '#contact' || href === '#ghl-form') {
+          var formEl = target.querySelector('#novus-contact-form, form, #novus-form-wrapper');
+          if (formEl) {
+            var rect = formEl.getBoundingClientRect();
+            window.scrollTo({ top: window.pageYOffset + rect.top - 40, behavior: 'smooth' });
+            return;
+          }
+        }
         target.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }
     });
