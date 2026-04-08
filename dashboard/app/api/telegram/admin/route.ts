@@ -10,6 +10,26 @@ import { autoHeal } from '@/lib/auto-heal';
 
 export const maxDuration = 60; // Allow up to 60s for CSV imports + AI processing
 
+function parseCSVLine(line: string): string[] {
+  const fields: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') { field += '"'; i++; }
+      else inQuotes = !inQuotes;
+    } else if (ch === ',' && !inQuotes) {
+      fields.push(field.trim());
+      field = "";
+    } else {
+      field += ch;
+    }
+  }
+  fields.push(field.trim());
+  return fields;
+}
+
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
   return timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -1307,7 +1327,7 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
 
             if (hasHeaders && csvLines.length > 1) {
               // Direct CSV parsing — no AI, handles thousands of rows
-              const headers = csvLines[0].split(',').map((h: string) => h.trim().toLowerCase().replace(/"/g, ''));
+              const headers = parseCSVLine(csvLines[0]).map((h: string) => h.toLowerCase());
               const findCol = (...names: string[]) => headers.findIndex(h => names.some(n => h.includes(n)));
               const colBusiness = findCol('business', 'entreprise', 'company', 'nom');
               const colContact = findCol('contact', 'prenom', 'first');
@@ -1330,11 +1350,13 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
 
               for (let i = 1; i < csvLines.length; i++) {
                 // Simple CSV split (handles basic quoting)
-                const cols = csvLines[i].match(/("([^"]*)"|[^,]*)/g)?.map((c: string) => c.replace(/^"|"$/g, '').trim()) || [];
+                const cols = parseCSVLine(csvLines[i]);
                 const nom = (colBusiness >= 0 ? cols[colBusiness] : '') || (colContact >= 0 ? cols[colContact] : '') || '';
                 const email = (colEmail >= 0 ? cols[colEmail] : '')?.toLowerCase().trim() || '';
                 const phoneRaw = colPhone >= 0 ? cols[colPhone] : '';
-                const phone = (phoneRaw || '').replace(/[^0-9+]/g, '').replace(/^\+?1?(\d{10})$/, '$1').slice(-10);
+                // Extract digits from formats like "Numéro de téléphone: +1 514-446-1800"
+                const phoneDigits = (phoneRaw || '').replace(/[^0-9]/g, '');
+                const phone = phoneDigits.slice(-10);
                 const city = (colCity >= 0 ? cols[colCity] : '') || '';
                 const province = (colProvince >= 0 ? cols[colProvince] : '') || '';
                 const industry = (colIndustry >= 0 ? cols[colIndustry] : '') || '';
@@ -1392,24 +1414,28 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
               } catch { /* prospect in background via cron */ }
             }
 
-            const lines = [
-              `🤖 <b>Aria — Importation terminee!</b>`,
-              `📄 Fichier: ${doc.file_name}`,
-              ``,
-              `✅ <b>${importes} leads ajoutes</b> au CRM`,
-              ignores > 0 ? `⛔ ${ignores} rejetes (doublons)` : '',
-              `📊 ${total} contacts detectes au total`,
-              ``,
-              prospectEmails > 0 ? `📧 <b>${prospectEmails} offres envoyees</b> par email` : `📧 Offres en cours d'envoi...`,
-              ``,
-              `📋 <b>Prochaines etapes automatiques:</b>`,
-              `• 48h — Suivi #1 si pas de reponse`,
-              `• 5 jours — Suivi #2 dernier rappel`,
-              `• Reponse detectee — Aria closer prend le relais`,
-              ``,
-              `🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`,
-            ];
-            await sendTelegram(chatId, lines.filter(Boolean).join('\n'));
+            if (importes > 0) {
+              const lines = [
+                `🤖 <b>Aria — Importation terminee!</b>`,
+                `📄 Fichier: ${doc.file_name}`,
+                ``,
+                `✅ <b>${importes} leads ajoutes</b> au CRM`,
+                ignores > 0 ? `⛔ ${ignores} rejetes (doublons)` : '',
+                `📊 ${total} contacts detectes au total`,
+                ``,
+                prospectEmails > 0 ? `📧 <b>${prospectEmails} offres envoyees</b> par email` : `📧 Offres en cours d'envoi...`,
+                ``,
+                `📋 <b>Prochaines etapes automatiques:</b>`,
+                `• 48h — Suivi #1 si pas de reponse`,
+                `• 5 jours — Suivi #2 dernier rappel`,
+                `• Reponse detectee — Aria closer prend le relais`,
+                ``,
+                `🔗 <a href="https://novus-epoxy.vercel.app/dashboard/crm">Voir dans le CRM</a>`,
+              ];
+              await sendTelegram(chatId, lines.filter(Boolean).join('\n'));
+            } else if (total > 0) {
+              await sendTelegram(chatId, `🤖 <b>Aria:</b> ${doc.file_name} — ${ignores} doublons detectes, 0 nouveaux leads.`);
+            }
           }
         } catch (err) {
           console.error('[Telegram Group CSV] Import error:', err);
