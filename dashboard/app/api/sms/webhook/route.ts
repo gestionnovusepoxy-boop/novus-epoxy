@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getOrCreateConversation, processMessage } from '@/lib/agent';
 
-// Twilio incoming SMS webhook — handles STOP/START opt-out + forwards to admins
+// Twilio incoming SMS webhook — handles STOP/START opt-out + AI replies via Nova
 // Configure in Twilio console: Messaging > Phone Number > Webhook URL
 // POST https://novus-epoxy.vercel.app/api/sms/webhook
 
@@ -99,13 +100,29 @@ export async function POST(req: NextRequest) {
     // --- Forward to Telegram admins ---
     await forwardToTelegram(from, body, cleaned);
 
+    // --- AI Reply via Nova agent ---
+    let aiReply = "Merci pour votre message! L'equipe Novus Epoxy vous repondra sous peu. Luca: 581-307-5983";
+    try {
+      const conversationId = await getOrCreateConversation('sms', `sms_${phone}`);
+      const novaReply = await processMessage(
+        { conversationId, channel: 'sms', visitorId: `sms_${phone}` },
+        body,
+      );
+      if (novaReply && novaReply.length > 5) {
+        // Truncate to 320 chars for SMS (2 segments max)
+        aiReply = novaReply.slice(0, 320);
+      }
+    } catch (err) {
+      console.error('[SMS Webhook] Nova AI failed, using fallback:', err);
+    }
+
     // Log the auto-reply so rate limiting works
     await query(
       `INSERT INTO sms_logs (direction, from_number, to_number, message, statut) VALUES ('outbound_webhook', $1, $2, $3, 'sent')`,
-      [process.env.TWILIO_PHONE_NUMBER ?? '+15817014055', phone, "Merci pour votre message! L'equipe Novus Epoxy vous repondra sous peu. Luca: 581-307-5983"]
+      [process.env.TWILIO_PHONE_NUMBER ?? '+15817014055', phone, aiReply]
     ).catch(() => {});
 
-    return twiml("Merci pour votre message! L'equipe Novus Epoxy vous repondra sous peu. Luca: 581-307-5983");
+    return twiml(aiReply);
   } catch (err) {
     console.error('[SMS Webhook] Error:', err);
     return emptyTwiml();
