@@ -403,6 +403,8 @@ ${text.split('\n').map(line => line.trim() ? `<p style="margin:0 0 8px;">${line}
         alreadySentEmails.add(lead.email.toLowerCase());
         emailsSent++;
         contacted = true;
+        // Anti-spam delay: 15-25 sec random between sends
+        await new Promise(r => setTimeout(r, 15000 + Math.random() * 10000));
       } catch (err) {
         console.error(`[Prospect] FAIL ${lead.email}:`, err instanceof Error ? err.message : err);
       }
