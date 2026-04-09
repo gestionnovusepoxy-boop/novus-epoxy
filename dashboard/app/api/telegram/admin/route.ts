@@ -292,6 +292,29 @@ const TOOLS = [
       required: ['titre', 'date'],
     },
   },
+  {
+    name: 'scraper_leads',
+    description: 'Scrape des leads a partir d\'une URL ou d\'un mot-cle. Si un mot-cle est fourni (ex: "epoxy quebec pages jaunes"), construit automatiquement une URL Pages Jaunes. Retourne les entreprises/contacts trouves. Utilise quand Luca dit "scrape les leads", "trouve des clients sur pages jaunes", "scrape ce site".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'URL a scraper OU mot-cle de recherche (ex: "epoxy quebec pages jaunes", "https://www.pagesjaunes.ca/...")' },
+        max_results: { type: 'number', description: 'Nombre maximum de resultats (defaut: 20)', default: 20 },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'scraper_competitors',
+    description: 'Analyse un ou plusieurs sites web de competiteurs. Retourne les informations cles: services, prix, zone de service, avis, forces/faiblesses. Utilise quand Luca dit "analyse ce competiteur", "regarde ce site", "compare avec eux".',
+    input_schema: {
+      type: 'object',
+      properties: {
+        urls: { type: 'string', description: 'URL(s) des competiteurs a analyser (separees par virgule si plusieurs)' },
+      },
+      required: ['urls'],
+    },
+  },
 ];
 
 // Execute tool calls
@@ -898,6 +921,123 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
           ? `Rappel recurrent cree: "${titre}" — ${created} occurrences (12 mois)`
           : `Rappel cree: "${titre}" le ${date} a ${heure}`,
         created,
+      });
+    }
+
+    case 'scraper_leads': {
+      const scraperUrl = process.env.SCRAPER_URL || 'http://localhost:8899';
+      const scraperKey = '65d5d80cca68d9b6161fe9b528465aba0a534be595434941';
+      const q = (input.query as string).trim();
+      const maxResults = Math.min(Number(input.max_results) || 20, 50);
+
+      // Determine if it's a URL or keyword
+      let targetUrl = q;
+      if (!q.startsWith('http://') && !q.startsWith('https://')) {
+        // Build Pages Jaunes search URL from keywords
+        const keywords = encodeURIComponent(q);
+        targetUrl = `https://www.pagesjaunes.ca/search/si/1/${keywords}`;
+      }
+
+      try {
+        const resp = await fetch(`${scraperUrl}/scrape`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${scraperKey}`,
+          },
+          body: JSON.stringify({
+            url: targetUrl,
+            type: 'leads',
+            max_results: maxResults,
+          }),
+          signal: AbortSignal.timeout(45000),
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text().catch(() => '');
+          return JSON.stringify({ error: `Scraper erreur ${resp.status}: ${errText || resp.statusText}` });
+        }
+
+        const data = await resp.json() as { leads?: Array<Record<string, unknown>>; results?: Array<Record<string, unknown>>; [key: string]: unknown };
+        const leads = data.leads || data.results || [];
+
+        if (!Array.isArray(leads) || leads.length === 0) {
+          return JSON.stringify({ message: 'Aucun lead trouve pour cette recherche.', url_scrapee: targetUrl });
+        }
+
+        return JSON.stringify({
+          total: leads.length,
+          url_scrapee: targetUrl,
+          leads: (leads as Array<Record<string, unknown>>).slice(0, maxResults).map((l: Record<string, unknown>) => ({
+            nom: l.name || l.nom || l.business_name || '—',
+            telephone: l.phone || l.telephone || l.tel || '—',
+            email: l.email || '—',
+            adresse: l.address || l.adresse || '—',
+            site_web: l.website || l.url || '—',
+            categorie: l.category || l.categorie || '—',
+          })),
+        });
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : 'Erreur inconnue';
+        return JSON.stringify({ error: `Scraper inaccessible: ${message}` });
+      }
+    }
+
+    case 'scraper_competitors': {
+      const scraperUrl = process.env.SCRAPER_URL || 'http://localhost:8899';
+      const scraperKey = '65d5d80cca68d9b6161fe9b528465aba0a534be595434941';
+      const urlsRaw = (input.urls as string).trim();
+      const urls = urlsRaw.split(',').map(u => u.trim()).filter(Boolean);
+
+      if (urls.length === 0) {
+        return JSON.stringify({ error: 'Aucune URL fournie.' });
+      }
+
+      const results: Array<Record<string, unknown>> = [];
+
+      for (const url of urls.slice(0, 5)) {
+        try {
+          const resp = await fetch(`${scraperUrl}/scrape`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${scraperKey}`,
+            },
+            body: JSON.stringify({
+              url: url.startsWith('http') ? url : `https://${url}`,
+              type: 'competitor_analysis',
+            }),
+            signal: AbortSignal.timeout(45000),
+          });
+
+          if (!resp.ok) {
+            results.push({ url, error: `Erreur ${resp.status}` });
+            continue;
+          }
+
+          const data = await resp.json() as Record<string, unknown>;
+          results.push({
+            url,
+            nom_entreprise: data.company_name || data.nom || '—',
+            services: data.services || [],
+            zone_service: data.service_area || data.zone || '—',
+            prix_visibles: data.pricing || data.prix || 'Non affiche',
+            avis_google: data.reviews || data.avis || '—',
+            telephone: data.phone || data.telephone || '—',
+            email: data.email || '—',
+            forces: data.strengths || data.forces || [],
+            faiblesses: data.weaknesses || data.faiblesses || [],
+            resume: data.summary || data.resume || '—',
+          });
+        } catch (err: unknown) {
+          const message = err instanceof Error ? err.message : 'Erreur inconnue';
+          results.push({ url, error: `Inaccessible: ${message}` });
+        }
+      }
+
+      return JSON.stringify({
+        total_analyses: results.length,
+        competiteurs: results,
       });
     }
 
