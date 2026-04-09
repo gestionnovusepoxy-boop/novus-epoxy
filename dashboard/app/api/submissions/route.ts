@@ -114,20 +114,9 @@ function parseSurface(surface: string | null): number | null {
 }
 
 async function sendSMSNotif(phone: string, msg: string) {
-  const sid = process.env.TWILIO_ACCOUNT_SID;
-  const token = process.env.TWILIO_AUTH_TOKEN;
-  const from = process.env.TWILIO_PHONE_NUMBER;
-  if (!sid || !token || !from) return;
-
-  const formatted = phone.startsWith('+') ? phone : `+1${phone.replace(/\D/g, '')}`;
-  await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
-    method: 'POST',
-    headers: {
-      Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64'),
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({ From: from, To: formatted, Body: msg }),
-  }).catch(() => {});
+  // Use centralized sendSMS which handles quiet hours, validation, dedup, and logging
+  const { sendSMS } = await import('@/lib/sms');
+  await sendSMS(phone, msg).catch(() => {});
 }
 
 async function analyzeLeadWithClaude(submission: {

@@ -27,6 +27,15 @@ export async function sendSMS(to: string, body: string, fromOverride?: string, _
   const cleaned = to.replace(/[^0-9+]/g, '');
   const phone = cleaned.startsWith('+') ? cleaned : cleaned.startsWith('1') ? `+${cleaned}` : `+1${cleaned}`;
 
+  // Validate phone number — must be 10 or 11 digits with valid QC area code
+  const digitsOnly = phone.replace(/\D/g, '');
+  const validAreaCodes = ['418', '581', '819', '450', '438', '514', '579', '873', '367'];
+  const areaCode = digitsOnly.length === 11 ? digitsOnly.substring(1, 4) : digitsOnly.substring(0, 3);
+  if (digitsOnly.length < 10 || digitsOnly.length > 11 || !validAreaCodes.includes(areaCode)) {
+    console.log(`[SMS] BLOQUE — numero invalide (${to}) — area code ${areaCode} non reconnu`);
+    return false;
+  }
+
   // SMS opt-out check
   try {
     const { query } = await import('@/lib/db');
@@ -36,6 +45,25 @@ export async function sendSMS(to: string, body: string, fromOverride?: string, _
       return false;
     }
   } catch { /* DB check failed — proceed with send */ }
+
+  // Dedup check — prevent sending same SMS to same number within 6 hours
+  const dedupeKey = `sms_dedup_${phone}_${Buffer.from(body.substring(0, 50)).toString('base64').substring(0, 20)}`;
+  try {
+    const { query: dbQ } = await import('@/lib/db');
+    const existing = await dbQ(
+      `SELECT 1 FROM kv_store WHERE key = $1 AND updated_at > NOW() - INTERVAL '6 hours'`,
+      [dedupeKey]
+    );
+    if (existing.length > 0) {
+      console.log(`[SMS] BLOQUE — dedup (meme SMS envoye dans les 6 dernieres heures a ${to})`);
+      return false;
+    }
+    // Mark as sent
+    await dbQ(
+      `INSERT INTO kv_store (key, value, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (key) DO UPDATE SET value = $2, updated_at = NOW()`,
+      [dedupeKey, JSON.stringify({ to: phone, sent_at: new Date().toISOString() })]
+    );
+  } catch { /* dedup check failed — proceed */ }
 
   try {
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
