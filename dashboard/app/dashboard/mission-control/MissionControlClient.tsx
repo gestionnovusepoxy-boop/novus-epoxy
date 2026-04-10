@@ -661,7 +661,7 @@ function AgentCard({
   }
 
   return (
-    <div className={`relative flex flex-col bg-slate-900 border ${agent.border} rounded-2xl p-4 shadow-lg ${agent.glow} hover:border-opacity-50 transition-all duration-200 group ${isStreaming ? 'ring-2 ring-green-500/30' : ''} ${!isEnabled ? 'opacity-50 grayscale' : ''}`}>
+    <div className={`relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800/80 border ${agent.border} rounded-2xl p-4 shadow-lg ${agent.glow} hover:shadow-xl hover:border-opacity-60 transition-all duration-200 group ${isStreaming ? 'ring-2 ring-green-500/30' : ''} ${!isEnabled ? 'opacity-50 grayscale' : ''}`}>
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
         <div className={`w-11 h-11 rounded-xl ${agent.bg} flex items-center justify-center text-xl flex-shrink-0 shadow-lg overflow-hidden`}>
@@ -675,8 +675,13 @@ function AgentCard({
           <div className="flex items-center gap-2">
             <h3 className="text-white font-bold text-base">{agent.name}</h3>
             <span className="flex items-center gap-1.5">
-              <span className={`w-2 h-2 rounded-full ${statusDot} flex-shrink-0`} />
-              <span className={`text-[10px] font-semibold uppercase tracking-wider ${statusTextColor}`}>{statusText}</span>
+              <span className="relative flex-shrink-0">
+                <span className={`block w-2.5 h-2.5 rounded-full ${statusDot}`} />
+                {(statusText === 'Actif' || statusText === 'ACTIF') && (
+                  <span className={`absolute inset-0 w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping opacity-75`} />
+                )}
+              </span>
+              <span className={`text-[10px] font-bold uppercase tracking-wider ${statusTextColor}`}>{statusText}</span>
             </span>
           </div>
           <p className={`text-xs font-medium ${agent.text}`}>{agent.role}</p>
@@ -700,9 +705,9 @@ function AgentCard({
           {metrics.map(m => {
             const isZero = m.value === '0' || m.value === '—';
             return (
-              <div key={m.label} className="flex flex-col items-center bg-slate-800/70 rounded-lg px-2 py-1.5">
-                <span className={`text-lg font-bold ${isZero ? 'text-slate-600' : agent.text}`}>{m.value}</span>
-                <span className="text-[10px] text-slate-500 mt-0.5 text-center leading-tight">{m.label}</span>
+              <div key={m.label} className="flex flex-col items-center bg-gradient-to-b from-slate-800/90 to-slate-800/50 rounded-lg px-2 py-2 border border-slate-700/30">
+                <span className={`text-2xl font-extrabold tracking-tight ${isZero ? 'text-slate-600' : agent.text}`}>{m.value}</span>
+                <span className="text-[10px] text-slate-400 mt-1 text-center leading-tight font-medium">{m.label}</span>
               </div>
             );
           })}
@@ -753,7 +758,7 @@ function AgentCard({
         <button
           onClick={() => onChat(agent.id as AgentId)}
           disabled={!isEnabled}
-          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg ${agent.bg} hover:opacity-90 text-white text-xs font-medium transition disabled:opacity-40 disabled:cursor-not-allowed`}
+          className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg ${agent.bg} hover:opacity-90 hover:scale-[1.02] text-white text-sm font-bold transition-all duration-150 shadow-md disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:scale-100`}
         >
           <span>💬</span> Chat
         </button>
@@ -1023,6 +1028,13 @@ export default function MissionControlClient({ authorName, initialActivity }: Pr
       }
     } catch { /* noop */ }
   }, [handleTestAgent]);
+
+  // Fetch activity on mount + every 30 seconds
+  useEffect(() => {
+    void refreshActivity();
+    const interval = setInterval(() => { void refreshActivity(); }, 30000);
+    return () => clearInterval(interval);
+  }, [refreshActivity]);
 
   // Auto-refresh statuses every 60 seconds
   useEffect(() => {
