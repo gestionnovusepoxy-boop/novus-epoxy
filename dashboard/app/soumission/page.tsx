@@ -197,9 +197,37 @@ function SoumissionForm() {
                 <h2 className="text-white text-xl font-bold mb-1">Dimensions du plancher</h2>
                 <p className="text-slate-400 text-sm mb-5">Entrez les mesures OU directement les pi²</p>
 
-                {/* Option A: Dimensions longueur x largeur */}
+                {/* Option 1: Superficie exacte */}
                 <div className="bg-slate-900/60 border-2 border-slate-700 rounded-xl p-4 mb-3">
-                  <p className="text-amber-400 text-xs font-bold mb-2 uppercase tracking-wider">Option 1 — Mesures en pieds</p>
+                  <p className="text-amber-400 text-xs font-bold mb-2 uppercase tracking-wider">Option 1 — Superficie exacte</p>
+                  <p className="text-slate-400 text-[11px] mb-3">Si vous connaissez deja vos pi²</p>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      inputMode="numeric"
+                      placeholder="Ex: 475"
+                      value={longueur === '' && largeur === '' ? form.surface_estimee : ''}
+                      onChange={e => {
+                        setLongueur('');
+                        setLargeur('');
+                        set('surface_estimee', e.target.value);
+                      }}
+                      className="w-full bg-slate-800/70 border-2 border-slate-600/50 text-white rounded-lg p-3 pr-14 text-lg font-bold focus:border-amber-400 focus:outline-none text-center placeholder:text-slate-600"
+                    />
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-400 font-bold text-sm">pi²</span>
+                  </div>
+                </div>
+
+                {/* OU separator */}
+                <div className="flex items-center gap-3 my-4">
+                  <div className="flex-1 h-px bg-slate-700"></div>
+                  <span className="text-slate-500 text-xs font-bold">OU</span>
+                  <div className="flex-1 h-px bg-slate-700"></div>
+                </div>
+
+                {/* Option 2: Dimensions longueur x largeur */}
+                <div className="bg-slate-900/60 border-2 border-slate-700 rounded-xl p-4 mb-4">
+                  <p className="text-amber-400 text-xs font-bold mb-2 uppercase tracking-wider">Option 2 — Mesures en pieds</p>
                   <p className="text-slate-400 text-[11px] mb-3">On calcule les pi² pour vous</p>
                   <div className="flex items-center gap-2">
                     <div className="flex-1">
@@ -247,34 +275,6 @@ function SoumissionForm() {
                       </div>
                     </div>
                   )}
-                </div>
-
-                {/* OU separator */}
-                <div className="flex items-center gap-3 my-4">
-                  <div className="flex-1 h-px bg-slate-700"></div>
-                  <span className="text-slate-500 text-xs font-bold">OU</span>
-                  <div className="flex-1 h-px bg-slate-700"></div>
-                </div>
-
-                {/* Option B: Superficie exacte */}
-                <div className="bg-slate-900/60 border-2 border-slate-700 rounded-xl p-4 mb-4">
-                  <p className="text-amber-400 text-xs font-bold mb-2 uppercase tracking-wider">Option 2 — Superficie exacte</p>
-                  <p className="text-slate-400 text-[11px] mb-3">Si vous connaissez deja vos pi²</p>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      placeholder="Ex: 475"
-                      value={longueur === '' && largeur === '' ? form.surface_estimee : ''}
-                      onChange={e => {
-                        setLongueur('');
-                        setLargeur('');
-                        set('surface_estimee', e.target.value);
-                      }}
-                      className="w-full bg-slate-800/70 border-2 border-slate-600/50 text-white rounded-lg p-3 pr-14 text-lg font-bold focus:border-amber-400 focus:outline-none text-center placeholder:text-slate-600"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-400 font-bold text-sm">pi²</span>
-                  </div>
                 </div>
 
                 {form.surface_estimee && Number(form.surface_estimee) > 0 && (
