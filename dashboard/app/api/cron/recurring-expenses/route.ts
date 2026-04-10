@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getQuebecDate, getQuebecDayOfMonth, getQuebecDay, getQuebecNow } from '@/lib/timezone';
 
 export const maxDuration = 60;
 
@@ -11,8 +12,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const today = new Date().toISOString().slice(0, 10);
-  const dayOfMonth = new Date().getDate();
+  const today = getQuebecDate();
+  const dayOfMonth = getQuebecDayOfMonth();
 
   // Get all active recurring expenses that should fire today
   const recurring = await query(
@@ -31,11 +32,11 @@ export async function GET(req: NextRequest) {
       shouldCreate = true;
     } else if (freq === 'hebdomadaire') {
       // Create every week on the same weekday as jour_du_mois (1=Monday...7=Sunday)
-      const todayWeekday = new Date().getDay() || 7; // Convert 0 (Sunday) to 7
+      const todayWeekday = getQuebecDay() || 7; // Convert 0 (Sunday) to 7
       shouldCreate = todayWeekday === targetDay;
     } else if (freq === 'annuel') {
       // jour_du_mois stores the month (1-12), create on 1st of that month
-      const currentMonth = new Date().getMonth() + 1;
+      const currentMonth = getQuebecNow().getMonth() + 1;
       shouldCreate = currentMonth === targetDay && dayOfMonth === 1;
     }
 

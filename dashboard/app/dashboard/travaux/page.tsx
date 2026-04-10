@@ -708,8 +708,16 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
             href={`/dashboard/devis/${job.id}`}
             className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium px-3 py-2 rounded-lg transition"
           >
-            Modifier
+            Voir devis
           </Link>
+          {job.invoice_id && (
+            <Link
+              href={`/dashboard/factures/${job.invoice_id}`}
+              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-sm font-medium px-3 py-2 rounded-lg transition"
+            >
+              Facture {job.invoice_numero}
+            </Link>
+          )}
           <button
             onClick={handleComplete}
             disabled={loading || !canComplete}

@@ -814,8 +814,11 @@ function buildTools(agentId: AgentId) {
       parameters: z.object({}),
       execute: async () => {
         const crons = [
+          { key: 'echo_last_run', name: 'Echo Monitor Run', expected_hours: 25 },
+          { key: 'echo_last_report', name: 'Echo Report', expected_hours: 25 },
           { key: 'last_email_scan', name: 'Email Scan', expected_hours: 3 },
           { key: 'last_gmail_watch', name: 'Gmail Watch', expected_hours: 168 },
+          { key: 'last_ghl_sync', name: 'GHL Sync', expected_hours: 25 },
         ];
         const results = [];
         for (const cron of crons) {

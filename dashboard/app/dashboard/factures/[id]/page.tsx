@@ -155,7 +155,7 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
         <h3 className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-4">Client</h3>
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <div><p className="text-slate-500">Nom</p><p className="text-white font-medium">{inv.client_nom}</p></div>
+          <div><p className="text-slate-500">Nom</p><Link href={`/dashboard/crm?search=${encodeURIComponent(inv.client_nom)}`} className="text-amber-400 hover:text-amber-300 font-medium transition hover:underline">{inv.client_nom}</Link></div>
           <div><p className="text-slate-500">Courriel</p><p className="text-white">{inv.client_email}</p></div>
           <div><p className="text-slate-500">Telephone</p><p className="text-white">{inv.client_tel ?? '—'}</p></div>
           <div><p className="text-slate-500">Adresse</p><p className="text-white">{inv.client_adresse ?? '—'}</p></div>
@@ -188,9 +188,20 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
         </div>
       </div>
 
-      {/* Contrat + Projet */}
+      {/* Devis + Contrat + Projet */}
       {inv.quote_id && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
+          <div className="rounded-xl p-5 border bg-purple-500/5 border-purple-500/30">
+            <h3 className="text-xs font-medium uppercase tracking-wider mb-2 text-slate-400">Devis</h3>
+            <p className="text-purple-400 font-semibold text-sm">Devis #{inv.quote_id}</p>
+            <p className="text-slate-500 text-xs mb-3">Soumission originale</p>
+            <Link
+              href={`/dashboard/devis/${inv.quote_id}`}
+              className="inline-block bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+            >
+              Voir le devis
+            </Link>
+          </div>
           <div className="rounded-xl p-5 border bg-green-500/5 border-green-500/30">
             <h3 className="text-xs font-medium uppercase tracking-wider mb-2 text-slate-400">Contrat</h3>
             <p className="text-green-400 font-semibold text-sm">Signé par {inv.contrat_signature_nom ?? inv.client_nom}</p>
@@ -205,7 +216,7 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
           </div>
           <div className="rounded-xl p-5 border bg-blue-500/5 border-blue-500/30">
             <h3 className="text-xs font-medium uppercase tracking-wider mb-2 text-slate-400">Projet</h3>
-            <p className="text-blue-400 font-semibold text-sm">Devis #{inv.quote_id}</p>
+            <p className="text-blue-400 font-semibold text-sm">Projet #{inv.quote_id}</p>
             <p className="text-slate-500 text-xs mb-3">Heures, dépenses, photos, profit</p>
             <Link
               href={`/dashboard/travaux?projet=${inv.quote_id}`}

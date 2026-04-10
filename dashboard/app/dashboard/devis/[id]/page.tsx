@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { fetchQuote, updateQuote, sendQuote, sendQuoteSMS, type Quote, type QuoteStatut } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
 import { SERVICES, formatMoney, type ServiceType } from '@/lib/pricing';
@@ -48,6 +49,11 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         setNewJ2(data.booking.jour2_date);
         setNewJ2Slot(data.booking.jour2_slot);
       }
+    }).catch(() => {});
+    // Fetch linked invoice
+    fetch(`/api/invoices?quote_id=${id}`).then(r => r.json()).then(res => {
+      const list = res?.data ?? res;
+      if (Array.isArray(list) && list.length > 0) setLinkedInvoice({ id: list[0].id, numero: list[0].numero });
     }).catch(() => {});
   }, [id]);
 
@@ -182,6 +188,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
     setAction('');
   }
   const [depositResult, setDepositResult] = useState<{ conflict?: boolean; available_dates?: { date: string; jour2_date: string; jour2_slot: string }[]; confirmed?: boolean } | null>(null);
+  const [linkedInvoice, setLinkedInvoice] = useState<{ id: number; numero: string } | null>(null);
 
   // Booking state
   const [booking, setBooking] = useState<{ id: number; jour1_date: string; jour1_slot: string; jour2_date: string; jour2_slot: string; statut: string } | null>(null);
@@ -323,7 +330,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
               <p className="text-slate-500">Nom</p>
-              <p className="text-white font-medium">{quote.client_nom}</p>
+              <Link href={`/dashboard/crm?search=${encodeURIComponent(quote.client_nom)}`} className="text-amber-400 hover:text-amber-300 font-medium transition hover:underline">{quote.client_nom}</Link>
             </div>
             <div>
               <p className="text-slate-500">Courriel</p>
@@ -634,6 +641,28 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           >
             Voir le contrat
           </a>
+        </div>
+      )}
+
+      {/* Liens rapides — Facture & Travaux */}
+      {(linkedInvoice || ['depot_paye', 'planifie', 'complete'].includes(quote.statut)) && (
+        <div className="flex gap-3 flex-wrap">
+          {linkedInvoice && (
+            <Link
+              href={`/dashboard/factures/${linkedInvoice.id}`}
+              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 font-semibold rounded-lg px-6 py-2.5 text-sm transition border border-amber-500/30 inline-block"
+            >
+              Facture {linkedInvoice.numero}
+            </Link>
+          )}
+          {['depot_paye', 'planifie', 'complete'].includes(quote.statut) && (
+            <Link
+              href={`/dashboard/travaux?projet=${quote.id}`}
+              className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 font-semibold rounded-lg px-6 py-2.5 text-sm transition border border-blue-500/30 inline-block"
+            >
+              Voir le projet / travaux
+            </Link>
+          )}
         </div>
       )}
 

@@ -1,5 +1,6 @@
 // Twilio SMS integration for Novus Epoxy
 // Sends notifications to admin and follow-ups to clients
+import { getQuebecHour } from '@/lib/timezone';
 
 const TWILIO_SID = () => process.env.TWILIO_ACCOUNT_SID ?? '';
 const TWILIO_TOKEN = () => process.env.TWILIO_AUTH_TOKEN ?? '';
@@ -7,8 +8,7 @@ const TWILIO_FROM = () => process.env.TWILIO_PHONE_NUMBER ?? '';
 
 export async function sendSMS(to: string, body: string, fromOverride?: string, _skipQuietHours = true): Promise<boolean> {
   // Quiet hours: JAMAIS de SMS avant 8h ou après 21h Eastern — ordre du patron, non négociable
-  const now = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Toronto' }));
-  const hour = now.getHours();
+  const hour = getQuebecHour();
   if (hour < 8 || hour >= 21) {
     console.log(`[SMS] BLOQUE — heures calmes (${hour}h ET) — SMS non envoye a ${to}`);
     return false;

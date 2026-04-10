@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
 import { sendSMS } from '@/lib/sms';
+import { getQuebecHour, getQuebecDate } from '@/lib/timezone';
 
 export const maxDuration = 60;
 
@@ -188,14 +189,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Business hours only: 8h-20h Quebec (EDT = UTC-4)
+  // Business hours only: 8h-20h Quebec (auto DST)
   const now = new Date();
-  const quebecHour = (now.getUTCHours() - 4 + 24) % 24;
+  const quebecHour = getQuebecHour();
   if (quebecHour < 8 || quebecHour >= 20) {
     return NextResponse.json({ ok: true, message: `Hors heures (${quebecHour}h). Aucun envoi.` });
   }
 
-  const today = now.toISOString().slice(0, 10);
+  const today = getQuebecDate();
   const portfolio = await loadPortfolio();
   const photos = pickPhotos(portfolio, 3);
 

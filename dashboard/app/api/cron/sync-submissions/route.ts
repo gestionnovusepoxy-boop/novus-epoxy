@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getQuebecHour } from '@/lib/timezone';
 
 export const maxDuration = 30;
 
@@ -41,9 +42,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  // Business hours only: 8h-20h Quebec (EDT = UTC-4)
-  const now = new Date();
-  const quebecHour = (now.getUTCHours() - 4 + 24) % 24;
+  // Business hours only: 8h-20h Quebec (auto DST)
+  const quebecHour = getQuebecHour();
   if (quebecHour < 8 || quebecHour >= 20) {
     return NextResponse.json({ ok: true, message: `Hors heures (${quebecHour}h). Prochain sync a 8h.` });
   }
