@@ -24,7 +24,7 @@ const SECTIONS: NavSection[] = [
       { href: '/dashboard/devis',    label: 'Devis',      icon: '\u{1F4DD}' },
       { href: '/dashboard/factures', label: 'Factures',   icon: '\u{1F9FE}' },
       { href: '/dashboard/crm',      label: 'CRM Leads', icon: '\u{1F4C7}' },
-      { href: '/dashboard/travaux',  label: 'Travaux',   icon: '\u{1F528}' },
+      { href: '/dashboard/travaux',  label: 'Rapport projet',   icon: '\u{1F528}' },
     ],
   },
   {
