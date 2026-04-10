@@ -394,7 +394,7 @@ ${text.split('\n').map(line => line.trim() ? `<p style="margin:0 0 8px;">${line}
           subject,
           html,
           text,
-          idempotencyKey: `prospect-${lead.id}-${Date.now()}`,
+          idempotencyKey: `prospect-${lead.id}`,
         });
         await query(
           `INSERT INTO email_logs (resend_id, destinataire, sujet, statut, html_body, direction) VALUES ($1, $2, $3, 'sent', $4, 'outbound')`,

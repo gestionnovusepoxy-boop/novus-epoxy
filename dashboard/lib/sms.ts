@@ -46,6 +46,19 @@ export async function sendSMS(to: string, body: string, fromOverride?: string, _
     }
   } catch { /* DB check failed — proceed with send */ }
 
+  // Daily limit check — max 100 SMS per day
+  try {
+    const { query: limitQ } = await import('@/lib/db');
+    const countResult = await limitQ(
+      `SELECT COUNT(*)::int AS cnt FROM sms_logs WHERE direction = 'outbound' AND created_at >= CURRENT_DATE`
+    );
+    const todayCount = countResult[0]?.cnt ?? 0;
+    if (todayCount >= 100) {
+      console.warn(`[SMS] BLOQUE — limite quotidienne atteinte (${todayCount}/100) — SMS non envoye a ${to}`);
+      return false;
+    }
+  } catch { /* daily limit check failed — proceed */ }
+
   // Dedup check — prevent sending same SMS to same number within 6 hours
   const dedupeKey = `sms_dedup_${phone}_${Buffer.from(body.substring(0, 50)).toString('base64').substring(0, 20)}`;
   try {

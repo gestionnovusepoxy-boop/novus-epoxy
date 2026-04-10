@@ -5,6 +5,28 @@ import { query } from '@/lib/db';
 const VALID_STATUT = ['nouveau', 'offre_envoyee', 'contacte', 'devis_envoye', 'rdv_pris', 'ferme', 'gagne'] as const;
 const VALID_TEMP   = ['chaud', 'tiede', 'froid'] as const;
 
+// --- Lead validation ---
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+const BLOCKED_EMAIL_DOMAINS = ['example.com', 'test.com', 'domain.com', 'mailinator.com', 'guerrillamail.com', 'tempmail.com'];
+const VALID_QC_AREA_CODES = ['418', '581', '819', '450', '438', '514', '579', '873', '367'];
+
+function isValidEmail(email: string): boolean {
+  if (!email) return false;
+  const e = email.toLowerCase().trim();
+  if (!EMAIL_REGEX.test(e)) return false;
+  const domain = e.split('@')[1];
+  if (BLOCKED_EMAIL_DOMAINS.includes(domain)) return false;
+  return true;
+}
+
+function isValidQCPhone(phone: string): boolean {
+  const digits = phone.replace(/\D/g, '');
+  const last10 = digits.slice(-10);
+  if (last10.length !== 10) return false;
+  const areaCode = last10.slice(0, 3);
+  return VALID_QC_AREA_CODES.includes(areaCode);
+}
+
 // Auto-score lead temperature based on notes keywords
 const HOT_KW = ['asap','maintenant','rapidement','le plus tot','le plus tôt','cette semaine','urgent','tout de suite','immediat','immédiat','des que possible','dès que possible','au plus vite','presse','pressé','vite','demain','aujourd','ready','pret','prêt','commencer','le plus vite','rapide'];
 const COLD_KW = ['pas de date','a voir','à voir','???','juste savoir','pas presse','pas pressé','aucune idee','aucune idée','sais pas','pas sur','pas sûr','pas certain','no date','annee prochaine','année prochaine','pas pour tout de suite','dans longtemps','pas decide','pas décidé'];
@@ -90,6 +112,15 @@ export async function POST(req: NextRequest) {
   const { nom, telephone, email, service, superficie, ville, notes, source, statut, temperature, type } = body;
 
   if (!nom) return NextResponse.json({ error: 'nom requis' }, { status: 400 });
+
+  // Validate email format + domain blocklist
+  if (email && !isValidEmail(email)) {
+    return NextResponse.json({ error: 'Email invalide ou domaine bloqué' }, { status: 400 });
+  }
+  // Validate QC phone
+  if (telephone && !isValidQCPhone(telephone)) {
+    return NextResponse.json({ error: 'Téléphone invalide — indicatif régional QC requis (418, 514, 450, etc.)' }, { status: 400 });
+  }
 
   const statutVal = VALID_STATUT.includes(statut) ? statut : 'nouveau';
   const tempVal   = VALID_TEMP.includes(temperature) ? temperature : autoScoreTemp(notes, service);

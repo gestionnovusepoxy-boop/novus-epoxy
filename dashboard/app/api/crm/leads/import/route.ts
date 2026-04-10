@@ -14,6 +14,36 @@ interface ParsedLead {
   notes: string;
 }
 
+// --- Lead quality validation ---
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[a-zA-Z]{2,}$/;
+const BLOCKED_EMAIL_DOMAINS = ['example.com', 'test.com', 'domain.com', 'mailinator.com', 'guerrillamail.com', 'tempmail.com'];
+const VALID_QC_AREA_CODES = ['418', '581', '819', '450', '438', '514', '579', '873', '367'];
+const GARBAGE_NAME_PATTERNS = ['http', 'www', '.com', 'recipe', 'streaming', 'stock', 'valuation', 'warehouse', 'fire engulf'];
+
+function isValidEmail(email: string): boolean {
+  if (!email) return false;
+  const e = email.toLowerCase().trim();
+  if (!EMAIL_REGEX.test(e)) return false;
+  const domain = e.split('@')[1];
+  if (BLOCKED_EMAIL_DOMAINS.includes(domain)) return false;
+  return true;
+}
+
+function isValidQCPhone(phone: string): boolean {
+  const digits = phone.replace(/\D/g, '');
+  const last10 = digits.slice(-10);
+  if (last10.length !== 10) return false;
+  const areaCode = last10.slice(0, 3);
+  return VALID_QC_AREA_CODES.includes(areaCode);
+}
+
+function isGarbageName(name: string): boolean {
+  if (!name) return true;
+  if (name.length > 60) return true;
+  const lower = name.toLowerCase();
+  return GARBAGE_NAME_PATTERNS.some(p => lower.includes(p));
+}
+
 // Auto-score temperature based on data completeness + keywords
 function scoreTemperature(lead: ParsedLead): 'chaud' | 'tiede' | 'froid' {
   let score = 0;
@@ -199,8 +229,14 @@ export async function POST(req: NextRequest) {
 
       for (const lead of batch) {
         if (!lead.nom || lead.nom.trim().length < 2) { skipped++; continue; }
+        // Filter garbage names
+        if (isGarbageName(lead.nom)) { skipped++; continue; }
         const phone = (lead.telephone || '').replace(/\D/g, '').slice(-10);
         const email = (lead.email || '').toLowerCase().trim();
+        // Validate email + phone quality — skip if BOTH are invalid
+        const emailValid = isValidEmail(email);
+        const phoneValid = isValidQCPhone(lead.telephone || '');
+        if (!emailValid && !phoneValid) { skipped++; continue; }
         if (phone.length === 10 && existingPhones.has(phone)) { skipped++; continue; }
         if (email.includes('@') && existingEmails.has(email)) { skipped++; continue; }
         const temp = scoreTemperature(lead);
