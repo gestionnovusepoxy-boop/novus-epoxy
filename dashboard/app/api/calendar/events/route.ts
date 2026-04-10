@@ -43,18 +43,22 @@ export async function GET(req: NextRequest) {
     const slot2 = (b.jour2_slot as string) === 'matin' ? { start: '08:00', end: '12:00' } : { start: '12:00', end: '16:00' };
 
     const j1 = (b.jour1_date as Date).toISOString().split('T')[0];
-    const j2 = (b.jour2_date as Date).toISOString().split('T')[0];
+    const j2 = b.jour2_date ? (b.jour2_date as Date).toISOString().split('T')[0] : null;
 
     const statusLabel = isComplete ? ' ✓' : isProvisoire ? ' ?' : '';
-    const extra = { type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut };
+    const extra = { type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut, jour1_date: j1, jour1_slot: b.jour1_slot, jour2_date: j2, jour2_slot: b.jour2_slot };
+
+    // Short address: take first part before comma or limit to ~30 chars
+    const shortAddr = adresse ? (adresse.length > 35 ? adresse.slice(0, 35) + '...' : adresse) : '';
+    const addrSuffix = shortAddr ? ` - ${shortAddr}` : '';
 
     const cls1 = slot1.start === '08:00' ? ['novus-am'] : ['novus-pm'];
     const cls2 = slot2.start === '08:00' ? ['novus-am'] : ['novus-pm'];
 
-    return [
+    const events = [
       {
         id: `booking-${b.id}-j1`,
-        title: `J1: ${nom} — ${service}${statusLabel}`,
+        title: `J1: ${nom}${addrSuffix}${statusLabel}`,
         start: `${j1}T${slot1.start}:00`,
         end: `${j1}T${slot1.end}:00`,
         backgroundColor: color1,
@@ -63,9 +67,13 @@ export async function GET(req: NextRequest) {
         extendedProps: extra,
         editable: !isComplete,
       },
-      {
+    ];
+
+    // Only add jour 2 if it exists
+    if (b.jour2_date && j2) {
+      events.push({
         id: `booking-${b.id}-j2`,
-        title: `J2: ${nom} — ${service}${statusLabel}`,
+        title: `J2: ${nom}${addrSuffix}${statusLabel}`,
         start: `${j2}T${slot2.start}:00`,
         end: `${j2}T${slot2.end}:00`,
         backgroundColor: color2,
@@ -73,8 +81,10 @@ export async function GET(req: NextRequest) {
         classNames: cls2,
         extendedProps: extra,
         editable: !isComplete,
-      },
-    ];
+      });
+    }
+
+    return events;
   });
 
   // 2. Manual calendar events

@@ -66,16 +66,29 @@ export async function GET(req: NextRequest) {
   });
 }
 
-// Admin — update booking dates
+// Admin — update booking dates (supports both id and quote_id)
 export async function PATCH(req: NextRequest) {
   const { auth } = await import('@/lib/auth');
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Non autorise' }, { status: 401 });
 
   const body = await req.json();
-  const { quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot } = body;
-  if (!quote_id || !jour1_date || !jour2_date) {
-    return NextResponse.json({ error: 'quote_id, jour1_date, jour2_date requis' }, { status: 400 });
+  const { id, quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot } = body;
+
+  // Update by booking id directly (from calendar edit modal)
+  if (id) {
+    if (!jour1_date) return NextResponse.json({ error: 'jour1_date requis' }, { status: 400 });
+    const result = await query(
+      `UPDATE bookings SET jour1_date = COALESCE($2, jour1_date), jour1_slot = COALESCE($3, jour1_slot), jour2_date = $4, jour2_slot = $5, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, jour1_date, jour1_slot || 'matin', jour2_date || null, jour2_slot || null]
+    );
+    if (result.length === 0) return NextResponse.json({ error: 'Booking introuvable' }, { status: 404 });
+    return NextResponse.json({ ok: true, booking: result[0] });
+  }
+
+  // Legacy: update by quote_id
+  if (!quote_id || !jour1_date) {
+    return NextResponse.json({ error: 'id ou quote_id requis, avec jour1_date' }, { status: 400 });
   }
 
   const existing = await query(`SELECT id FROM bookings WHERE quote_id = $1`, [quote_id]);
@@ -83,12 +96,12 @@ export async function PATCH(req: NextRequest) {
     // Create new booking
     await query(
       `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut) VALUES ($1, $2, $3, $4, $5, 'en_attente')`,
-      [quote_id, jour1_date, jour1_slot || 'matin', jour2_date, jour2_slot || 'apres-midi']
+      [quote_id, jour1_date, jour1_slot || 'matin', jour2_date || null, jour2_slot || 'apres-midi']
     );
   } else {
     await query(
       `UPDATE bookings SET jour1_date = $1, jour1_slot = $2, jour2_date = $3, jour2_slot = $4, updated_at = NOW() WHERE quote_id = $5`,
-      [jour1_date, jour1_slot || 'matin', jour2_date, jour2_slot || 'apres-midi', quote_id]
+      [jour1_date, jour1_slot || 'matin', jour2_date || null, jour2_slot || 'apres-midi', quote_id]
     );
   }
 
