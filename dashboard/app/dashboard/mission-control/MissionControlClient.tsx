@@ -49,9 +49,9 @@ const COMMAND_LABELS: Record<string, string> = Object.fromEntries(
 
 // ─── Agent definitions ────────────────────────────────────────────────────────
 
-// DiceBear avatar URLs — each agent gets a unique anime-style avatar
+// DiceBear avatar URLs — each agent gets a unique 3D character avatar
 const AVATAR_URL = (name: string) =>
-  `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(name)}&backgroundColor=transparent&features=true&featuresProbability=30`;
+  `https://api.dicebear.com/9.x/notionists/svg?seed=${encodeURIComponent(name)}`;
 
 const AGENTS = [
   {
@@ -668,12 +668,14 @@ function AgentCard({
     <div className={`relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800/80 border ${agent.border} rounded-2xl p-4 shadow-lg ${agent.glow} hover:shadow-xl hover:border-opacity-60 transition-all duration-200 group ${isStreaming ? 'ring-2 ring-green-500/30' : ''} ${!isEnabled ? 'opacity-50 grayscale' : ''}`}>
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
-        <div className={`w-14 h-14 rounded-full ${agent.bg} flex items-center justify-center text-xl flex-shrink-0 shadow-lg overflow-hidden ring-2 ${agent.ring}`}>
-          {(agent as Record<string, unknown>).avatar ? (
-            <img src={(agent as Record<string, unknown>).avatar as string} alt={agent.name} className="w-full h-full object-cover rounded-full" />
-          ) : (
-            <span className="text-white font-bold text-lg">{agent.emoji}</span>
-          )}
+        <div className={`w-16 h-16 rounded-full flex items-center justify-center text-xl flex-shrink-0 shadow-lg overflow-hidden ring-2 ${agent.ring} bg-gradient-to-br from-slate-700 to-slate-900`}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`https://api.dicebear.com/9.x/notionists/svg?seed=${agent.id}`}
+            alt={agent.name}
+            className="w-full h-full"
+            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; (e.target as HTMLImageElement).parentElement!.innerHTML = `<span class="text-white font-bold text-2xl">${agent.name[0]}</span>`; }}
+          />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
