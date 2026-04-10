@@ -39,15 +39,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       `UPDATE invoices SET depot_paye = true, depot_paye_at = NOW(), depot_methode = $1, statut = 'depot_recu' WHERE id = $2`,
       [methode, invoiceId],
     );
-    // Also update linked quote
+    // Also update linked quote — sync both deposit_paid_at AND paid_at for backward compat
     const inv = invRows[0];
-    await query(`UPDATE quotes SET statut = 'depot_paye', paid_at = NOW() WHERE id = $1`, [inv.quote_id]);
+    await query(
+      `UPDATE quotes SET statut = 'depot_paye', deposit_paid_at = NOW(), paid_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [inv.quote_id],
+    );
   } else {
     await query(
       `UPDATE invoices SET final_paye = true, final_paye_at = NOW(), final_methode = $1, statut = 'completee' WHERE id = $2`,
       [methode, invoiceId],
     );
-    await query(`UPDATE quotes SET statut = 'complete' WHERE id = $1`, [invRows[0].quote_id]);
+    // Sync balance_paid_at on the linked quote so Rapport projet shows "payé"
+    await query(
+      `UPDATE quotes SET statut = 'complete', balance_paid_at = NOW(), updated_at = NOW() WHERE id = $1`,
+      [invRows[0].quote_id],
+    );
   }
 
   // Return updated invoice
