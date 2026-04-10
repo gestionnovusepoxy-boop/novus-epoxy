@@ -117,6 +117,77 @@ export async function GET() {
     FROM sms_logs
   `).catch(() => [{ envoyes: 0, recus: 0 }]);
 
+  // 13. Urgent actions — counts
+  const leadsChaudsNonContactes = await query(`
+    SELECT COUNT(*)::int AS count
+    FROM crm_leads
+    WHERE temperature = 'chaud' AND prospect_sent_at IS NULL
+  `).catch(() => [{ count: 0 }]);
+
+  const devisSansReponse48h = await query(`
+    SELECT COUNT(*)::int AS count
+    FROM quotes
+    WHERE statut = 'envoye'
+      AND sent_at <= NOW() - INTERVAL '48 hours'
+      AND relance_1_at IS NULL
+  `).catch(() => [{ count: 0 }]);
+
+  const depotsEnAttente = await query(`
+    SELECT COUNT(*)::int AS count
+    FROM quotes
+    WHERE statut = 'contrat_signe' AND deposit_paid_at IS NULL
+  `).catch(() => [{ count: 0 }]);
+
+  const facturesImpayees = await query(`
+    SELECT
+      COUNT(*)::int AS count,
+      COALESCE(SUM(
+        CASE
+          WHEN NOT depot_paye THEN depot_montant
+          ELSE 0
+        END
+        +
+        CASE
+          WHEN NOT final_paye THEN final_montant
+          ELSE 0
+        END
+      ), 0)::numeric AS montant
+    FROM invoices
+    WHERE statut != 'payee'
+  `).catch(() => [{ count: 0, montant: 0 }]);
+
+  const soumissionsNonTraitees = await query(`
+    SELECT COUNT(*)::int AS count
+    FROM submissions
+    WHERE statut = 'nouveau'
+  `).catch(() => [{ count: 0 }]);
+
+  const reservationsDemain = await query(`
+    SELECT COUNT(*)::int AS count
+    FROM bookings
+    WHERE jour1_date = CURRENT_DATE + INTERVAL '1 day'
+      AND statut IN ('en_attente', 'confirme')
+  `).catch(() => [{ count: 0 }]);
+
+  // 14. Details for quick actions
+  const prochainsLeadsChauds = await query(`
+    SELECT id, nom, telephone, created_at
+    FROM crm_leads
+    WHERE temperature = 'chaud' AND prospect_sent_at IS NULL
+    ORDER BY created_at DESC
+    LIMIT 3
+  `).catch(() => []);
+
+  const prochainsDevisRelance = await query(`
+    SELECT id, client_nom, client_tel, total, sent_at
+    FROM quotes
+    WHERE statut = 'envoye'
+      AND sent_at <= NOW() - INTERVAL '48 hours'
+      AND relance_1_at IS NULL
+    ORDER BY sent_at ASC
+    LIMIT 3
+  `).catch(() => []);
+
   return NextResponse.json({
     financier: {
       encaisse,
@@ -149,5 +220,27 @@ export async function GET() {
     lead_sources: leadSources.map(s => ({ source: s.source as string || 'inconnu', count: Number(s.count) })),
     chatbot: { conversations: Number(chatbot[0].count) },
     sms: smsStats[0],
+    actions_urgentes: {
+      leads_chauds_non_contactes: Number(leadsChaudsNonContactes[0]?.count || 0),
+      devis_sans_reponse_48h: Number(devisSansReponse48h[0]?.count || 0),
+      depots_en_attente: Number(depotsEnAttente[0]?.count || 0),
+      factures_impayees: Number(facturesImpayees[0]?.count || 0),
+      factures_impayees_montant: Number(facturesImpayees[0]?.montant || 0),
+      soumissions_non_traitees: Number(soumissionsNonTraitees[0]?.count || 0),
+      reservations_demain: Number(reservationsDemain[0]?.count || 0),
+    },
+    prochains_leads_chauds: prochainsLeadsChauds.map(l => ({
+      id: l.id,
+      nom: l.nom,
+      telephone: l.telephone,
+      created_at: l.created_at,
+    })),
+    prochains_devis_relance: prochainsDevisRelance.map(q => ({
+      id: q.id,
+      client_nom: q.client_nom,
+      client_tel: q.client_tel,
+      total: Number(q.total),
+      sent_at: q.sent_at,
+    })),
   });
 }

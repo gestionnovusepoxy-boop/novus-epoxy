@@ -43,6 +43,192 @@ interface OverviewData {
   lead_sources: { source: string; count: number }[];
   chatbot: { conversations: number };
   sms: { envoyes: number; recus: number };
+  actions_urgentes: {
+    leads_chauds_non_contactes: number;
+    devis_sans_reponse_48h: number;
+    depots_en_attente: number;
+    factures_impayees: number;
+    factures_impayees_montant: number;
+    soumissions_non_traitees: number;
+    reservations_demain: number;
+  };
+  prochains_leads_chauds: { id: number; nom: string; telephone: string; created_at: string }[];
+  prochains_devis_relance: { id: number; client_nom: string; client_tel: string; total: number; sent_at: string }[];
+}
+
+/* ─── Urgent Actions ─── */
+function UrgentActions({ data }: { data: OverviewData }) {
+  const a = data.actions_urgentes;
+  const totalUrgent =
+    a.leads_chauds_non_contactes +
+    a.devis_sans_reponse_48h +
+    a.depots_en_attente +
+    a.factures_impayees +
+    a.soumissions_non_traitees +
+    a.reservations_demain;
+
+  if (totalUrgent === 0) {
+    return (
+      <div className="bg-slate-800 border border-green-500/40 rounded-xl p-5">
+        <div className="flex items-center gap-3">
+          <span className="text-3xl">✅</span>
+          <div>
+            <h3 className="text-white font-semibold text-base">Tout est à jour, bravo!</h3>
+            <p className="text-slate-400 text-xs mt-0.5">Aucune action urgente en ce moment.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const cards: {
+    icon: string;
+    count: number;
+    title: string;
+    subtitle: string;
+    href: string;
+  }[] = [
+    {
+      icon: '🔥',
+      count: a.leads_chauds_non_contactes,
+      title: 'leads chauds à rappeler',
+      subtitle: 'Prospects chauds jamais contactés',
+      href: '/dashboard/crm?temperature=chaud',
+    },
+    {
+      icon: '📨',
+      count: a.devis_sans_reponse_48h,
+      title: 'devis sans réponse > 48h',
+      subtitle: 'Relance à envoyer',
+      href: '/dashboard/devis?filter=relance',
+    },
+    {
+      icon: '💰',
+      count: a.depots_en_attente,
+      title: 'dépôts attendus',
+      subtitle: 'Contrats signés, dépôt à recevoir',
+      href: '/dashboard/devis?filter=depot',
+    },
+    {
+      icon: '🧾',
+      count: a.factures_impayees,
+      title: 'factures impayées',
+      subtitle: a.factures_impayees_montant > 0 ? fmt(a.factures_impayees_montant) + ' à recevoir' : 'Soldes en attente',
+      href: '/dashboard/factures?filter=impayees',
+    },
+    {
+      icon: '📋',
+      count: a.soumissions_non_traitees,
+      title: 'soumissions à traiter',
+      subtitle: 'Demandes web non traitées',
+      href: '/dashboard/soumissions',
+    },
+    {
+      icon: '📅',
+      count: a.reservations_demain,
+      title: 'rendez-vous demain',
+      subtitle: 'Chantiers ou rencontres planifiés',
+      href: '/dashboard/calendrier',
+    },
+  ];
+
+  return (
+    <div className="bg-slate-800 border border-amber-500/30 rounded-xl p-4 sm:p-5 space-y-4">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-xl">⚡</span>
+          <h3 className="text-white font-semibold text-sm sm:text-base">Actions urgentes</h3>
+        </div>
+        <span className="text-amber-400 text-xs font-medium">{totalUrgent} à traiter</span>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+        {cards.map((c, i) => {
+          const isUrgent = c.count > 0;
+          return (
+            <Link
+              key={i}
+              href={c.href}
+              className={`block rounded-lg border p-3 sm:p-4 transition hover:border-amber-400/60 ${
+                isUrgent
+                  ? 'bg-red-500/5 border-red-500/40'
+                  : 'bg-slate-900/40 border-green-500/20 opacity-60'
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-2xl flex-shrink-0">{c.icon}</span>
+                  <div className="min-w-0">
+                    <p className="text-white text-sm font-semibold leading-tight">
+                      <span className={isUrgent ? 'text-red-400' : 'text-green-400'}>{c.count}</span>{' '}
+                      {c.title}
+                    </p>
+                    <p className="text-slate-400 text-[11px] mt-0.5 truncate">{c.subtitle}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex items-center justify-end mt-2">
+                <span className="text-amber-400 text-[11px] font-medium hover:text-amber-300">
+                  Voir →
+                </span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      {(data.prochains_leads_chauds.length > 0 || data.prochains_devis_relance.length > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-3 border-t border-slate-700">
+          {data.prochains_leads_chauds.length > 0 && (
+            <div>
+              <p className="text-slate-400 text-[11px] uppercase tracking-wider font-medium mb-2">
+                Prochains leads chauds
+              </p>
+              <div className="space-y-1.5">
+                {data.prochains_leads_chauds.map(l => (
+                  <Link
+                    key={l.id}
+                    href={`/dashboard/crm/${l.id}`}
+                    className="flex items-center justify-between bg-slate-900/50 rounded-md px-3 py-2 hover:bg-slate-900 transition"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-white text-xs font-medium truncate">{l.nom}</p>
+                      <p className="text-slate-400 text-[10px] truncate">{l.telephone}</p>
+                    </div>
+                    <span className="text-amber-400 text-[10px] flex-shrink-0 ml-2">Rappeler →</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+          {data.prochains_devis_relance.length > 0 && (
+            <div>
+              <p className="text-slate-400 text-[11px] uppercase tracking-wider font-medium mb-2">
+                Devis à relancer
+              </p>
+              <div className="space-y-1.5">
+                {data.prochains_devis_relance.map(q => (
+                  <Link
+                    key={q.id}
+                    href={`/dashboard/devis/${q.id}`}
+                    className="flex items-center justify-between bg-slate-900/50 rounded-md px-3 py-2 hover:bg-slate-900 transition"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-white text-xs font-medium truncate">{q.client_nom}</p>
+                      <p className="text-slate-400 text-[10px] truncate">
+                        {fmt(q.total)}
+                        {q.sent_at && ' — envoyé ' + new Date(q.sent_at).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' })}
+                      </p>
+                    </div>
+                    <span className="text-amber-400 text-[10px] flex-shrink-0 ml-2">Relancer →</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* ─── KPI Card ─── */
@@ -143,6 +329,8 @@ function DashboardContent() {
     <PollingProvider onRefresh={loadData}>
       <div className="p-3 sm:p-6 space-y-4 sm:space-y-6">
         <h2 className="text-xl sm:text-2xl font-bold text-white">Vue d&apos;ensemble</h2>
+
+        {data && <UrgentActions data={data} />}
 
         {!data && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
