@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PollingProvider } from '@/components/polling-provider';
 import { formatMoney } from '@/lib/pricing';
+import { getQuebecDate } from '@/lib/timezone';
 import Link from 'next/link';
 
 /* ─── Types ─── */
@@ -20,6 +21,9 @@ interface Travail {
   tvq: number;
   total: number;
   depot_requis: number;
+  depot_paye_at?: string | null;
+  solde_paye_at?: string | null;
+  contrat_signe_at?: string | null;
   statut: string;
   jour1_date: string | null;
   jour2_date: string | null;
@@ -90,12 +94,24 @@ function slotLabel(slot: string | null): string {
 
 function daysUntil(dateStr: string): number | null {
   if (!dateStr) return null;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  // Use Quebec timezone for "today" reference
+  const todayStr = getQuebecDate();
+  const today = new Date(todayStr + 'T00:00:00');
   const clean = String(dateStr).slice(0, 10);
   const target = new Date(clean + 'T00:00:00');
   if (isNaN(target.getTime())) return null;
-  return Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.round((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+function mapsUrl(address: string): string {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`;
+}
+
+function formatDateShortFr(iso: string | null | undefined): string {
+  if (!iso) return '';
+  const d = new Date(String(iso).slice(0, 10) + 'T12:00:00');
+  if (isNaN(d.getTime())) return String(iso).slice(0, 10);
+  return d.toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' });
 }
 
 function isThisWeek(dateStr: string): boolean {
@@ -549,6 +565,110 @@ function ProfitSection({ quoteId, sousTotal, tps, tvq }: { quoteId: number; sous
   );
 }
 
+/* ─── Quick Actions Bar ─── */
+function QuickActions({ job }: { job: Travail }) {
+  const btn = 'flex items-center gap-1.5 text-xs font-medium px-2.5 py-1.5 rounded-lg border transition whitespace-nowrap';
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {job.client_tel && (
+        <a
+          href={`tel:${job.client_tel}`}
+          className={`${btn} bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border-emerald-500/30`}
+          title="Appeler le client"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" /></svg>
+          Appeler
+        </a>
+      )}
+      {job.client_email && (
+        <a
+          href={`mailto:${job.client_email}`}
+          className={`${btn} bg-sky-500/10 hover:bg-sky-500/20 text-sky-300 border-sky-500/30`}
+          title="Envoyer un email"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" /></svg>
+          Email
+        </a>
+      )}
+      {job.client_adresse && (
+        <a
+          href={mapsUrl(job.client_adresse)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`${btn} bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-300 border-indigo-500/30`}
+          title="Ouvrir dans Google Maps"
+        >
+          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.244-4.243a8 8 0 1111.314 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          Maps
+        </a>
+      )}
+      <Link
+        href={`/dashboard/devis/${job.id}`}
+        className={`${btn} bg-slate-700/60 hover:bg-slate-700 text-slate-200 border-slate-600`}
+      >
+        Devis
+      </Link>
+      {job.invoice_id ? (
+        <Link
+          href={`/dashboard/factures/${job.invoice_id}`}
+          className={`${btn} bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border-amber-500/30`}
+        >
+          Facture {job.invoice_numero || ''}
+        </Link>
+      ) : (
+        <Link
+          href={`/dashboard/factures?create=${job.id}`}
+          className={`${btn} bg-purple-500/10 hover:bg-purple-500/20 text-purple-300 border-purple-500/30`}
+          title="Creer une facture pour ce projet"
+        >
+          + Facture
+        </Link>
+      )}
+    </div>
+  );
+}
+
+/* ─── Entity Summary (devis/contrat/facture/paiements) ─── */
+function EntitySummary({ job }: { job: Travail }) {
+  const depotPaye = job.statut === 'depot_paye' || job.statut === 'planifie' || job.statut === 'en_cours' || job.statut === 'complete' || job.statut === 'facture' || job.statut === 'paye' || !!job.depot_paye_at;
+  const soldePaye = job.statut === 'paye' || !!job.solde_paye_at;
+  const contratSigne = !!job.contrat_signe_at || depotPaye;
+
+  const row = (label: string, value: React.ReactNode, ok: boolean) => (
+    <div className="flex items-center justify-between text-xs py-1 border-b border-slate-800/60 last:border-0">
+      <span className="text-slate-500">{label}</span>
+      <span className={`font-medium ${ok ? 'text-emerald-300' : 'text-slate-500'}`}>{value}</span>
+    </div>
+  );
+
+  return (
+    <div className="bg-slate-900/50 rounded-lg p-3">
+      <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">Dossier projet</h4>
+      {row('Devis', `#${job.id}`, true)}
+      {row('Contrat', contratSigne ? 'Signe' : 'En attente', contratSigne)}
+      {row(
+        'Depot',
+        depotPaye
+          ? `${formatMoney(Number(job.depot_requis))}${job.depot_paye_at ? ' — ' + formatDateShortFr(job.depot_paye_at) : ''}`
+          : 'Non paye',
+        depotPaye
+      )}
+      {row(
+        'Solde',
+        soldePaye
+          ? `${formatMoney(Number(job.total) - Number(job.depot_requis))}${job.solde_paye_at ? ' — ' + formatDateShortFr(job.solde_paye_at) : ''}`
+          : 'Non paye',
+        soldePaye
+      )}
+      {row(
+        'Facture',
+        job.invoice_id ? job.invoice_numero || `#${job.invoice_id}` : 'Non creee',
+        !!job.invoice_id
+      )}
+    </div>
+  );
+}
+
 /* ─── Job Card ─── */
 function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) {
   const [loading, setLoading] = useState(false);
@@ -607,39 +727,67 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
     else daysLabel = `Dans ${days} jours`;
   }
 
+  const imminent = days !== null && days <= 1 && days >= 0;
+  const cardBorder = imminent
+    ? 'border-amber-500/60 ring-1 ring-amber-500/20'
+    : 'border-slate-700 hover:border-slate-600';
+
   return (
-    <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3 hover:border-slate-600 transition">
+    <div className={`bg-slate-800 border rounded-xl p-5 space-y-4 transition ${cardBorder}`}>
       {/* Header */}
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded font-mono">Projet #{job.id}</span>
-            <h3 className="text-white font-semibold text-base">{job.client_nom}</h3>
+            <h3 className="text-white font-bold text-lg truncate">{job.client_nom}</h3>
           </div>
-          {job.client_tel && (
-            <a href={`tel:${job.client_tel}`} className="text-amber-400 text-sm hover:underline">
-              {job.client_tel}
-            </a>
+          <div className="mt-1 space-y-0.5 text-sm">
+            {job.client_tel && (
+              <a href={`tel:${job.client_tel}`} className="block text-amber-400 hover:underline">
+                {job.client_tel}
+              </a>
+            )}
+            {job.client_email && (
+              <a href={`mailto:${job.client_email}`} className="block text-sky-400 hover:underline truncate">
+                {job.client_email}
+              </a>
+            )}
+            {job.client_adresse && (
+              <a
+                href={mapsUrl(job.client_adresse)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-slate-400 hover:text-indigo-300"
+              >
+                {job.client_adresse}
+              </a>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <span className={`text-xs font-medium px-2.5 py-1 rounded-full border whitespace-nowrap ${badge.cls}`}>
+            {badge.label}
+          </span>
+          {daysLabel && (
+            <span className={`text-xs font-semibold ${imminent ? 'text-amber-400' : 'text-slate-400'}`}>
+              {daysLabel}
+            </span>
           )}
         </div>
-        <span className={`text-xs font-medium px-2.5 py-1 rounded-full border whitespace-nowrap ${badge.cls}`}>
-          {badge.label}
-        </span>
       </div>
 
-      {job.client_adresse && (
-        <p className="text-slate-400 text-sm">{job.client_adresse}</p>
-      )}
+      {/* Quick actions */}
+      <QuickActions job={job} />
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <span className="text-slate-300">
-          {SERVICE_LABEL[job.type_service] || job.type_service} — {job.superficie} pi2
-        </span>
+      {/* Service */}
+      <div className="text-sm text-slate-300">
+        {SERVICE_LABEL[job.type_service] || job.type_service} — {job.superficie} pi2
       </div>
 
-      {/* Dates */}
+      {/* Booking dates */}
       {job.jour1_date && (
-        <div className="bg-slate-900/50 rounded-lg p-3 space-y-1">
+        <div className={`rounded-lg p-3 space-y-1 ${imminent ? 'bg-amber-500/10 border border-amber-500/30' : 'bg-slate-900/50'}`}>
+          <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1">Planification</h4>
           <div className="flex items-center gap-2 text-sm">
             <span className="text-slate-500">Jour 1:</span>
             <span className="text-white font-medium">{formatDateFr(job.jour1_date)}</span>
@@ -655,20 +803,35 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
         </div>
       )}
 
+      {/* Entity summary */}
+      <EntitySummary job={job} />
+
       {/* Financials */}
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <span className="text-slate-400">Total: <span className="text-white font-medium">{formatMoney(Number(job.total))}</span></span>
-        <span className="text-slate-400">Depot: <span className="text-emerald-400">{formatMoney(Number(job.depot_requis))}</span></span>
-        <span className="text-slate-400">Solde: <span className="text-amber-400 font-medium">{formatMoney(balance)}</span></span>
+      <div className="bg-slate-900/50 rounded-lg p-3">
+        <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider mb-1.5">Montants</h4>
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <div>
+            <div className="text-slate-500 text-xs">Total</div>
+            <div className="text-white font-semibold">{formatMoney(Number(job.total))}</div>
+          </div>
+          <div>
+            <div className="text-slate-500 text-xs">Depot</div>
+            <div className="text-emerald-400 font-semibold">{formatMoney(Number(job.depot_requis))}</div>
+          </div>
+          <div>
+            <div className="text-slate-500 text-xs">Solde</div>
+            <div className="text-amber-400 font-semibold">{formatMoney(balance)}</div>
+          </div>
+        </div>
       </div>
 
       {/* Photo counter + Expand/Collapse toggle */}
       <div className="flex items-center justify-between">
         <button
           onClick={() => setExpanded(!expanded)}
-          className="text-xs text-slate-500 hover:text-slate-300 transition"
+          className="text-xs text-slate-400 hover:text-white transition font-medium"
         >
-          {expanded ? '▾ Masquer details' : '▸ Photos, checklist & heures'}
+          {expanded ? '▾ Masquer details' : '▸ Photos, checklist, heures & profit'}
         </button>
         <div className="flex items-center gap-2 text-xs">
           {photoCounts.avant > 0 && (
@@ -694,39 +857,16 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center justify-between pt-1 flex-wrap gap-2">
-        <div className="flex items-center gap-2">
-          {daysLabel && (
-            <span className={`text-sm font-medium ${days !== null && days <= 1 ? 'text-amber-400' : 'text-slate-400'}`}>
-              {daysLabel}
-            </span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <Link
-            href={`/dashboard/devis/${job.id}`}
-            className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium px-3 py-2 rounded-lg transition"
-          >
-            Voir devis
-          </Link>
-          {job.invoice_id && (
-            <Link
-              href={`/dashboard/factures/${job.invoice_id}`}
-              className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-sm font-medium px-3 py-2 rounded-lg transition"
-            >
-              Facture {job.invoice_numero}
-            </Link>
-          )}
-          <button
-            onClick={handleComplete}
-            disabled={loading || !canComplete}
-            title={!canComplete ? (!hasPhotosApres ? 'Ajoutez au moins 1 photo apres avant de completer' : 'Completez la checklist avant de completer') : ''}
-            className="bg-green-600 hover:bg-green-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-medium px-4 py-2 rounded-lg transition"
-          >
-            {loading ? 'En cours...' : 'Marquer complete'}
-          </button>
-        </div>
+      {/* Complete button */}
+      <div className="flex items-center justify-end pt-1 flex-wrap gap-2 border-t border-slate-700/50">
+        <button
+          onClick={handleComplete}
+          disabled={loading || !canComplete}
+          title={!canComplete ? (!hasPhotosApres ? 'Ajoutez au moins 1 photo apres avant de completer' : 'Completez la checklist avant de completer') : ''}
+          className="bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+        >
+          {loading ? 'En cours...' : 'Marquer complete'}
+        </button>
       </div>
 
       {/* Hint if button disabled */}
@@ -770,26 +910,41 @@ function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: bool
   }, [autoExpand]);
 
   return (
-    <div ref={cardRef} className={`bg-slate-800/60 border rounded-xl p-5 space-y-3 ${autoExpand ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-slate-700/50'}`}>
+    <div ref={cardRef} className={`bg-slate-800/60 border rounded-xl p-5 space-y-4 ${autoExpand ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-slate-700/50'}`}>
       <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] bg-slate-700 text-slate-400 px-1.5 py-0.5 rounded font-mono">Projet #{job.id}</span>
-            <h3 className="text-white font-semibold text-base">{job.client_nom}</h3>
+            <h3 className="text-white font-bold text-lg truncate">{job.client_nom}</h3>
           </div>
-          {job.client_adresse && (
-            <p className="text-slate-500 text-sm">{job.client_adresse}</p>
-          )}
+          <div className="mt-1 space-y-0.5 text-sm">
+            {job.client_tel && (
+              <a href={`tel:${job.client_tel}`} className="block text-amber-400 hover:underline">{job.client_tel}</a>
+            )}
+            {job.client_email && (
+              <a href={`mailto:${job.client_email}`} className="block text-sky-400 hover:underline truncate">{job.client_email}</a>
+            )}
+            {job.client_adresse && (
+              <a
+                href={mapsUrl(job.client_adresse)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-slate-500 hover:text-indigo-300"
+              >
+                {job.client_adresse}
+              </a>
+            )}
+          </div>
         </div>
         <span className="text-xs font-medium px-2.5 py-1 rounded-full border bg-green-500/20 text-green-300 border-green-500/30 whitespace-nowrap">
           Termine
         </span>
       </div>
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <span className="text-slate-300">
-          {SERVICE_LABEL[job.type_service] || job.type_service} — {job.superficie} pi2
-        </span>
+      <QuickActions job={job} />
+
+      <div className="text-sm text-slate-300">
+        {SERVICE_LABEL[job.type_service] || job.type_service} — {job.superficie} pi2
       </div>
 
       {job.jour1_date && (
@@ -799,8 +954,13 @@ function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: bool
         </div>
       )}
 
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-        <span className="text-slate-400">Total: <span className="text-white font-medium">{formatMoney(Number(job.total))}</span></span>
+      <EntitySummary job={job} />
+
+      <div className="bg-slate-900/50 rounded-lg p-3">
+        <div className="flex items-center justify-between text-sm">
+          <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Total projet</span>
+          <span className="text-white font-semibold text-base">{formatMoney(Number(job.total))}</span>
+        </div>
       </div>
 
       <button
@@ -818,33 +978,19 @@ function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: bool
           <ProfitSection quoteId={job.id} sousTotal={Number(job.sous_total)} tps={Number(job.tps)} tvq={Number(job.tvq)} />
         </div>
       )}
-
-      <div className="flex justify-end gap-2">
-        {job.invoice_id && (
-          <Link
-            href={`/dashboard/factures/${job.invoice_id}`}
-            className="bg-amber-500/20 hover:bg-amber-500/30 text-amber-400 border border-amber-500/30 text-sm font-medium px-3 py-2 rounded-lg transition"
-          >
-            Facture {job.invoice_numero}
-          </Link>
-        )}
-        <Link
-          href={`/dashboard/devis/${job.id}`}
-          className="bg-slate-700 hover:bg-slate-600 text-slate-300 text-sm font-medium px-3 py-2 rounded-lg transition"
-        >
-          Voir devis
-        </Link>
-      </div>
     </div>
   );
 }
+
+type TabKey = 'en_cours' | 'planifies' | 'termines' | 'tous';
 
 function PageContent() {
   const searchParams = useSearchParams();
   const projetParam = searchParams.get('projet');
   const [data, setData] = useState<Travail[]>([]);
-  const [tab, setTab] = useState<'actifs' | 'termines'>('actifs');
-  const [focusProjet, setFocusProjet] = useState<number | null>(projetParam ? parseInt(projetParam) : null);
+  const [tab, setTab] = useState<TabKey>('en_cours');
+  const [search, setSearch] = useState('');
+  const [focusProjet] = useState<number | null>(projetParam ? parseInt(projetParam) : null);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/travaux');
@@ -853,7 +999,7 @@ function PageContent() {
     setData(json.data ?? []);
   }, []);
 
-  // Auto-switch tab if focused project is in completed
+  // Auto-switch tab if focused project is completed
   useEffect(() => {
     if (focusProjet && data.length > 0) {
       const job = data.find(j => j.id === focusProjet);
@@ -861,27 +1007,53 @@ function PageContent() {
     }
   }, [focusProjet, data]);
 
-  // Split active vs completed
-  const activeJobs = data.filter(j => j.statut !== 'complete');
-  const completedJobs = data.filter(j => j.statut === 'complete');
+  // Apply search filter
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return data;
+    return data.filter(j =>
+      (j.client_nom || '').toLowerCase().includes(q) ||
+      (j.client_adresse || '').toLowerCase().includes(q) ||
+      (j.client_email || '').toLowerCase().includes(q) ||
+      (j.client_tel || '').toLowerCase().includes(q) ||
+      String(j.id).includes(q)
+    );
+  }, [data, search]);
 
-  // Group active jobs
+  // Split buckets
+  const completedJobs = filtered.filter(j => j.statut === 'complete');
+  const activeJobs = filtered.filter(j => j.statut !== 'complete');
+  // "Planifies" = booked with dates but not yet in progress
+  const planifiedJobs = activeJobs.filter(j => j.jour1_date && (j.statut === 'approuve' || j.statut === 'depot_paye' || j.statut === 'planifie'));
+  // "En cours" = active jobs (already shown today/this week view)
+  const enCoursJobs = activeJobs.filter(j => j.statut === 'en_cours' || (!j.jour1_date) || (j.jour1_date && !planifiedJobs.includes(j)));
+
+  // Group "en cours" jobs by proximity
   const thisWeek: Travail[] = [];
   const upcoming: Travail[] = [];
   const noDates: Travail[] = [];
-
-  for (const job of activeJobs) {
-    if (!job.jour1_date) {
-      noDates.push(job);
-    } else if (isThisWeek(job.jour1_date)) {
-      thisWeek.push(job);
-    } else {
-      upcoming.push(job);
-    }
+  for (const job of enCoursJobs) {
+    if (!job.jour1_date) noDates.push(job);
+    else if (isThisWeek(job.jour1_date)) thisWeek.push(job);
+    else upcoming.push(job);
   }
 
-  const tabCls = (t: 'actifs' | 'termines') =>
-    `px-4 py-2 text-sm font-medium rounded-lg transition ${
+  // Count for tab counters — based on unfiltered data so users see full totals
+  const totalCounts = useMemo(() => {
+    const completes = data.filter(j => j.statut === 'complete');
+    const actives = data.filter(j => j.statut !== 'complete');
+    const plans = actives.filter(j => j.jour1_date && (j.statut === 'approuve' || j.statut === 'depot_paye' || j.statut === 'planifie'));
+    const encours = actives.filter(j => !plans.includes(j));
+    return {
+      en_cours: encours.length,
+      planifies: plans.length,
+      termines: completes.length,
+      tous: data.length,
+    };
+  }, [data]);
+
+  const tabCls = (t: TabKey) =>
+    `px-4 py-2 text-sm font-medium rounded-lg transition whitespace-nowrap ${
       tab === t
         ? 'bg-amber-500 text-black'
         : 'bg-slate-800 text-slate-400 hover:text-white hover:bg-slate-700'
@@ -892,19 +1064,45 @@ function PageContent() {
       <div className="p-6 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <h2 className="text-2xl font-bold text-white">Travaux</h2>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setTab('actifs')} className={tabCls('actifs')}>
-              En cours ({activeJobs.length})
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={() => setTab('en_cours')} className={tabCls('en_cours')}>
+              En cours ({totalCounts.en_cours})
+            </button>
+            <button onClick={() => setTab('planifies')} className={tabCls('planifies')}>
+              Planifies ({totalCounts.planifies})
             </button>
             <button onClick={() => setTab('termines')} className={tabCls('termines')}>
-              Termines ({completedJobs.length})
+              Completes ({totalCounts.termines})
+            </button>
+            <button onClick={() => setTab('tous')} className={tabCls('tous')}>
+              Tous ({totalCounts.tous})
             </button>
           </div>
         </div>
 
-        {tab === 'actifs' && (
+        {/* Search bar */}
+        <div className="relative">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" /></svg>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Rechercher par client, adresse, email, telephone ou numero de projet..."
+            className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-3 py-2.5 text-sm text-white placeholder:text-slate-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition"
+          />
+          {search && (
+            <button
+              onClick={() => setSearch('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white text-sm"
+            >
+              &times;
+            </button>
+          )}
+        </div>
+
+        {tab === 'en_cours' && (
           <>
-            {activeJobs.length === 0 && (
+            {enCoursJobs.length === 0 && (
               <div className="bg-slate-800 border border-slate-700 rounded-xl p-12 text-center">
                 <p className="text-slate-500 text-sm">Aucun travail en cours</p>
               </div>
@@ -912,6 +1110,18 @@ function PageContent() {
             <Section title="Cette semaine" jobs={thisWeek} onRefresh={load} />
             <Section title="Prochaines semaines" jobs={upcoming} onRefresh={load} />
             <Section title="En attente de dates" jobs={noDates} onRefresh={load} />
+          </>
+        )}
+
+        {tab === 'planifies' && (
+          <>
+            {planifiedJobs.length === 0 ? (
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-12 text-center">
+                <p className="text-slate-500 text-sm">Aucun projet planifie</p>
+              </div>
+            ) : (
+              <Section title="Projets planifies" jobs={planifiedJobs} onRefresh={load} />
+            )}
           </>
         )}
 
@@ -927,6 +1137,29 @@ function PageContent() {
                 <CompletedJobCard key={job.id} job={job} autoExpand={focusProjet === job.id} />
               ))}
             </div>
+          </>
+        )}
+
+        {tab === 'tous' && (
+          <>
+            {filtered.length === 0 && (
+              <div className="bg-slate-800 border border-slate-700 rounded-xl p-12 text-center">
+                <p className="text-slate-500 text-sm">Aucun projet trouve</p>
+              </div>
+            )}
+            {activeJobs.length > 0 && (
+              <Section title={`Actifs (${activeJobs.length})`} jobs={activeJobs} onRefresh={load} />
+            )}
+            {completedJobs.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-slate-400 text-sm font-semibold uppercase tracking-wider">Completes ({completedJobs.length})</h3>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {completedJobs.map(job => (
+                    <CompletedJobCard key={job.id} job={job} autoExpand={focusProjet === job.id} />
+                  ))}
+                </div>
+              </div>
+            )}
           </>
         )}
       </div>
