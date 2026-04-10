@@ -416,9 +416,9 @@ function SoumissionForm() {
 
         {/* Bottom contact bar */}
         <div className="mx-4 mb-8">
-          <a href="tel:5813072678" className="flex items-center justify-center gap-2 bg-slate-800/50 border border-slate-700/30 rounded-xl p-3 hover:bg-slate-700/50 transition-all">
+          <a href="tel:5813075983" className="flex items-center justify-center gap-2 bg-slate-800/50 border border-slate-700/30 rounded-xl p-3 hover:bg-slate-700/50 transition-all">
             <span className="text-amber-400 font-bold text-sm">Appelez maintenant</span>
-            <span className="text-white font-bold text-sm">581-307-2678</span>
+            <span className="text-white font-bold text-sm">581-307-5983</span>
           </a>
         </div>
 
