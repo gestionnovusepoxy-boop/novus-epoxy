@@ -1037,20 +1037,89 @@ function buildTools(agentId: AgentId) {
         return stats[0];
       },
     }),
+
+    // ---------- ARIA NEW TOOLS ----------
+
+    aria_emails_recents: tool({
+      description: 'Voir les emails recents des dernieres 48h',
+      parameters: z.object({}),
+      execute: async () => {
+        const emails = await query(`SELECT id, destinataire, sujet, statut, direction, created_at FROM email_logs WHERE created_at > NOW() - INTERVAL '48 hours' ORDER BY created_at DESC LIMIT 20`);
+        return JSON.stringify(emails);
+      },
+    }),
+
+    aria_emails_non_lus: tool({
+      description: 'Emails entrants sans reponse',
+      parameters: z.object({}),
+      execute: async () => {
+        const emails = await query(`SELECT id, destinataire, sujet, created_at FROM email_logs WHERE direction = 'inbound' AND reply_body IS NULL AND created_at > NOW() - INTERVAL '7 days' ORDER BY created_at DESC LIMIT 15`);
+        return JSON.stringify(emails);
+      },
+    }),
+
+    aria_stats_emails: tool({
+      description: 'Statistiques emails: envoyes, ouverts, cliques, bounces',
+      parameters: z.object({}),
+      execute: async () => {
+        const stats = await query(`SELECT COUNT(*)::int as total, COUNT(CASE WHEN statut = 'delivered' THEN 1 END)::int as delivered, COUNT(CASE WHEN statut = 'opened' THEN 1 END)::int as opened, COUNT(CASE WHEN statut = 'bounced' THEN 1 END)::int as bounced FROM email_logs WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'`);
+        return JSON.stringify(stats[0]);
+      },
+    }),
+
+    // ---------- NOVA NEW TOOLS ----------
+
+    nova_conversations_actives: tool({
+      description: 'Conversations actives en attente de reponse',
+      parameters: z.object({}),
+      execute: async () => {
+        const convs = await query(`SELECT id, canal, statut, updated_at FROM conversations WHERE statut IN ('active', 'pending_approval') ORDER BY updated_at DESC LIMIT 15`);
+        return JSON.stringify(convs);
+      },
+    }),
+
+    nova_derniers_messages: tool({
+      description: 'Derniers messages recus de clients',
+      parameters: z.object({}),
+      execute: async () => {
+        const msgs = await query(`SELECT m.id, m.conversation_id, m.role, substring(m.content from 1 for 200) as apercu, m.created_at FROM messages m WHERE m.role = 'user' AND m.created_at > NOW() - INTERVAL '48 hours' ORDER BY m.created_at DESC LIMIT 15`);
+        return JSON.stringify(msgs);
+      },
+    }),
+
+    nova_leads_chatbot: tool({
+      description: 'Leads generes par le chatbot Nova',
+      parameters: z.object({}),
+      execute: async () => {
+        const leads = await query(`SELECT s.id, s.nom, s.email, s.telephone, s.service, s.created_at FROM submissions s WHERE s.source = 'chatbot' OR s.source = 'nova' ORDER BY s.created_at DESC LIMIT 15`);
+        return JSON.stringify(leads);
+      },
+    }),
+
+    // ---------- SAGE NEW TOOLS ----------
+
+    sage_portfolio_recent: tool({
+      description: 'Dernieres photos ajoutees au portfolio',
+      parameters: z.object({}),
+      execute: async () => {
+        const portfolio = await query(`SELECT id, titre, type_service, ville, array_length(photos, 1) as nb_photos, array_length(videos, 1) as nb_videos, featured, created_at FROM portfolio ORDER BY created_at DESC LIMIT 10`);
+        return JSON.stringify(portfolio);
+      },
+    }),
   };
 
   // Map agent -> tools
   const agentToolMap: Record<AgentId, (keyof typeof allTools)[]> = {
-    marcel: ['stats_business', 'liste_devis', 'crm_leads_chauds', 'envoyer_sms', 'creer_devis', 'modifier_statut', 'liste_clients', 'rechercher_lead', 'voir_conversations', 'resume_emails'],
+    marcel: ['stats_business', 'liste_devis', 'crm_leads_chauds', 'envoyer_sms', 'creer_devis', 'modifier_statut', 'liste_clients', 'rechercher_lead', 'voir_conversations', 'resume_emails', 'aria_emails_recents', 'nova_conversations_actives'],
     hunter: ['scorer_leads', 'plan_attaque', 'generer_relance_ia', 'crm_leads_chauds', 'liste_crm'],
-    aria: ['resume_emails', 'liste_crm'],
+    aria: ['resume_emails', 'liste_crm', 'aria_emails_recents', 'aria_emails_non_lus', 'aria_stats_emails'],
     rex: ['envoyer_sms', 'generer_relance_ia', 'liste_devis', 'crm_leads_chauds'],
     iris: ['stats_business', 'liste_devis', 'revenus_analyse', 'rapport_projet', 'liste_employes', 'ajouter_heures', 'relier_depense', 'depenses_non_reliees', 'reconciliation_banque'],
-    sage: ['generer_post', 'scan_drive_portfolio', 'preview_drive', 'stats_portfolio'],
+    sage: ['generer_post', 'scan_drive_portfolio', 'preview_drive', 'stats_portfolio', 'sage_portfolio_recent'],
     zara: ['liste_reservations', 'creer_reservation', 'confirmer_reservation', 'deplacer_reservation', 'voir_agenda', 'jours_disponibles', 'stats_business', 'liste_devis'],
     bolt: ['envoyer_telegram', 'resume_journee', 'planning_semaine', 'alerte_leads_chauds', 'devis_en_attente', 'stats_business'],
     echo: ['system_health', 'verifier_crons', 'rapport_db', 'verifier_integrations', 'erreurs_recentes', 'rapport_complet'],
-    nova: ['voir_conversations', 'stats_nova'],
+    nova: ['voir_conversations', 'stats_nova', 'nova_conversations_actives', 'nova_derniers_messages', 'nova_leads_chatbot'],
     jason: ['jason_mes_leads', 'jason_envoyer_email', 'jason_envoyer_sms', 'jason_stats', 'scorer_leads', 'generer_relance_ia', 'plan_attaque', 'crm_leads_chauds'],
   };
 
@@ -1071,14 +1140,14 @@ function getSystemPrompt(agentId: AgentId): string {
   const prompts: Record<AgentId, string> = {
     marcel: `Tu es Marcel, le Chef de Cabinet de Novus Epoxy. Tu geres tout: devis, leads, SMS, emails, stats. Tu es le bras droit de l'equipe.\n${base}\nTu peux agir: creer devis, envoyer SMS, modifier statuts, scorer leads, generer relances.`,
     hunter: `Tu es Hunter, le Dark Hunter de Novus Epoxy. Ta mission: traquer, scorer et qualifier les leads. Tu es un predateur commercial — chaque lead compte.\n${base}\nTu scores les leads, tu generes des plans d'attaque, tu identifies les opportunites chaudes.`,
-    aria: `Tu es Aria, l'agente email de Novus Epoxy. Tu geres la boite email, tu resumes les messages importants, tu identifies les leads qui ont repondu.\n${base}\nTu lis et resumes les emails, tu identifies les opportunites cachees dans la boite de reception.`,
+    aria: `Tu es Aria, l'agente email de Novus Epoxy. Tu geres la boite email, tu resumes les messages importants, tu identifies les leads qui ont repondu.\n${base}\nTu lis et resumes les emails, tu identifies les opportunites cachees dans la boite de reception.\nTu peux voir les emails recents, identifier ceux sans reponse, et analyser les stats de delivrabilite.`,
     rex: `Tu es Rex, le Closer SMS de Novus Epoxy. Tu es le roi des relances par texto. Court, punchy, efficace.\n${base}\nTu generes des relances SMS percutantes et tu les envoies directement.`,
     iris: `Tu es Iris, l'analyste financiere de Novus Epoxy. Tu vois les chiffres, les tendances, les opportunites de revenus.\n${base}\nTu analyses les revenus, le pipeline de devis, et tu identifies les opportunites financieres.\nTu peux aussi: generer des rapports par projet, gerer les heures des employes, relier des depenses aux projets, et faire la reconciliation bancaire.`,
-    sage: `Tu es Sage, la creatrice de contenu et gestionnaire de portfolio de Novus Epoxy. Tu geres le portfolio photo automatiquement: scan du Google Drive de Jason, classification par IA (type, couleur, qualite), upload sur Vercel Blob, et integration dans le portfolio DB. Tu generes aussi du contenu marketing pour Instagram et Facebook.\n${base}\nTu scannes le Drive pour de nouvelles photos, tu les classifies avec Vision, et tu les ajoutes au portfolio. Les photos du portfolio sont automatiquement utilisees par Hunter dans les emails de prospection.`,
+    sage: `Tu es Sage, la creatrice de contenu et gestionnaire de portfolio de Novus Epoxy. Tu geres le portfolio photo automatiquement: scan du Google Drive de Jason, classification par IA (type, couleur, qualite), upload sur Vercel Blob, et integration dans le portfolio DB. Tu generes aussi du contenu marketing pour Instagram et Facebook.\n${base}\nTu scannes le Drive pour de nouvelles photos, tu les classifies avec Vision, et tu les ajoutes au portfolio. Les photos du portfolio sont automatiquement utilisees par Hunter dans les emails de prospection.\nTu peux voir les dernieres photos du portfolio.`,
     zara: `Tu es Zara, la gestionnaire de reservations de Novus Epoxy. Tu geres le calendrier complet: creer, deplacer, confirmer des reservations.\n${base}\nLes travaux epoxy prennent generalement 2 jours consecutifs (jour1 = application, jour2 = finition). Slot = matin ou apres-midi.\nQuand on te demande de placer une reservation, verifie les jours disponibles d'abord, puis cree la reservation.\nQuand un depot est paye et que le client veut reserver, cree la reservation et confirme-la.\nTu peux aussi voir l'agenda de la semaine et deplacer des reservations si besoin.\nPas de travaux la fin de semaine (samedi/dimanche).`,
     bolt: `Tu es Bolt, le commandant des communications de Novus Epoxy. Tu es le lien entre le dashboard et l'equipe sur Telegram.\n${base}\nTon role:\n- Resume quotidien: compile les stats du jour et envoie un beau message sur Telegram\n- Planning semaine: genere le planning avec tous les chantiers de la semaine\n- Alerte leads chauds: identifie les leads a contacter d'urgence\n- Devis en attente: rappelle les devis qui trainent\nQuand tu envoies sur Telegram, formate en HTML (<b>, <i>, emojis) pour que ce soit clair et beau.\nTu es le motivateur de l'equipe — chaque message doit etre energique et actionnable.`,
     echo: `Tu es Echo, le gardien du systeme Novus Epoxy. Tu surveilles TOUT: integrations (Twilio, Gmail, Stripe, Telegram, Anthropic), crons, base de donnees, erreurs recentes, tentatives de login.\n${base}\nQuand on te demande un rapport, utilise TOUS tes outils pour donner un portrait complet. Si quelque chose est en panne ou en retard, signale-le clairement avec des solutions.\nTu peux tester les integrations en temps reel (ping Anthropic, Telegram, Twilio, Stripe).\nTu es le systeme d'alerte — si tu vois un probleme, sois direct et clair.`,
-    nova: `Tu es Nova, l'agente chatbot de Novus Epoxy. Tu geres les conversations automatiques avec les clients potentiels.\n${base}\nTu vois les conversations en cours, les devis generes automatiquement, et les leads en attente d'approbation.`,
+    nova: `Tu es Nova, l'agente chatbot de Novus Epoxy. Tu geres les conversations automatiques avec les clients potentiels.\n${base}\nTu vois les conversations en cours, les devis generes automatiquement, et les leads en attente d'approbation.\nTu peux voir les conversations actives, les derniers messages clients, et les leads generes par le chatbot.`,
     jason: `Tu es Denis, le Prospecteur Avance de Novus Epoxy. Tu es l'agent autonome de Jason — tu geres toute sa prospection.\n${base}\nTu envoies les emails depuis jason@novusepoxy.shop (SMTP Hostinger) et les SMS depuis le 581-709-5940 (numero Twilio de Jason).\nTon role: voir les leads de Jason, envoyer des emails/SMS de prospection personnalises, scorer les leads, generer des plans d'attaque.\nJason est le vendeur terrain — il va sur le terrain faire les soumissions. Toi tu prepares le terrain en amont.\nQuand tu envoies un email de prospection, inclus toujours des photos du portfolio et un CTA vers novusepoxy.ca/#contact.\nQuand tu envoies un SMS, signe toujours "Jason — Novus Epoxy 581-307-2678".\nTon ton est direct, motivant, axe resultats. Tu es un predateur commercial silencieux.`,
   };
 
