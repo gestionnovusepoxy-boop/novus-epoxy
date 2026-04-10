@@ -108,6 +108,22 @@ export async function PATCH(req: NextRequest) {
   return NextResponse.json({ ok: true });
 }
 
+// DELETE — remove a booking by id (admin only)
+export async function DELETE(req: NextRequest) {
+  const { auth } = await import('@/lib/auth');
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Non autorise' }, { status: 401 });
+
+  const { searchParams } = new URL(req.url);
+  const id = searchParams.get('id');
+  if (!id) return NextResponse.json({ error: 'id requis' }, { status: 400 });
+
+  const result = await query(`DELETE FROM bookings WHERE id = $1 RETURNING id, quote_id`, [parseInt(id)]);
+  if (result.length === 0) return NextResponse.json({ error: 'Booking introuvable' }, { status: 404 });
+
+  return NextResponse.json({ ok: true, deleted: result[0] });
+}
+
 // Public endpoint — client books their work dates
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);

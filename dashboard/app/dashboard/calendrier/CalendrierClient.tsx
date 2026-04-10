@@ -379,6 +379,7 @@ function EditBookingModal({
   booking,
   onClose,
   onSave,
+  onDelete,
 }: {
   booking: {
     bookingId: number;
@@ -397,6 +398,7 @@ function EditBookingModal({
   };
   onClose: () => void;
   onSave: (data: { id: number; jour1_date: string; jour1_slot: string; jour2_date: string | null; jour2_slot: string | null }) => void;
+  onDelete: (bookingId: number) => void;
 }) {
   const [jour1Date, setJour1Date] = useState(booking.jour1_date);
   const [jour1Slot, setJour1Slot] = useState<string>(booking.jour1_slot || 'matin');
@@ -583,6 +585,15 @@ function EditBookingModal({
               Voir facture
             </a>
           )}
+
+          {/* Delete button */}
+          <button
+            type="button"
+            onClick={() => onDelete(booking.bookingId)}
+            className="block w-full text-center px-4 py-2.5 bg-red-600/10 text-red-400 border border-red-600/30 rounded-lg font-medium text-sm hover:bg-red-600/20 transition"
+          >
+            Supprimer la reservation
+          </button>
         </div>
       </div>
     </div>
@@ -712,6 +723,22 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
         loadEvents();
       }
     } catch { /* ignore */ }
+  }, [loadEvents]);
+
+  // Delete a booking from edit modal
+  const handleDeleteBooking = useCallback(async (bookingId: number) => {
+    if (!window.confirm('Supprimer cette reservation? Cette action est irreversible.')) return;
+    try {
+      const res = await fetch(`/api/bookings?id=${bookingId}`, { method: 'DELETE' });
+      if (res.ok) {
+        setEditBooking(null);
+        loadEvents();
+      } else {
+        alert('Erreur lors de la suppression');
+      }
+    } catch {
+      alert('Erreur lors de la suppression');
+    }
   }, [loadEvents]);
 
   // Handle resize
@@ -903,6 +930,7 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
           booking={editBooking}
           onClose={() => setEditBooking(null)}
           onSave={handleSaveBooking}
+          onDelete={handleDeleteBooking}
         />
       )}
     </div>
