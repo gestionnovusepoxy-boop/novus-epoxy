@@ -16,11 +16,14 @@ interface Travail {
   client_adresse: string | null;
   type_service: string;
   superficie: number;
+  prix_pied_carre: number;
   sous_total: number;
   tps: number;
   tvq: number;
   total: number;
   depot_requis: number;
+  rabais_pct: number | null;
+  rabais_montant: number | null;
   depot_paye_at?: string | null;
   solde_paye_at?: string | null;
   contrat_signe_at?: string | null;
