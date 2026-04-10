@@ -503,30 +503,42 @@ function ExpensesSection({ quoteId }: { quoteId: number }) {
 }
 
 /* ─── Profit Section ─── */
-function ProfitSection({ quoteId, sousTotal, tps, tvq }: { quoteId: number; sousTotal: number; tps: number; tvq: number }) {
+function ProfitSection({ job }: { job: Travail }) {
+  const quoteId = job.id;
+  const sousTotal = Number(job.sous_total);
+  const prixPiedCarre = Number(job.prix_pied_carre || 0);
+  const superficie = Number(job.superficie || 0);
+  const rabaisPct = Number(job.rabais_pct || 0);
+  const rabaisMontant = Number(job.rabais_montant || 0);
+
+  // Compute "prix de base avant rabais": if we have price × area, use that; otherwise infer from sousTotal + rabais
+  const prixBase = prixPiedCarre > 0 && superficie > 0
+    ? prixPiedCarre * superficie
+    : sousTotal + rabaisMontant;
+  const hasRabais = rabaisMontant > 0 || rabaisPct > 0;
+
   const [totalHeures, setTotalHeures] = useState(0);
   const [totalSalaires, setTotalSalaires] = useState(0);
-  const [totalDepenses, setTotalDepenses] = useState(0);
+  const [depenses, setDepenses] = useState<{ id: number; fournisseur: string; montant_ttc: number; receipt_url?: string | null }[]>([]);
 
   useEffect(() => {
     (async () => {
-      // Get hours + salaries
       const hRes = await fetch(`/api/equipe/heures?quote_id=${quoteId}`);
       if (hRes.ok) {
         const json = await hRes.json();
         setTotalHeures(json.totals?.heures ?? 0);
         setTotalSalaires(json.totals?.montant ?? 0);
       }
-      // Get expenses
       const eRes = await fetch(`/api/expenses?quote_id=${quoteId}`);
       if (eRes.ok) {
         const json = await eRes.json();
-        const list = (json.data ?? json) as { montant_ttc: number }[];
-        setTotalDepenses((Array.isArray(list) ? list : []).reduce((sum, e) => sum + Number(e.montant_ttc || 0), 0));
+        const list = (json.data ?? json) as { id: number; fournisseur: string; montant_ttc: number; receipt_url?: string | null }[];
+        setDepenses(Array.isArray(list) ? list : []);
       }
     })();
   }, [quoteId]);
 
+  const totalDepenses = depenses.reduce((sum, e) => sum + Number(e.montant_ttc || 0), 0);
   const totalCouts = totalSalaires + totalDepenses;
   const profit = sousTotal - totalCouts;
   const margin = sousTotal > 0 ? Math.round((profit / sousTotal) * 100) : 0;
@@ -534,18 +546,62 @@ function ProfitSection({ quoteId, sousTotal, tps, tvq }: { quoteId: number; sous
   return (
     <div className={`rounded-lg p-3 space-y-1.5 ${profit >= 0 ? 'bg-green-950/30 border border-green-800/30' : 'bg-red-950/30 border border-red-800/30'}`}>
       <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Profit du projet</h4>
+
+      {/* Revenue breakdown: base price, discount, subtotal */}
+      {hasRabais && (
+        <>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">
+              Prix de base
+              {prixPiedCarre > 0 && superficie > 0 && (
+                <span className="text-slate-600"> ({formatMoney(prixPiedCarre)}/pi² × {superficie} pi²)</span>
+              )}
+            </span>
+            <span className="text-white">{formatMoney(prixBase)}</span>
+          </div>
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-slate-400">
+              Rabais{rabaisPct > 0 && <span className="text-slate-600"> ({rabaisPct}%)</span>}
+            </span>
+            <span className="text-amber-400">-{formatMoney(rabaisMontant)}</span>
+          </div>
+        </>
+      )}
       <div className="flex items-center justify-between text-sm">
-        <span className="text-slate-400">Revenu <span className="text-slate-600">(avant taxes)</span></span>
+        <span className="text-slate-400">Sous-total <span className="text-slate-600">(avant taxes)</span></span>
         <span className="text-white font-medium">{formatMoney(sousTotal)}</span>
       </div>
-      <div className="flex items-center justify-between text-sm">
+
+      {/* Costs */}
+      <div className="flex items-center justify-between text-sm border-t border-slate-700/50 pt-1.5 mt-1">
         <span className="text-slate-400">Main d&apos;oeuvre ({totalHeures}h)</span>
         <span className="text-red-400">-{formatMoney(totalSalaires)}</span>
       </div>
       <div className="flex items-center justify-between text-sm">
-        <span className="text-slate-400">Depenses materiaux</span>
+        <span className="text-slate-400">Depenses liees ({depenses.length})</span>
         <span className="text-red-400">-{formatMoney(totalDepenses)}</span>
       </div>
+
+      {/* Detail of expenses */}
+      {depenses.length > 0 && (
+        <div className="pl-3 pt-1 space-y-0.5 border-l border-slate-700/50 ml-1">
+          {depenses.map(d => (
+            <div key={d.id} className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-1.5 text-slate-500 min-w-0">
+                {d.receipt_url ? (
+                  <a href={d.receipt_url} target="_blank" rel="noopener" className="w-2 h-2 bg-amber-500 rounded-sm hover:bg-amber-400 flex-shrink-0" title="Voir la facture" />
+                ) : (
+                  <span className="w-2 h-2 bg-slate-700 rounded-sm flex-shrink-0" title="Pas de photo" />
+                )}
+                <span className="truncate">{d.fournisseur}</span>
+              </div>
+              <span className="text-slate-500">{formatMoney(Number(d.montant_ttc))}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Net profit */}
       <div className="flex items-center justify-between text-sm border-t border-slate-700 pt-1.5 mt-1">
         <span className="text-white font-bold">Profit net</span>
         <span className={`font-bold ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -856,7 +912,7 @@ function JobCard({ job, onComplete }: { job: Travail; onComplete: () => void }) 
           <HoursSection quoteId={job.id} />
           <ExpensesSection quoteId={job.id} />
           <ChecklistSection quoteId={job.id} onChecklistChange={setCheckedItems} />
-          <ProfitSection quoteId={job.id} sousTotal={Number(job.sous_total)} tps={Number(job.tps)} tvq={Number(job.tvq)} />
+          <ProfitSection job={job} />
         </div>
       )}
 
@@ -978,7 +1034,7 @@ function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: bool
           <PhotoSection quoteId={job.id} />
           <HoursSection quoteId={job.id} />
           <ExpensesSection quoteId={job.id} />
-          <ProfitSection quoteId={job.id} sousTotal={Number(job.sous_total)} tps={Number(job.tps)} tvq={Number(job.tvq)} />
+          <ProfitSection job={job} />
         </div>
       )}
     </div>
