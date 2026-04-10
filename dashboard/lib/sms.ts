@@ -52,7 +52,7 @@ export async function sendSMS(to: string, body: string, fromOverride?: string, _
     const countResult = await limitQ(
       `SELECT COUNT(*)::int AS cnt FROM sms_logs WHERE direction = 'outbound' AND created_at >= CURRENT_DATE`
     );
-    const todayCount = countResult[0]?.cnt ?? 0;
+    const todayCount = Number((countResult[0] as Record<string, unknown>)?.cnt ?? 0);
     if (todayCount >= 100) {
       console.warn(`[SMS] BLOQUE — limite quotidienne atteinte (${todayCount}/100) — SMS non envoye a ${to}`);
       return false;
