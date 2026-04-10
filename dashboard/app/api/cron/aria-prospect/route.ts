@@ -34,10 +34,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, message: `Hors heures (${quebecHour}h). Prochain envoi a 8h.` });
   }
 
-  // Get pending leads (email or phone)
+  // Get pending leads — ONLY with valid QC phone numbers or email
+  // Quebec area codes: 418, 581, 819, 450, 438, 514, 579, 873, 367
   const pending = await query(
     `SELECT id FROM crm_leads WHERE statut = 'nouveau' AND prospect_sent_at IS NULL AND (
-      (email IS NOT NULL AND email != '') OR (telephone IS NOT NULL AND telephone != '')
+      (email IS NOT NULL AND email != '' AND email NOT LIKE '%example%' AND email NOT LIKE '%test%')
+      OR (telephone IS NOT NULL AND telephone != '' AND (
+        telephone ~ '(418|581|819|450|438|514|579|873|367)'
+      ))
     ) ORDER BY id LIMIT 35`
   );
 

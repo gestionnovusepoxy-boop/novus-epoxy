@@ -410,9 +410,11 @@ ${text.split('\n').map(line => line.trim() ? `<p style="margin:0 0 8px;">${line}
       }
     }
 
-    // 2. SMS — send to ALL leads with phone number (with dedup check)
+    // 2. SMS — send ONLY to valid Quebec phone numbers (with dedup check)
     const shouldSMS = lead.telephone?.trim();
-    if (shouldSMS && !BLACKLIST_PHONES.includes(phone10)) {
+    const qcAreaCodes = ['418','581','819','450','438','514','579','873','367'];
+    const smsAreaCode = phone10.substring(0, 3);
+    if (shouldSMS && !BLACKLIST_PHONES.includes(phone10) && qcAreaCodes.includes(smsAreaCode)) {
       // DEDUP: check sms_logs if this number was already texted
       // sms_logs stores to_number in +1XXXXXXXXXX format, so check both formats
       const smsPhone10 = lead.telephone!.replace(/\D/g, '').slice(-10);
