@@ -1106,21 +1106,54 @@ function buildTools(agentId: AgentId) {
         return JSON.stringify(portfolio);
       },
     }),
+
+    memoriser: tool({
+      description: "Sauvegarder un fait important dans ta memoire permanente. Utilise pour te souvenir de preferences clients, decisions, observations importantes.",
+      parameters: z.object({
+        fait: z.string().describe("Le fait a retenir"),
+        categorie: z.string().optional().describe("Categorie: client, lead, decision, observation, preference"),
+      }),
+      execute: async ({ fait, categorie }) => {
+        const memKey = `agent_memory_${agentId}`;
+        const existing = await getKv(memKey) as Array<{fait: string; categorie: string; date: string}> || [];
+        existing.push({ fait, categorie: categorie || 'observation', date: new Date().toISOString() });
+        // Keep last 100 memories per agent
+        const trimmed = existing.slice(-100);
+        await setKv(memKey, trimmed);
+        return JSON.stringify({ ok: true, total_memories: trimmed.length, saved: fait });
+      },
+    }),
+
+    rappeler: tool({
+      description: "Consulter ta memoire permanente. Utilise au debut de chaque conversation pour te rappeler le contexte.",
+      parameters: z.object({
+        categorie: z.string().optional().describe("Filtrer par categorie: client, lead, decision, observation, preference"),
+        recherche: z.string().optional().describe("Mot-cle pour chercher dans les faits"),
+      }),
+      execute: async ({ categorie, recherche }) => {
+        const memKey = `agent_memory_${agentId}`;
+        const memories = await getKv(memKey) as Array<{fait: string; categorie: string; date: string}> || [];
+        let filtered = memories;
+        if (categorie) filtered = filtered.filter(m => m.categorie === categorie);
+        if (recherche) filtered = filtered.filter(m => m.fait.toLowerCase().includes(recherche.toLowerCase()));
+        return JSON.stringify({ total: filtered.length, memories: filtered.slice(-20) });
+      },
+    }),
   };
 
   // Map agent -> tools
   const agentToolMap: Record<AgentId, (keyof typeof allTools)[]> = {
-    marcel: ['stats_business', 'liste_devis', 'crm_leads_chauds', 'envoyer_sms', 'creer_devis', 'modifier_statut', 'liste_clients', 'rechercher_lead', 'voir_conversations', 'resume_emails', 'aria_emails_recents', 'nova_conversations_actives'],
-    hunter: ['scorer_leads', 'plan_attaque', 'generer_relance_ia', 'crm_leads_chauds', 'liste_crm'],
-    aria: ['resume_emails', 'liste_crm', 'aria_emails_recents', 'aria_emails_non_lus', 'aria_stats_emails'],
-    rex: ['envoyer_sms', 'generer_relance_ia', 'liste_devis', 'crm_leads_chauds'],
-    iris: ['stats_business', 'liste_devis', 'revenus_analyse', 'rapport_projet', 'liste_employes', 'ajouter_heures', 'relier_depense', 'depenses_non_reliees', 'reconciliation_banque'],
-    sage: ['generer_post', 'scan_drive_portfolio', 'preview_drive', 'stats_portfolio', 'sage_portfolio_recent'],
-    zara: ['liste_reservations', 'creer_reservation', 'confirmer_reservation', 'deplacer_reservation', 'voir_agenda', 'jours_disponibles', 'stats_business', 'liste_devis'],
-    bolt: ['envoyer_telegram', 'resume_journee', 'planning_semaine', 'alerte_leads_chauds', 'devis_en_attente', 'stats_business'],
-    echo: ['system_health', 'verifier_crons', 'rapport_db', 'verifier_integrations', 'erreurs_recentes', 'rapport_complet'],
-    nova: ['voir_conversations', 'stats_nova', 'nova_conversations_actives', 'nova_derniers_messages', 'nova_leads_chatbot'],
-    jason: ['jason_mes_leads', 'jason_envoyer_email', 'jason_envoyer_sms', 'jason_stats', 'scorer_leads', 'generer_relance_ia', 'plan_attaque', 'crm_leads_chauds'],
+    marcel: ['stats_business', 'liste_devis', 'crm_leads_chauds', 'envoyer_sms', 'creer_devis', 'modifier_statut', 'liste_clients', 'rechercher_lead', 'voir_conversations', 'resume_emails', 'aria_emails_recents', 'nova_conversations_actives', 'memoriser', 'rappeler'],
+    hunter: ['scorer_leads', 'plan_attaque', 'generer_relance_ia', 'crm_leads_chauds', 'liste_crm', 'memoriser', 'rappeler'],
+    aria: ['resume_emails', 'liste_crm', 'aria_emails_recents', 'aria_emails_non_lus', 'aria_stats_emails', 'memoriser', 'rappeler'],
+    rex: ['envoyer_sms', 'generer_relance_ia', 'liste_devis', 'crm_leads_chauds', 'memoriser', 'rappeler'],
+    iris: ['stats_business', 'liste_devis', 'revenus_analyse', 'rapport_projet', 'liste_employes', 'ajouter_heures', 'relier_depense', 'depenses_non_reliees', 'reconciliation_banque', 'memoriser', 'rappeler'],
+    sage: ['generer_post', 'scan_drive_portfolio', 'preview_drive', 'stats_portfolio', 'sage_portfolio_recent', 'memoriser', 'rappeler'],
+    zara: ['liste_reservations', 'creer_reservation', 'confirmer_reservation', 'deplacer_reservation', 'voir_agenda', 'jours_disponibles', 'stats_business', 'liste_devis', 'memoriser', 'rappeler'],
+    bolt: ['envoyer_telegram', 'resume_journee', 'planning_semaine', 'alerte_leads_chauds', 'devis_en_attente', 'stats_business', 'memoriser', 'rappeler'],
+    echo: ['system_health', 'verifier_crons', 'rapport_db', 'verifier_integrations', 'erreurs_recentes', 'rapport_complet', 'memoriser', 'rappeler'],
+    nova: ['voir_conversations', 'stats_nova', 'nova_conversations_actives', 'nova_derniers_messages', 'nova_leads_chatbot', 'memoriser', 'rappeler'],
+    jason: ['jason_mes_leads', 'jason_envoyer_email', 'jason_envoyer_sms', 'jason_stats', 'scorer_leads', 'generer_relance_ia', 'plan_attaque', 'crm_leads_chauds', 'memoriser', 'rappeler'],
   };
 
   const toolKeys = agentToolMap[agentId];
@@ -1135,7 +1168,7 @@ function buildTools(agentId: AgentId) {
 
 function getSystemPrompt(agentId: AgentId): string {
   const date = new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-  const base = `Tu travailles pour Novus Epoxy — planchers epoxy haut de gamme au Quebec.\nEquipe: Luca (fondateur, 581-307-5983) et Jason (ventes, 581-307-2678).\nDate: ${date}\nSois direct, professionnel, en francais quebecois. Utilise les outils disponibles pour des donnees reelles.`;
+  const base = `Tu travailles pour Novus Epoxy — planchers epoxy haut de gamme au Quebec.\nEquipe: Luca (fondateur, 581-307-5983) et Jason (ventes, 581-307-2678).\nDate: ${date}\nSois direct, professionnel, en francais quebecois. Utilise les outils disponibles pour des donnees reelles.\nIMPORTANT: Au debut de chaque conversation, utilise l'outil 'rappeler' pour consulter ta memoire. Quand tu apprends quelque chose d'important sur un client, un lead, ou une decision, utilise 'memoriser' pour le sauvegarder. Ta memoire persiste entre les conversations.`;
 
   const prompts: Record<AgentId, string> = {
     marcel: `Tu es Marcel, le Chef de Cabinet de Novus Epoxy. Tu geres tout: devis, leads, SMS, emails, stats. Tu es le bras droit de l'equipe.\n${base}\nTu peux agir: creer devis, envoyer SMS, modifier statuts, scorer leads, generer relances.`,
