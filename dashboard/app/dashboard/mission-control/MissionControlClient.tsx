@@ -49,9 +49,13 @@ const COMMAND_LABELS: Record<string, string> = Object.fromEntries(
 
 // ─── Agent definitions ────────────────────────────────────────────────────────
 
+// DiceBear avatar URLs — each agent gets a unique anime-style avatar
+const AVATAR_URL = (name: string) =>
+  `https://api.dicebear.com/9.x/adventurer/svg?seed=${encodeURIComponent(name)}&backgroundColor=transparent&features=true&featuresProbability=30`;
+
 const AGENTS = [
   {
-    id: 'marcel', name: 'Marcel', emoji: '🤖', role: 'Chef de Cabinet',
+    id: 'marcel', name: 'Marcel', emoji: 'M', avatar: AVATAR_URL('Marcel-chef'), role: 'Chef de Cabinet',
     desc: 'Orchestration centrale — devis, CRM, SMS, emails',
     color: 'violet',
     ring: 'ring-violet-500/40', bg: 'bg-violet-600', text: 'text-violet-400',
@@ -64,7 +68,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'hunter', name: 'Hunter', emoji: '🎯', role: 'Dark Hunter',
+    id: 'hunter', name: 'Hunter', emoji: 'H', avatar: AVATAR_URL('Hunter-dark'), role: 'Dark Hunter',
     desc: 'Prospecte, score leads, génère plans d\'attaque',
     color: 'red',
     ring: 'ring-red-500/40', bg: 'bg-red-600', text: 'text-red-400',
@@ -77,7 +81,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'aria', name: 'Aria', emoji: '📧', role: 'Closer Automatique',
+    id: 'aria', name: 'Aria', emoji: 'A', avatar: AVATAR_URL('Aria-email'), role: 'Closer Automatique',
     desc: 'Import leads, offres, closer, suivis 48h/5j, détection réponses',
     color: 'blue',
     ring: 'ring-blue-500/40', bg: 'bg-blue-600', text: 'text-blue-400',
@@ -90,7 +94,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'rex', name: 'Rex', emoji: '📱', role: 'Closer SMS',
+    id: 'rex', name: 'Rex', emoji: 'R', avatar: AVATAR_URL('Rex-sms'), role: 'Closer SMS',
     desc: 'Relances SMS percutantes, scripts de closing',
     color: 'green',
     ring: 'ring-green-500/40', bg: 'bg-green-600', text: 'text-green-400',
@@ -103,7 +107,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'iris', name: 'Iris', emoji: '💰', role: 'Analyste Financière',
+    id: 'iris', name: 'Iris', emoji: 'I', avatar: AVATAR_URL('Iris-finance'), role: 'Analyste Financière',
     desc: 'Revenus, pipeline, rentabilité, projections',
     color: 'amber',
     ring: 'ring-amber-500/40', bg: 'bg-amber-600', text: 'text-amber-400',
@@ -116,7 +120,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'sage', name: 'Sage', emoji: '✍️', role: 'Content & Portfolio',
+    id: 'sage', name: 'Sage', emoji: 'S', avatar: AVATAR_URL('Sage-creative'), role: 'Content & Portfolio',
     desc: 'Portfolio auto — scanne Google Drive, classifie, upload',
     color: 'pink',
     ring: 'ring-pink-500/40', bg: 'bg-pink-600', text: 'text-pink-400',
@@ -129,7 +133,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'zara', name: 'Zara', emoji: '📅', role: 'Booking Manager',
+    id: 'zara', name: 'Zara', emoji: 'Z', avatar: AVATAR_URL('Zara-booking'), role: 'Booking Manager',
     desc: 'Réservations, calendrier, rappels clients',
     color: 'cyan',
     ring: 'ring-cyan-500/40', bg: 'bg-cyan-600', text: 'text-cyan-400',
@@ -142,7 +146,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'bolt', name: 'Bolt', emoji: '⚡', role: 'Telegram Commander',
+    id: 'bolt', name: 'Bolt', emoji: 'B', avatar: AVATAR_URL('Bolt-telegram'), role: 'Telegram Commander',
     desc: 'Notifications équipe, alertes Telegram',
     color: 'orange',
     ring: 'ring-orange-500/40', bg: 'bg-orange-600', text: 'text-orange-400',
@@ -155,7 +159,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'echo', name: 'Echo', emoji: '🔍', role: 'System Monitor',
+    id: 'echo', name: 'Echo', emoji: 'E', avatar: AVATAR_URL('Echo-monitor'), role: 'System Monitor',
     desc: 'Santé système, env vars, crons, alertes',
     color: 'slate',
     ring: 'ring-slate-400/40', bg: 'bg-slate-600', text: 'text-slate-400',
@@ -168,7 +172,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'nova', name: 'Nova', emoji: '💬', role: 'Closer Chatbot',
+    id: 'nova', name: 'Nova', emoji: 'N', avatar: AVATAR_URL('Nova-chatbot'), role: 'Closer Chatbot',
     desc: 'Chatbot site web — collecte leads, génère devis',
     color: 'emerald',
     ring: 'ring-emerald-500/40', bg: 'bg-emerald-600', text: 'text-emerald-400',
@@ -181,7 +185,7 @@ const AGENTS = [
     ],
   },
   {
-    id: 'jason', name: 'Denis', emoji: '🏗️', role: 'Prospecteur Avance',
+    id: 'jason', name: 'Denis', emoji: 'D', avatar: AVATAR_URL('Denis-prospector'), role: 'Prospecteur Avance',
     desc: 'Prospection autonome — emails, SMS, leads de Jason',
     color: 'yellow',
     ring: 'ring-yellow-500/40', bg: 'bg-yellow-600', text: 'text-yellow-400',
@@ -664,11 +668,11 @@ function AgentCard({
     <div className={`relative flex flex-col bg-gradient-to-br from-slate-900 via-slate-900 to-slate-800/80 border ${agent.border} rounded-2xl p-4 shadow-lg ${agent.glow} hover:shadow-xl hover:border-opacity-60 transition-all duration-200 group ${isStreaming ? 'ring-2 ring-green-500/30' : ''} ${!isEnabled ? 'opacity-50 grayscale' : ''}`}>
       {/* Header */}
       <div className="flex items-start gap-3 mb-3">
-        <div className={`w-11 h-11 rounded-xl ${agent.bg} flex items-center justify-center text-xl flex-shrink-0 shadow-lg overflow-hidden`}>
-          {(agent as Record<string, unknown>).image ? (
-            <img src={(agent as Record<string, unknown>).image as string} alt={agent.name} className="w-full h-full object-cover" />
+        <div className={`w-14 h-14 rounded-full ${agent.bg} flex items-center justify-center text-xl flex-shrink-0 shadow-lg overflow-hidden ring-2 ${agent.ring}`}>
+          {(agent as Record<string, unknown>).avatar ? (
+            <img src={(agent as Record<string, unknown>).avatar as string} alt={agent.name} className="w-full h-full object-cover rounded-full" />
           ) : (
-            agent.emoji
+            <span className="text-white font-bold text-lg">{agent.emoji}</span>
           )}
         </div>
         <div className="flex-1 min-w-0">
