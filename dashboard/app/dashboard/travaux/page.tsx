@@ -24,8 +24,8 @@ interface Travail {
   depot_requis: number;
   rabais_pct: number | null;
   rabais_montant: number | null;
-  depot_paye_at?: string | null;
-  solde_paye_at?: string | null;
+  deposit_paid_at?: string | null;
+  balance_paid_at?: string | null;
   contrat_signe_at?: string | null;
   statut: string;
   jour1_date: string | null;
@@ -689,8 +689,8 @@ function QuickActions({ job }: { job: Travail }) {
 
 /* ─── Entity Summary (devis/contrat/facture/paiements) ─── */
 function EntitySummary({ job }: { job: Travail }) {
-  const depotPaye = job.statut === 'depot_paye' || job.statut === 'planifie' || job.statut === 'en_cours' || job.statut === 'complete' || job.statut === 'facture' || job.statut === 'paye' || !!job.depot_paye_at;
-  const soldePaye = job.statut === 'paye' || !!job.solde_paye_at;
+  const depotPaye = !!job.deposit_paid_at || job.statut === 'depot_paye' || job.statut === 'planifie' || job.statut === 'en_cours' || job.statut === 'complete' || job.statut === 'facture' || job.statut === 'paye';
+  const soldePaye = !!job.balance_paid_at || job.statut === 'complete' || job.statut === 'paye';
   const contratSigne = !!job.contrat_signe_at || depotPaye;
 
   const row = (label: string, value: React.ReactNode, ok: boolean) => (
@@ -708,14 +708,14 @@ function EntitySummary({ job }: { job: Travail }) {
       {row(
         'Depot',
         depotPaye
-          ? `${formatMoney(Number(job.depot_requis))}${job.depot_paye_at ? ' — ' + formatDateShortFr(job.depot_paye_at) : ''}`
+          ? `${formatMoney(Number(job.depot_requis))}${job.deposit_paid_at ? ' — ' + formatDateShortFr(job.deposit_paid_at) : ''}`
           : 'Non paye',
         depotPaye
       )}
       {row(
         'Solde',
         soldePaye
-          ? `${formatMoney(Number(job.total) - Number(job.depot_requis))}${job.solde_paye_at ? ' — ' + formatDateShortFr(job.solde_paye_at) : ''}`
+          ? `${formatMoney(Number(job.total) - Number(job.depot_requis))}${job.balance_paid_at ? ' — ' + formatDateShortFr(job.balance_paid_at) : ''}`
           : 'Non paye',
         soldePaye
       )}
