@@ -2,16 +2,41 @@ import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 
+// All 20 crons from vercel.json with human-readable labels and schedules
+const VERCEL_CRONS = [
+  { path: '/api/cron/relance',            label: 'Relance devis (48h + 5j)',       schedule: '0 13 * * *',   desc: 'Tous les jours 9h' },
+  { path: '/api/cron/rappels',            label: 'Rappels rendez-vous',            schedule: '0 12 * * *',   desc: 'Tous les jours 8h' },
+  { path: '/api/cron/avis',               label: 'Demande d\'avis Google',         schedule: '0 15 * * *',   desc: 'Tous les jours 11h' },
+  { path: '/api/cron/depot',              label: 'Rappel depot',                   schedule: '0 14 * * *',   desc: 'Tous les jours 10h' },
+  { path: '/api/cron/recurring-expenses', label: 'Depenses recurrentes',           schedule: '0 10 * * *',   desc: 'Tous les jours 6h' },
+  { path: '/api/cron/email-scan',         label: 'Scan emails entrants',           schedule: '0 8 * * *',    desc: 'Tous les jours 4h' },
+  { path: '/api/cron/morning-summary',    label: 'Resume du matin (Telegram)',     schedule: '0 8 * * *',    desc: 'Tous les jours 4h' },
+  { path: '/api/gmail/watch',             label: 'Gmail Watch renewal',            schedule: '0 6 * * *',    desc: 'Tous les jours 2h' },
+  { path: '/api/cron/lead-followup',      label: 'Relance leads automatique',      schedule: '0 13 * * *',   desc: 'Tous les jours 9h' },
+  { path: '/api/cron/health-check',       label: 'Health check (Echo)',            schedule: '0 12 * * *',   desc: 'Tous les jours 8h' },
+  { path: '/api/cron/relance-prospect',   label: 'Relance prospects',              schedule: '0 14 * * *',   desc: 'Tous les jours 10h' },
+  { path: '/api/cron/referral',           label: 'Programme referral',             schedule: '0 16 * * 1',   desc: 'Lundi 12h' },
+  { path: '/api/cron/prospect-followup',  label: 'Suivi prospects (Denis)',        schedule: '0 14 * * *',   desc: 'Tous les jours 10h' },
+  { path: '/api/cron/iris-report',        label: 'Rapport Iris (finances)',        schedule: '0 13 * * *',   desc: 'Tous les jours 9h' },
+  { path: '/api/cron/deposit-watch',      label: 'Surveillance depots',            schedule: '0 9 * * *',    desc: 'Tous les jours 5h' },
+  { path: '/api/cron/relance-facture',    label: 'Relance factures impayees',      schedule: '0 11 * * *',   desc: 'Tous les jours 7h' },
+  { path: '/api/cron/reviews',            label: 'Collecte avis clients',          schedule: '0 10 * * 1',   desc: 'Lundi 6h' },
+  { path: '/api/cron/aria-prospect',      label: 'Aria prospection email',         schedule: '0 9 * * *',    desc: 'Tous les jours 5h' },
+  { path: '/api/cron/sync-submissions',   label: 'Sync soumissions',               schedule: '30 12 * * *',  desc: 'Tous les jours 8h30' },
+  { path: '/api/cron/nurture-leads',      label: 'Nurture leads tiedes',           schedule: '0 15 * * *',   desc: 'Tous les jours 11h' },
+];
+
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Non autorise' }, { status: 401 });
 
-  // Cron activity from kv_store
-  const cronKeys = await query(`
-    SELECT key, value, updated_at FROM kv_store
-    WHERE key IN ('echo_last_run', 'echo_last_report', 'last_email_scan', 'last_gmail_watch', 'last_ghl_sync')
-    ORDER BY key
-  `).catch(() => []);
+  // All crons from vercel.json — they run automatically on Vercel's scheduler
+  const crons = VERCEL_CRONS.map(c => ({
+    path: c.path,
+    label: c.label,
+    schedule: c.desc,
+    status: 'actif' as const,
+  }));
 
   // SMS stats today
   const smsToday = await query(`
@@ -58,7 +83,7 @@ export async function GET() {
   const conversations = await query(`SELECT COUNT(*)::int as cnt FROM conversations WHERE statut IN ('active', 'pending_approval')`).catch(() => [{ cnt: 0 }]);
 
   return NextResponse.json({
-    crons: cronKeys,
+    crons,
     sms: smsToday[0] || { total: 0, sent: 0, failed: 0 },
     emails: emailsToday[0] || { total: 0, delivered: 0, opened: 0, bounced: 0 },
     leads: { today: leadsToday[0]?.cnt || 0, total: leadsTotal[0]?.cnt || 0, prospected: leadsProspected[0]?.cnt || 0 },

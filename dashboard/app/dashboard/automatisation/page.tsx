@@ -2,13 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
-const CRON_LABELS: Record<string, string> = {
-  echo_last_run: 'Echo (audit quotidien)',
-  echo_last_report: 'Echo (dernier rapport)',
-  last_email_scan: 'Scan emails entrants',
-  last_gmail_watch: 'Gmail Watch renewal',
-  last_ghl_sync: 'GoHighLevel sync',
-};
+// Cron labels no longer needed — API returns label + schedule directly
 
 const STATUT_LABELS: Record<string, string> = {
   brouillon: 'Brouillon',
@@ -22,7 +16,7 @@ const STATUT_LABELS: Record<string, string> = {
 };
 
 interface AutoData {
-  crons: { key: string; value: string; updated_at: string }[];
+  crons: { path: string; label: string; schedule: string; status: 'actif' | 'arrete' }[];
   sms: { total: number; sent: number; failed: number };
   emails: { total: number; delivered: number; opened: number; bounced: number };
   leads: { today: number; total: number; prospected: number };
@@ -44,24 +38,7 @@ function StatusDot({ status }: { status: 'green' | 'yellow' | 'red' }) {
   );
 }
 
-function getCronStatus(updatedAt: string): 'green' | 'yellow' | 'red' {
-  const diff = Date.now() - new Date(updatedAt).getTime();
-  const hours = diff / (1000 * 60 * 60);
-  if (hours < 25) return 'green';
-  if (hours < 48) return 'yellow';
-  return 'red';
-}
-
-function timeAgo(dateStr: string): string {
-  const diff = Date.now() - new Date(dateStr).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'a l\'instant';
-  if (mins < 60) return `il y a ${mins}min`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `il y a ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `il y a ${days}j`;
-}
+// Status helpers removed — crons are now shown with their Vercel schedule
 
 function ProgressBar({ value, max, color }: { value: number; max: number; color: string }) {
   const pct = max > 0 ? Math.min(100, (value / max) * 100) : 0;
@@ -189,29 +166,30 @@ export default function AutomatisationPage() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Crons */}
             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3">
-              <h3 className="text-white font-semibold text-sm">Taches automatiques (Crons)</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-white font-semibold text-sm">Taches automatiques (Crons)</h3>
+                <span className="text-xs text-slate-400">{data.crons.length} actifs</span>
+              </div>
               {data.crons.length === 0 ? (
                 <p className="text-slate-500 text-sm">Aucune donnee de cron trouvee</p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
                   {data.crons.map(c => {
-                    const status = getCronStatus(c.updated_at);
+                    const isActive = c.status === 'actif';
                     return (
-                      <div key={c.key} className="flex items-center justify-between">
-                        <div className="flex items-center gap-2.5">
-                          <StatusDot status={status} />
-                          <div>
-                            <p className="text-white text-sm">{CRON_LABELS[c.key] || c.key}</p>
-                            <p className="text-slate-500 text-[10px]">{timeAgo(c.updated_at)}</p>
-                          </div>
+                      <div key={c.path} className="flex items-center justify-between py-1.5 border-b border-slate-700/50 last:border-0">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <StatusDot status={isActive ? 'green' : 'red'} />
+                          <p className="text-white text-sm truncate">{c.label}</p>
                         </div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          status === 'green' ? 'bg-green-500/10 text-green-400' :
-                          status === 'yellow' ? 'bg-yellow-500/10 text-yellow-400' :
-                          'bg-red-500/10 text-red-400'
-                        }`}>
-                          {status === 'green' ? 'OK' : status === 'yellow' ? 'Retard' : 'Arrete'}
-                        </span>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-slate-400 text-xs">{c.schedule}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            isActive ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
+                          }`}>
+                            {isActive ? 'Actif' : 'Arrete'}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
