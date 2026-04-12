@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 
+/** Convert a DB date (Date object or string) to YYYY-MM-DD safely */
+function toDateStr(d: unknown): string {
+  if (d instanceof Date) return d.toISOString().split('T')[0];
+  const s = String(d);
+  if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+  // Fallback: parse the string and convert
+  try { return new Date(s).toISOString().split('T')[0]; } catch { return s.slice(0, 10); }
+}
+
+/** Convert a DB datetime to ISO string safely */
+function toISOStr(d: unknown): string {
+  if (d instanceof Date) return d.toISOString();
+  const s = String(d);
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) return s;
+  try { return new Date(s).toISOString(); } catch { return s; }
+}
+
 // GET — fetch all events (bookings + manual events)
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -42,9 +59,8 @@ export async function GET(req: NextRequest) {
     const slot1 = (b.jour1_slot as string) === 'matin' ? { start: '08:00', end: '12:00' } : { start: '12:00', end: '16:00' };
     const slot2 = (b.jour2_slot as string) === 'matin' ? { start: '08:00', end: '12:00' } : { start: '12:00', end: '16:00' };
 
-    // Safe date extraction — avoid timezone shift from toISOString()
-    const j1 = String(b.jour1_date).slice(0, 10);
-    const j2 = b.jour2_date ? String(b.jour2_date).slice(0, 10) : null;
+    const j1 = toDateStr(b.jour1_date);
+    const j2 = b.jour2_date ? toDateStr(b.jour2_date) : null;
 
     const statusLabel = isComplete ? ' ✓' : isProvisoire ? ' ?' : '';
     const extra = { type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut, jour1_date: j1, jour1_slot: b.jour1_slot, jour2_date: j2, jour2_slot: b.jour2_slot };
@@ -97,8 +113,8 @@ export async function GET(req: NextRequest) {
   const manualEvents = manual.map(e => ({
     id: `event-${e.id}`,
     title: e.title as string,
-    start: String(e.start_date).slice(0, 19),
-    end: e.end_date ? String(e.end_date).slice(0, 19) : undefined,
+    start: toISOStr(e.start_date),
+    end: e.end_date ? toISOStr(e.end_date) : undefined,
     allDay: e.all_day as boolean,
     backgroundColor: (e.color as string) || '#f59e0b',
     borderColor: (e.color as string) || '#f59e0b',

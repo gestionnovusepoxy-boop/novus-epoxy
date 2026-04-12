@@ -8,7 +8,10 @@ import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import type { EventClickArg, DateSelectArg, EventDropArg, EventInput } from '@fullcalendar/core';
 import type { EventResizeDoneArg } from '@fullcalendar/interaction';
-import frLocale from '@fullcalendar/core/locales/fr-ca';
+import frLocaleBase from '@fullcalendar/core/locales/fr-ca';
+
+// Override firstDay to Sunday (fr-ca defaults to Monday)
+const frLocale = { ...frLocaleBase, week: { ...frLocaleBase.week, dow: 0 } };
 
 interface Booking {
   id: number;
