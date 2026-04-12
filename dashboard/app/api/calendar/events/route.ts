@@ -42,8 +42,9 @@ export async function GET(req: NextRequest) {
     const slot1 = (b.jour1_slot as string) === 'matin' ? { start: '08:00', end: '12:00' } : { start: '12:00', end: '16:00' };
     const slot2 = (b.jour2_slot as string) === 'matin' ? { start: '08:00', end: '12:00' } : { start: '12:00', end: '16:00' };
 
-    const j1 = (b.jour1_date as Date).toISOString().split('T')[0];
-    const j2 = b.jour2_date ? (b.jour2_date as Date).toISOString().split('T')[0] : null;
+    // Safe date extraction — avoid timezone shift from toISOString()
+    const j1 = String(b.jour1_date).slice(0, 10);
+    const j2 = b.jour2_date ? String(b.jour2_date).slice(0, 10) : null;
 
     const statusLabel = isComplete ? ' ✓' : isProvisoire ? ' ?' : '';
     const extra = { type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut, jour1_date: j1, jour1_slot: b.jour1_slot, jour2_date: j2, jour2_slot: b.jour2_slot };
@@ -96,8 +97,8 @@ export async function GET(req: NextRequest) {
   const manualEvents = manual.map(e => ({
     id: `event-${e.id}`,
     title: e.title as string,
-    start: (e.start_date as Date).toISOString(),
-    end: e.end_date ? (e.end_date as Date).toISOString() : undefined,
+    start: String(e.start_date).slice(0, 19),
+    end: e.end_date ? String(e.end_date).slice(0, 19) : undefined,
     allDay: e.all_day as boolean,
     backgroundColor: (e.color as string) || '#f59e0b',
     borderColor: (e.color as string) || '#f59e0b',
@@ -154,9 +155,11 @@ export async function PUT(req: NextRequest) {
     const bookingId = parseInt(match[1]);
     const jour = match[2]; // j1 or j2
 
-    const startDate = new Date(start);
-    const dateStr = startDate.toISOString().split('T')[0];
-    const hour = startDate.getHours();
+    // Extract date and time directly from the ISO string to avoid timezone shifts
+    // start can be "2026-05-09T08:00:00-04:00" or "2026-05-09T08:00:00" or "2026-05-09"
+    const dateStr = String(start).slice(0, 10); // "2026-05-09"
+    const timePart = String(start).slice(11, 13); // "08" or ""
+    const hour = timePart ? parseInt(timePart) : 8;
     const slot = hour < 12 ? 'matin' : 'apres-midi';
 
     if (jour === 'j1') {

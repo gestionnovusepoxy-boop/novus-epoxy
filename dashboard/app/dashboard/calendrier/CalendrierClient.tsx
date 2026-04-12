@@ -842,6 +842,8 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
           plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
           initialView="dayGridMonth"
           locale={frLocale}
+          firstDay={0}
+          timeZone="local"
           headerToolbar={{
             left: 'prev,next today',
             center: 'title',
