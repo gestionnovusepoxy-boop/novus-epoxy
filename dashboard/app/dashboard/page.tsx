@@ -187,7 +187,7 @@ function UrgentActions({ data }: { data: OverviewData }) {
                 {data.prochains_leads_chauds.map(l => (
                   <Link
                     key={l.id}
-                    href={`/dashboard/crm/${l.id}`}
+                    href="/dashboard/crm"
                     className="flex items-center justify-between bg-slate-900/50 rounded-md px-3 py-2 hover:bg-slate-900 transition"
                   >
                     <div className="min-w-0">

@@ -153,7 +153,8 @@ export async function GET() {
         END
       ), 0)::numeric AS montant
     FROM invoices
-    WHERE statut != 'payee'
+    WHERE statut NOT IN ('completee', 'payee', 'annulee')
+      AND (NOT depot_paye OR NOT final_paye)
   `).catch(() => [{ count: 0, montant: 0 }]);
 
   const soumissionsNonTraitees = await query(`
