@@ -244,3 +244,58 @@ body {
     justify-content: center;
   }
 }
+
+/* ─── Print styles for Rapport projet ─── */
+@media print {
+  /* Hide sidebar, header, nav, and non-essential UI */
+  nav, header, aside,
+  .sidebar-nav, [class*="sidebar"],
+  [class*="print:hidden"],
+  button:not([data-print]) {
+    display: none !important;
+  }
+
+  /* Full width, no dark background */
+  body {
+    background: white !important;
+    color: black !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  /* Make content full width */
+  main, [class*="ml-"] {
+    margin-left: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  /* Style cards for print */
+  [class*="bg-slate"], [class*="bg-green"], [class*="bg-red"] {
+    background: white !important;
+    border: 1px solid #ccc !important;
+    color: black !important;
+  }
+
+  /* Make text black */
+  [class*="text-white"], [class*="text-slate"], [class*="text-emerald"],
+  [class*="text-amber"], [class*="text-green"], [class*="text-red"],
+  [class*="text-sky"], [class*="text-indigo"], [class*="text-purple"] {
+    color: black !important;
+  }
+
+  /* Keep green/red for profit indicators */
+  .text-green-400 { color: #16a34a !important; }
+  .text-red-400 { color: #dc2626 !important; }
+  .text-amber-400 { color: #d97706 !important; }
+
+  /* Photos should print */
+  img {
+    max-width: 200px !important;
+    max-height: 150px !important;
+  }
+
+  /* Page breaks */
+  .page-break-before { page-break-before: always; }
+}
