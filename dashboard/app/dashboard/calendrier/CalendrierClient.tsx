@@ -881,8 +881,12 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
           eventResize={handleEventResize}
           eventTimeFormat={{ hour: 'numeric', minute: '2-digit', meridiem: false, hour12: false }}
           slotLabelFormat={{ hour: 'numeric', minute: '2-digit', meridiem: false, hour12: false }}
-          firstDay={1}
           businessHours={{ daysOfWeek: [1, 2, 3, 4, 5, 6], startTime: '07:00', endTime: '18:00' }}
+          slotLaneClassNames={(arg) => {
+            // Add a visible separator line at noon (AM/PM boundary)
+            if (arg.date && arg.date.getHours() === 12 && arg.date.getMinutes() === 0) return ['noon-separator'];
+            return [];
+          }}
         />
       </div>
 

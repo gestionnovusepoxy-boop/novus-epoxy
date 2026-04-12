@@ -165,6 +165,11 @@ body {
   flex-shrink: 0;
 }
 
+/* Noon separator line — AM/PM boundary */
+.novus-calendar .fc .noon-separator {
+  border-top: 2px solid #f59e0b !important;
+}
+
 .novus-calendar .fc .fc-timegrid-slot {
   height: 40px;
   border-color: #1e293b;
