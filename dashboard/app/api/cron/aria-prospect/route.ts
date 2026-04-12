@@ -34,11 +34,21 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, message: `Hors heures (${quebecHour}h). Prochain envoi a 8h.` });
   }
 
+  // Auto-clean: close leads with bounced emails so they never get re-contacted
+  await query(`
+    UPDATE crm_leads SET statut = 'perdu', temperature = 'froid', updated_at = NOW()
+    WHERE statut = 'nouveau' AND prospect_sent_at IS NULL
+      AND email IN (SELECT DISTINCT destinataire FROM email_logs WHERE statut = 'bounced')
+  `).catch(() => {});
+
   // Get pending leads — ONLY with valid QC phone numbers or email
   // Quebec area codes: 418, 581, 819, 450, 438, 514, 579, 873, 367
+  // Excludes: bounced emails, invalid formats, opted-out
   const pending = await query(
     `SELECT id FROM crm_leads WHERE statut = 'nouveau' AND prospect_sent_at IS NULL AND (
-      (email IS NOT NULL AND email != '' AND email NOT LIKE '%example%' AND email NOT LIKE '%test%')
+      (email IS NOT NULL AND email != '' AND email NOT LIKE '%example%' AND email NOT LIKE '%test%'
+       AND email LIKE '%@%.%' AND email NOT LIKE '%.png' AND email NOT LIKE '%.jpg'
+       AND email NOT IN (SELECT DISTINCT destinataire FROM email_logs WHERE statut = 'bounced'))
       OR (telephone IS NOT NULL AND telephone != '' AND (
         telephone ~ '(418|581|819|450|438|514|579|873|367)'
       ))
