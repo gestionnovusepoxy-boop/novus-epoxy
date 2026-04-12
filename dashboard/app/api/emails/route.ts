@@ -10,14 +10,68 @@ export async function GET(req: NextRequest) {
   const page   = Math.max(1, parseInt(searchParams.get('page')  ?? '1'));
   const limit  = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '25')));
   const offset = (page - 1) * limit;
+  const tab    = searchParams.get('tab') ?? '';
+  const search = searchParams.get('search') ?? '';
 
-  
+  // Build WHERE clauses
+  const conditions: string[] = [];
+  const params: (string | number)[] = [];
+  let paramIdx = 1;
+
+  if (search) {
+    conditions.push(`(destinataire ILIKE $${paramIdx} OR sujet ILIKE $${paramIdx})`);
+    params.push(`%${search}%`);
+    paramIdx++;
+  }
+
+  if (tab === 'prospection') {
+    conditions.push(`(sujet ILIKE '%Partenariat%' OR sujet ILIKE '%idée pour votre espace%' OR sujet ILIKE '%question rapide%' OR sujet ILIKE '%Planchers époxy pour%')`);
+  } else if (tab === 'offres') {
+    conditions.push(`(sujet ILIKE '%Soumission%' OR sujet ILIKE '%Devis%' OR sujet ILIKE '%soumission%' OR sujet ILIKE '%devis%')`);
+  } else if (tab === 'bounces') {
+    conditions.push(`statut = 'bounced'`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  if (tab === 'conversations') {
+    // Grouped by destinataire
+    const [countRow, rows] = await Promise.all([
+      db(
+        `SELECT COUNT(*)::int AS total FROM (SELECT DISTINCT destinataire FROM email_logs ${whereClause}) sub`,
+        params
+      ),
+      db(
+        `SELECT
+           destinataire,
+           COUNT(*)::int AS email_count,
+           MAX(created_at) AS last_date,
+           (array_agg(sujet ORDER BY created_at DESC))[1] AS last_sujet,
+           (array_agg(statut ORDER BY created_at DESC))[1] AS last_statut
+         FROM email_logs
+         ${whereClause}
+         GROUP BY destinataire
+         ORDER BY MAX(created_at) DESC
+         LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+        [...params, limit, offset]
+      ),
+    ]);
+
+    return NextResponse.json({
+      data:  rows,
+      total: (countRow[0] as { total: number }).total,
+      page,
+      limit,
+    });
+  }
+
+  // Standard list (all, prospection, offres, bounces)
   const [countRow, rows] = await Promise.all([
-    db(`SELECT COUNT(*)::int AS total FROM email_logs`),
+    db(`SELECT COUNT(*)::int AS total FROM email_logs ${whereClause}`, params),
     db(
       `SELECT id, resend_id, destinataire, sujet, statut, opened_at, clicked_at, created_at
-       FROM email_logs ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-      [limit, offset]
+       FROM email_logs ${whereClause} ORDER BY created_at DESC LIMIT $${paramIdx} OFFSET $${paramIdx + 1}`,
+      [...params, limit, offset]
     ),
   ]);
 

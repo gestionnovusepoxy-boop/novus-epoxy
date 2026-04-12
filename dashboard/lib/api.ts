@@ -107,11 +107,27 @@ export function fetchSubmissions(params: {
   return apiFetch(`/api/submissions?${qs}`);
 }
 
-export function fetchEmails(params: { page?: number; limit?: number }): Promise<PaginatedResponse<EmailLog>> {
+export function fetchEmails(params: {
+  page?: number; limit?: number; tab?: string; search?: string;
+}): Promise<PaginatedResponse<EmailLog>> {
   const qs = new URLSearchParams();
-  if (params.page)  qs.set('page',  String(params.page));
-  if (params.limit) qs.set('limit', String(params.limit));
+  if (params.page)   qs.set('page',   String(params.page));
+  if (params.limit)  qs.set('limit',  String(params.limit));
+  if (params.tab)    qs.set('tab',    params.tab);
+  if (params.search) qs.set('search', params.search);
   return apiFetch(`/api/emails?${qs}`);
+}
+
+export interface EmailStats {
+  total: number;
+  delivered: number;
+  opened: number;
+  bounced: number;
+  conversations: number;
+}
+
+export function fetchEmailStats(): Promise<EmailStats> {
+  return apiFetch('/api/emails/stats');
 }
 
 export function fetchStats(periode: '7d' | '30d' | '90d' = '30d'): Promise<StatsResponse> {
