@@ -26,25 +26,35 @@ export async function GET() {
     GROUP BY mois ORDER BY mois
   `);
 
-  // 3. Leads by week (last 8 weeks)
+  // 3. Leads by week (last 8 weeks) — clear date format
   const leadsByWeek = await query(`
-    SELECT to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS semaine,
+    SELECT to_char(date_trunc('week', created_at), 'DD Mon') AS semaine,
+           to_char(date_trunc('week', created_at), 'YYYY-MM-DD') AS semaine_iso,
            COUNT(*)::int AS count
     FROM crm_leads
     WHERE created_at >= NOW() - INTERVAL '8 weeks'
-    GROUP BY semaine ORDER BY semaine
+    GROUP BY semaine, semaine_iso ORDER BY semaine_iso
   `);
 
-  // 4. Leads by source with revenue attribution
+  // 4. Leads by source with revenue attribution — group CSV sources together
   const sourcePerf = await query(`
-    SELECT l.source,
-           COUNT(DISTINCT l.id)::int AS leads,
-           COUNT(DISTINCT q.id)::int AS devis,
-           COALESCE(SUM(DISTINCT q.total), 0)::numeric AS revenu_potentiel,
-           COUNT(DISTINCT CASE WHEN q.statut IN ('depot_paye','complete') THEN q.id END)::int AS signes
+    SELECT
+      CASE
+        WHEN l.source ILIKE 'csv:%' OR l.source ILIKE 'csv-%' THEN 'Import CSV (Jason)'
+        WHEN l.source ILIKE 'Import Jason%' THEN 'Import CSV (Jason)'
+        WHEN l.source ILIKE 'facebook%' OR l.source = 'Facebook Ads' OR l.source = 'fb' THEN 'Facebook Ads'
+        WHEN l.source IN ('site_web', 'Site web', 'site web') THEN 'Site web'
+        WHEN l.source = 'ghl' THEN 'GoHighLevel'
+        WHEN l.source = 'prospection' THEN 'Prospection (Denis)'
+        ELSE COALESCE(l.source, 'Inconnu')
+      END AS source,
+      COUNT(DISTINCT l.id)::int AS leads,
+      COUNT(DISTINCT q.id)::int AS devis,
+      COALESCE(SUM(DISTINCT q.total), 0)::numeric AS revenu_potentiel,
+      COUNT(DISTINCT CASE WHEN q.statut IN ('depot_paye','complete') THEN q.id END)::int AS signes
     FROM crm_leads l
     LEFT JOIN quotes q ON REPLACE(REPLACE(REPLACE(q.client_tel, '-', ''), ' ', ''), '+', '') LIKE '%' || RIGHT(REPLACE(REPLACE(l.telephone, '-', ''), ' ', ''), 10)
-    GROUP BY l.source
+    GROUP BY 1
     ORDER BY leads DESC
   `);
 

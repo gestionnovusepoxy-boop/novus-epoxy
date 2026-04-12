@@ -25,7 +25,7 @@ const SOURCE_LABELS: Record<string, string> = {
 interface StatsData {
   revenue_by_month: { mois: string; depots: number; soldes: number; total: number }[];
   quotes_by_month: { mois: string; count: number; total: number }[];
-  leads_by_week: { semaine: string; count: number }[];
+  leads_by_week: { semaine: string; semaine_iso?: string; count: number }[];
   source_performance: { source: string; leads: number; devis: number; revenu_potentiel: number; signes: number }[];
   funnel: { total_leads: number; contactes: number; devis_envoyes: number; signes: number; completes: number; payes: number };
   site: { visites: number; visiteurs_uniques: number; sessions: number; top_pages: { page: string; vues: number }[]; referrers: { source: string; vues: number }[] };
@@ -244,7 +244,7 @@ function PageContent() {
                     {data.leads_by_week.map(l => (
                       <div key={l.semaine} className="space-y-1">
                         <div className="flex justify-between text-xs">
-                          <span className="text-slate-400">Sem. {l.semaine.slice(5)}</span>
+                          <span className="text-slate-400">Sem. du {l.semaine}</span>
                           <span className="text-white font-medium">{l.count}</span>
                         </div>
                         <Bar value={l.count} max={Math.max(...data.leads_by_week.map(x => x.count))} color="#06b6d4" />
