@@ -430,12 +430,12 @@ function EditBookingModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-slate-800 rounded-xl max-w-lg w-full border border-slate-700" onClick={e => e.stopPropagation()}>
-        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+      <div className="bg-slate-800 rounded-xl max-w-lg w-full border border-slate-700 max-h-[90vh] flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-4 border-b border-slate-700 flex-shrink-0">
           <h3 className="text-white font-bold text-lg">Modifier la reservation</h3>
           <button onClick={onClose} className="text-slate-400 hover:text-white text-xl">&times;</button>
         </div>
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 overflow-y-auto">
           {/* Client info */}
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div>
