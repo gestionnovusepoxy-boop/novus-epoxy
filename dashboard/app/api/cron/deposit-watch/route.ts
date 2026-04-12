@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
+import { isQuietHours } from '@/lib/telegram-utils';
 
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
 const ADMIN_CHAT_IDS = () =>
@@ -29,6 +30,8 @@ export async function GET(req: NextRequest) {
   if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
   let depositsCreated = 0;
   let balanceAlerts = 0;

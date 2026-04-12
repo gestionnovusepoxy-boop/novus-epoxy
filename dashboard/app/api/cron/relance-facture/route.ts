@@ -4,6 +4,7 @@ import { formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
 import { sendSMS } from '@/lib/sms';
+import { isQuietHours } from '@/lib/telegram-utils';
 
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
 const ADMIN_CHAT_IDS = () =>
@@ -99,6 +100,8 @@ export async function GET(req: NextRequest) {
   if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
   let stage1Sent = 0;
   let stage2Sent = 0;

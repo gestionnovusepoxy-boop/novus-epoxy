@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query as db } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
+import { isQuietHours } from '@/lib/telegram-utils';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -162,6 +163,8 @@ async function notifyAdminsWithQuote(
   superficie: number | null,
   analysis?: { temperature: string; urgence: string; action: string; raison: string; emoji: string } | null,
 ) {
+  if (isQuietHours()) return;
+
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
 
@@ -414,7 +417,7 @@ export async function POST(req: NextRequest) {
     // Also Telegram
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
-    if (botToken) {
+    if (botToken && !isQuietHours()) {
       const tgMsg = `\ud83c\udfa8 <b>METALLIQUE — Couleurs en personne</b>\n\nJason, appelle ${clientName} pour choisir les couleurs!\n\ud83d\udcde ${clientTel}\n\ud83d\udce7 ${clientEmail}${clientVille ? `\n\ud83d\udccd ${clientVille}` : ''}`;
       await Promise.all(chatIds.map(chatId =>
         fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

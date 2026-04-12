@@ -3,6 +3,9 @@ import { createHmac, timingSafeEqual } from 'crypto';
 import { query } from '@/lib/db';
 import { getOrCreateConversation, processMessage } from '@/lib/agent';
 import { sendSMS } from '@/lib/sms';
+import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
+import { escapeHtml } from '@/lib/utils';
+import { isQuietHours } from '@/lib/telegram-utils';
 
 // GET — Meta webhook verification (subscribe handshake)
 export async function GET(req: NextRequest) {
@@ -74,19 +77,71 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
+// Map Facebook form field values to our service types
+const FB_SERVICE_MAP: Record<string, ServiceType> = {
+  'flocon': 'flake', 'flake': 'flake', 'flocon (flake)': 'flake',
+  'metallique': 'metallique', 'métallique': 'metallique', 'metallic': 'metallique',
+  'quartz': 'quartz',
+  'couleur unie': 'couleur_unie', 'uni': 'couleur_unie',
+  'antiderapant': 'antiderapant', 'antidérapant': 'antiderapant',
+  'commercial': 'commercial', 'industriel': 'commercial',
+  'meulage': 'meulage', 'meulage au diamant': 'meulage',
+};
+
+const FB_ESPACE_MAP: Record<string, string> = {
+  'garage': 'Garage', 'sous-sol': 'Sous-sol', 'sous sol': 'Sous-sol', 'basement': 'Sous-sol',
+  'balcon': 'Balcon', 'commercial': 'Commercial', 'industriel': 'Industriel',
+  'entrepot': 'Entrepôt', 'entrepôt': 'Entrepôt',
+};
+
+function matchMap<T>(value: string, map: Record<string, T>): T | null {
+  const lower = value.toLowerCase().trim();
+  if (map[lower]) return map[lower];
+  for (const [key, val] of Object.entries(map)) {
+    if (lower.includes(key)) return val;
+  }
+  return null;
+}
+
 // Send Telegram notification to all admin chat IDs
-async function notifyTelegramFacebookLead(nom: string, email: string, telephone: string | null) {
+async function notifyTelegramFacebookLead(nom: string, email: string, telephone: string | null, extra?: { service?: string; espace?: string; superficie?: number; adresse?: string; quoteId?: number; total?: number }) {
+  if (isQuietHours()) return;
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
   if (!botToken || chatIds.length === 0) return;
 
-  const msg = `🔥 *Nouveau lead Facebook!*\n\n${nom} — ${email} — ${telephone ?? 'Pas de tél'}\n\nAria va le contacter automatiquement.`;
+  const lines = [
+    `🔥 <b>Nouveau lead Facebook!</b>`,
+    ``,
+    `👤 ${escapeHtml(nom)}`,
+    `📧 ${escapeHtml(email)}`,
+    telephone ? `📞 ${escapeHtml(telephone)}` : '',
+    extra?.espace ? `🏗 ${escapeHtml(extra.espace)}` : '',
+    extra?.service ? `🔧 ${escapeHtml(extra.service)}` : '',
+    extra?.superficie ? `📐 ${extra.superficie} pi²` : '',
+    extra?.adresse ? `🏠 ${escapeHtml(extra.adresse)}` : '',
+  ].filter(Boolean);
+
+  if (extra?.quoteId && extra?.total) {
+    lines.push('', `📋 <b>Devis #${extra.quoteId} créé automatiquement!</b>`, `💰 Total: ${formatMoney(extra.total)}`);
+  } else {
+    lines.push('', `<i>Aria va le contacter automatiquement.</i>`);
+  }
+
+  const buttons: Record<string, unknown> = extra?.quoteId
+    ? { inline_keyboard: [[
+        { text: '✅ Approuver devis', callback_data: `approve_quote_${extra.quoteId}` },
+        { text: '📋 Voir dashboard', url: 'https://novus-epoxy.vercel.app/dashboard/devis' },
+      ]] }
+    : { inline_keyboard: [[
+        { text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' },
+      ]] };
 
   await Promise.all(chatIds.map(chatId =>
     fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId.trim(), text: msg, parse_mode: 'Markdown' }),
+      body: JSON.stringify({ chat_id: chatId.trim(), text: lines.join('\n'), parse_mode: 'HTML', reply_markup: buttons }),
     }).catch(() => {})
   ));
 }

@@ -4,8 +4,10 @@ import { formatMoney } from '@/lib/pricing';
 import { sendSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
+import { isQuietHours } from '@/lib/telegram-utils';
 
 async function notifyTelegramBooking(quoteId: number, clientName: string, jour1: string, jour2: string | null) {
+  if (isQuietHours()) return;
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const groupId = process.env.TELEGRAM_GROUP_CHAT_ID;
   const chatIds = groupId

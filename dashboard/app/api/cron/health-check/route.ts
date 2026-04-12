@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { google } from 'googleapis';
+import { isQuietHours } from '@/lib/telegram-utils';
 
 export const maxDuration = 90;
 
@@ -47,6 +48,8 @@ export async function GET(req: NextRequest) {
   if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
   const checks: CheckResult[] = [];
   let watchAutoFixed = false;

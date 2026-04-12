@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { isQuietHours } from '@/lib/telegram-utils';
 
 const GOOGLE_REVIEW_URL = process.env.GOOGLE_REVIEW_URL ?? 'https://g.page/r/CeAd5U7pHvj_EBM/review';
 const GOOGLE_BUSINESS_URL = 'https://business.google.com/dashboard';
@@ -24,6 +25,8 @@ export async function GET(req: NextRequest) {
   if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
   // Count review requests sent (from avis cron) in the last 7 days
   const weekRows = await query(

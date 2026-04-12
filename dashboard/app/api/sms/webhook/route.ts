@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getOrCreateConversation, processMessage } from '@/lib/agent';
+import { isQuietHours } from '@/lib/telegram-utils';
 
 // Twilio incoming SMS webhook — handles STOP/START opt-out + AI replies via Nova
 // Configure in Twilio console: Messaging > Phone Number > Webhook URL
@@ -130,6 +131,7 @@ export async function POST(req: NextRequest) {
 }
 
 async function forwardToTelegram(from: string, body: string, cleaned: string) {
+  if (isQuietHours()) return;
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
 

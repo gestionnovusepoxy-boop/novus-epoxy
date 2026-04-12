@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendEmail } from '@/lib/send-email';
+import { isQuietHours } from '@/lib/telegram-utils';
 
 const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
@@ -30,6 +31,8 @@ export async function GET(req: NextRequest) {
   if (!token || (token !== cronSecret && token !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
   // 1. Find leads ready for follow-up
   const leads = await query(

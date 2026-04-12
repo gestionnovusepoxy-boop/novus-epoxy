@@ -22,11 +22,11 @@
     },
     {
       "path": "/api/cron/email-scan",
-      "schedule": "0 8 * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/cron/morning-summary",
-      "schedule": "0 8 * * *"
+      "schedule": "0 11 * * *"
     },
     {
       "path": "/api/gmail/watch",
@@ -58,15 +58,15 @@
     },
     {
       "path": "/api/cron/deposit-watch",
-      "schedule": "0 9 * * *"
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/cron/relance-facture",
-      "schedule": "0 11 * * *"
+      "schedule": "0 15 * * *"
     },
     {
       "path": "/api/cron/reviews",
-      "schedule": "0 10 * * 1"
+      "schedule": "0 14 * * 1"
     },
     {
       "path": "/api/cron/aria-prospect",
