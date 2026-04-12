@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { PollingProvider } from '@/components/polling-provider';
 import { formatMoney } from '@/lib/pricing';
@@ -1235,5 +1235,9 @@ function PageContent() {
 }
 
 export default function TravauxPage() {
-  return <PageContent />;
+  return (
+    <Suspense fallback={<div className="p-8 text-center text-slate-500">Chargement...</div>}>
+      <PageContent />
+    </Suspense>
+  );
 }
