@@ -41,13 +41,14 @@ export async function GET(req: NextRequest) {
       AND email IN (SELECT DISTINCT destinataire FROM email_logs WHERE statut = 'bounced')
   `).catch(() => {});
 
-  // Daily limit: 75 prospect emails per day via Gmail (stay safe with quotas)
+  // Daily limit: 75 emails/day, max 5 per batch (every 10 min = espacement naturel)
   const MAX_PER_DAY = 75;
+  const MAX_PER_BATCH = 5;
   const sentTodayRes = await query(
     `SELECT COUNT(*)::int AS n FROM crm_leads WHERE prospect_sent_at >= CURRENT_DATE AND prospect_sent_at IS NOT NULL`
   ).catch(() => [{ n: 0 }]);
   const sentToday = (sentTodayRes[0]?.n as number) || 0;
-  const remaining = MAX_PER_DAY - sentToday;
+  const remaining = Math.min(MAX_PER_BATCH, MAX_PER_DAY - sentToday);
 
   if (remaining <= 0) {
     return NextResponse.json({ ok: true, message: `Limite atteinte: ${sentToday}/${MAX_PER_DAY} emails aujourd'hui. Reprise demain.`, emails: 0, sms: 0 });
