@@ -94,6 +94,24 @@
   setTimeout(removeReferralPopup, 1000);
   setTimeout(removeReferralPopup, 3000);
 
+  // Update outdated text on the site
+  function updateSiteText() {
+    var replacements = [
+      ['Réponse sous 24h', 'Soumission en 5 minutes'],
+      ['Nous vous contactons rapidement pour planifier votre projet', 'Recevez votre soumission détaillée en moins de 5 minutes'],
+    ];
+    var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null, false);
+    while (walker.nextNode()) {
+      var node = walker.currentNode;
+      for (var i = 0; i < replacements.length; i++) {
+        if (node.textContent.indexOf(replacements[i][0]) !== -1) {
+          node.textContent = node.textContent.replace(replacements[i][0], replacements[i][1]);
+        }
+      }
+    }
+  }
+  setTimeout(updateSiteText, 500);
+
   // Fix au chargement si l'URL contient #contact
   if (location.hash === '#contact') {
     setTimeout(function () {
