@@ -268,8 +268,8 @@ export async function POST(req: NextRequest) {
   const ipHash = await sha256(`${ip}${ua}${new Date().toISOString().slice(0, 10)}`);
 
   const submissionRows = await db(
-    `INSERT INTO submissions (nom, email, telephone, service, type_projet, adresse, surface_estimee, ville, ip_hash)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `INSERT INTO submissions (nom, email, telephone, service, type_projet, adresse, surface_estimee, ville, ip_hash, utm_source, utm_medium, utm_campaign)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      RETURNING id`,
     [
       body.nom.slice(0, 120),
@@ -281,6 +281,9 @@ export async function POST(req: NextRequest) {
       body.surface_estimee?.slice(0, 50) ?? null,
       body.ville?.slice(0, 120) ?? null,
       ipHash,
+      body.utm_source?.slice(0, 80) ?? null,
+      body.utm_medium?.slice(0, 80) ?? null,
+      body.utm_campaign?.slice(0, 120) ?? null,
     ]
   );
   const submissionId = (submissionRows[0] as { id: number }).id;
