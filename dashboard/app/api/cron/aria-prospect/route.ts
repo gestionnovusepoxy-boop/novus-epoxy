@@ -41,6 +41,18 @@ export async function GET(req: NextRequest) {
       AND email IN (SELECT DISTINCT destinataire FROM email_logs WHERE statut = 'bounced')
   `).catch(() => {});
 
+  // Daily limit: 75 prospect emails per day via Gmail (stay safe with quotas)
+  const MAX_PER_DAY = 75;
+  const sentTodayRes = await query(
+    `SELECT COUNT(*)::int AS n FROM crm_leads WHERE prospect_sent_at >= CURRENT_DATE AND prospect_sent_at IS NOT NULL`
+  ).catch(() => [{ n: 0 }]);
+  const sentToday = (sentTodayRes[0]?.n as number) || 0;
+  const remaining = MAX_PER_DAY - sentToday;
+
+  if (remaining <= 0) {
+    return NextResponse.json({ ok: true, message: `Limite atteinte: ${sentToday}/${MAX_PER_DAY} emails aujourd'hui. Reprise demain.`, emails: 0, sms: 0 });
+  }
+
   // Get pending leads — ONLY with valid QC phone numbers or email
   // Quebec area codes: 418, 581, 819, 450, 438, 514, 579, 873, 367
   // Excludes: bounced emails, invalid formats, opted-out
@@ -52,7 +64,7 @@ export async function GET(req: NextRequest) {
       OR (telephone IS NOT NULL AND telephone != '' AND (
         telephone ~ '(418|581|819|450|438|514|579|873|367)'
       ))
-    ) ORDER BY id LIMIT 35`
+    ) ORDER BY id LIMIT ${remaining}`
   );
 
   if (pending.length === 0) {
