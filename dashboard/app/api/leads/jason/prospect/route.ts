@@ -373,49 +373,57 @@ export async function POST(req: NextRequest) {
     }
 
     const prenom = getPrenom(lead.nom);
-    const project = lead.service || lead.notes?.split('—')[0] || '';
-    const isCommercial = lead.type === 'commercial';
     const isFacebookLead = (lead.source ?? '').toLowerCase().includes('ghl') || (lead.source ?? '').toLowerCase().includes('facebook');
     const ville = lead.ville || 'Québec';
 
+    // Determine lead category for targeted messaging
+    const nomLower = (lead.nom ?? '').toLowerCase();
+    const notesLower = (lead.notes ?? '').toLowerCase();
+    const serviceLower = (lead.service ?? '').toLowerCase();
+    const isCommercial = lead.type === 'commercial' ||
+      /commercial|industriel|entrepôt|entrepot|usine|manufacture|bureau/i.test(nomLower + ' ' + notesLower);
+    const isPartner = /entrepreneur|contracteur|construction|rénovation|renovation|immobilier|courtier|architecte|designer|plombier|électricien|electricien/i.test(nomLower + ' ' + notesLower);
+
     let contacted = false;
 
-    // 1. Send email — conversational plain text + minimal HTML (bypasses Promotions tab)
+    // 1. Send email — 3 categories: Partenaire, Résidentiel, Commercial/Industriel
     if (lead.email && String(lead.email).includes('@') && !alreadySentEmails.has(lead.email.toLowerCase())) {
-      // Subject line variants — short, personal, no promo words
-      const subjectVariants = isCommercial
-        ? [
-            `${prenom}, question rapide`,
-            `${prenom} — planchers époxy pour ${lead.nom.split(' ').slice(-1)[0] || 'votre entreprise'}`,
-            `Question pour ${lead.nom.trim().slice(0, 30)}`,
-          ]
-        : isFacebookLead
-          ? [
-            `${prenom}, merci pour votre demande`,
-            `${prenom} — votre soumission Novus Epoxy`,
-          ]
-          : [
-            `${prenom}, question rapide`,
-            `${prenom} — idée pour votre espace`,
-            `Question pour ${lead.nom.trim().slice(0, 30)}`,
-          ];
-      const subject = subjectVariants[Math.floor(Math.random() * subjectVariants.length)];
 
-      // Plain text body — conversational, <100 words, 1 question
-      const textVariants = isCommercial
-        ? [
-            `Bonjour ${prenom},\n\nJe suis Luca de Novus Epoxy. On fait des planchers en époxy commercial et résidentiel dans la région de ${ville}.\n\nJ'ai vu ${lead.nom.trim()} et je me demandais — est-ce que vous avez déjà considéré un plancher en époxy pour vos espaces?\n\nOn travaille avec plusieurs entrepreneurs du coin. Licence RBQ, +1000 projets.\n\nSi ça vous intéresse, répondez à ce courriel ou appelez-moi.\n\nLuca — 581-307-5983\nJason — 581-307-2678\nNovus Epoxy`,
-            `Bonjour ${prenom},\n\nLuca de Novus Epoxy ici. On installe des planchers époxy haut de gamme pour les entreprises dans votre secteur.\n\nOn cherche des partenaires dans la région de ${ville} — est-ce que c'est quelque chose qui pourrait vous intéresser?\n\nPas de pression, juste curieux.\n\nLuca — 581-307-5983\nJason — 581-307-2678\nNovus Epoxy`,
-          ]
-        : isFacebookLead
-          ? [
-            `Bonjour ${prenom},\n\nMerci pour votre demande! Pour préparer votre soumission rapidement, j'aurais besoin de quelques infos:\n\n1. Type d'espace (garage, sous-sol, balcon)?\n2. Superficie approximative?\n3. Type de fini souhaité?\n4. Adresse des travaux?\n\nRépondez à ce courriel ou appelez-moi au 581-307-5983.\n\nLuca\nNovus Epoxy`,
-          ]
-          : [
-            `Bonjour ${prenom},\n\nJe suis Luca de Novus Epoxy. On fait des planchers en époxy haut de gamme dans la région de ${ville}.\n\n${project ? `J'ai vu que vous pourriez être intéressé par ${project} — ` : ''}est-ce que c'est quelque chose qui vous intéresserait?\n\nOn peut préparer une soumission gratuite en moins d'une heure. Licence RBQ, +1000 projets.\n\nLuca — 581-307-5983\nJason — 581-307-2678\nNovus Epoxy`,
-            `Bonjour ${prenom},\n\nLuca de Novus Epoxy. On installe des planchers époxy dans le coin de ${ville}.\n\nEst-ce que vous avez un projet de plancher en tête? On fait garage, sous-sol, balcon, commercial.\n\nSi oui, répondez ici ou appelez-moi.\n\nLuca — 581-307-5983\nJason — 581-307-2678\nNovus Epoxy`,
-          ];
-      const text = textVariants[Math.floor(Math.random() * textVariants.length)];
+      let subject: string;
+      let text: string;
+
+      if (isFacebookLead) {
+        // === FACEBOOK LEAD — réponse directe à une demande ===
+        subject = `${prenom}, votre soumission gratuite`;
+        text = `Bonjour ${prenom},\n\nMerci pour votre demande! Je suis Luca, propriétaire de Novus Epoxy.\n\nPour préparer votre soumission rapidement, j'ai besoin de quelques infos:\n\n1. Type d'espace? (garage, sous-sol, balcon, patio)\n2. Superficie approximative en pi²?\n3. Type de fini souhaité? (métallique, flake, uni)\n\nOn peut vous envoyer une soumission détaillée en moins de 5 minutes.\n\nAppellez-moi directement: 581-307-5983\n\nLuca Hayes\nNovus Epoxy — Licence RBQ 5861-8471-01\nnovusepoxy.ca`;
+
+      } else if (isPartner) {
+        // === PARTENAIRE — offre de collaboration B2B ===
+        const subjects = [
+          `${prenom} — partenariat planchers époxy`,
+          `Collaboration Novus Epoxy × ${prenom}`,
+        ];
+        subject = subjects[Math.floor(Math.random() * subjects.length)];
+        text = `Bonjour ${prenom},\n\nJe suis Luca Hayes, propriétaire de Novus Epoxy. On installe des planchers en époxy haut de gamme dans la grande région de ${ville}.\n\nJe vous contacte parce qu'on cherche des partenaires dans le domaine de la construction et de la rénovation. Voici ce qu'on peut vous offrir:\n\n• Commission de référence sur chaque projet\n• Installation rapide (2 jours max)\n• Garantie 10 ans sur tous nos travaux\n• Licence RBQ 5861-8471-01\n• Plus de 1000 projets complétés\n\nSi vous avez des clients qui cherchent un plancher de garage, sous-sol, patio ou commercial — on est la solution.\n\nIntéressé? Répondez à ce courriel ou appelez-moi.\n\nLuca Hayes — 581-307-5983\nJason Lanthier — 581-307-2678\nnovusepoxy.ca`;
+
+      } else if (isCommercial) {
+        // === COMMERCIAL/INDUSTRIEL — offre de services B2B ===
+        const subjects = [
+          `${prenom} — planchers époxy commerciaux`,
+          `Planchers haute performance pour vos espaces`,
+        ];
+        subject = subjects[Math.floor(Math.random() * subjects.length)];
+        text = `Bonjour ${prenom},\n\nLuca Hayes de Novus Epoxy. On installe des planchers époxy haute performance pour les espaces commerciaux et industriels dans la région de ${ville}.\n\nNos planchers commerciaux offrent:\n\n• Résistance chimique et aux impacts\n• Antidérapant certifié\n• Installation rapide — minimum de temps d'arrêt\n• Entretien facile, durée de vie 15+ ans\n• Licence RBQ 5861-8471-01\n\nEntrepôt, garage commercial, showroom, restaurant — on couvre tout.\n\nSoumission gratuite en moins de 24h. Intéressé?\n\nLuca Hayes — 581-307-5983\nJason Lanthier — 581-307-2678\nnovusepoxy.ca`;
+
+      } else {
+        // === RÉSIDENTIEL — offre pour garage, balcon, patio, sous-sol ===
+        const subjects = [
+          `${prenom}, idée pour votre plancher`,
+          `${prenom} — soumission gratuite époxy`,
+        ];
+        subject = subjects[Math.floor(Math.random() * subjects.length)];
+        text = `Bonjour ${prenom},\n\nJe suis Luca de Novus Epoxy. On transforme les planchers de garage, sous-sol, balcon et patio en surfaces époxy haut de gamme dans la région de ${ville}.\n\nNotre offre résidentielle:\n\n• Finis métallique, flake ou uni — au choix\n• Installation en 2 jours\n• Garantie 10 ans\n• Soumission gratuite en 5 minutes\n• Plus de 1000 projets réalisés\n\nSi vous avez un projet en tête, répondez à ce courriel ou appelez-moi au 581-307-5983.\n\nVous pouvez aussi remplir notre formulaire rapide:\nhttps://novus-epoxy.vercel.app/soumission\n\nLuca Hayes\nNovus Epoxy — Licence RBQ 5861-8471-01\nnovusepoxy.ca`;
+      }
 
       // Minimal HTML — same content as plain text, just with basic formatting
       const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body>
