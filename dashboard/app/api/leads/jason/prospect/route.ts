@@ -337,6 +337,41 @@ export async function POST(req: NextRequest) {
     );
     if (claimed.length === 0) { skipped++; continue; } // Already claimed by another process
 
+    // === QUALITY GATE: skip garbage/scraped leads ===
+    const nom = (lead.nom ?? '').trim();
+    const emailAddr = (lead.email ?? '').toLowerCase().trim();
+
+    // Skip if name contains non-Latin chars (Hindi, Chinese, Arabic, etc.)
+    if (/[^\u0000-\u024F\u1E00-\u1EFF\u2000-\u206F\u2070-\u209F\u20A0-\u20CF\u2100-\u214F]/.test(nom)) {
+      await query(`UPDATE crm_leads SET statut = 'perdu', updated_at = NOW() WHERE id = $1`, [lead.id]);
+      skipped++; continue;
+    }
+    // Skip if name looks like a URL, filename, or scraped title (too long, has special chars)
+    if (nom.length > 80 || /[<>{}|\\~`]/.test(nom) || /\.(com|org|net|ca|png|jpg|html|php)/i.test(nom)) {
+      await query(`UPDATE crm_leads SET statut = 'perdu', updated_at = NOW() WHERE id = $1`, [lead.id]);
+      skipped++; continue;
+    }
+    // Skip if name has offensive/spam content
+    if (/cum|porn|xxx|sex|casino|bitcoin|crypto|lottery|viagra/i.test(nom)) {
+      await query(`UPDATE crm_leads SET statut = 'perdu', updated_at = NOW() WHERE id = $1`, [lead.id]);
+      skipped++; continue;
+    }
+    // Skip emails from obvious non-Quebec domains (international news, tech companies, etc.)
+    if (emailAddr && (
+      emailAddr.endsWith('.png') || emailAddr.endsWith('.jpg') ||
+      emailAddr.includes('sentry.io') || emailAddr.includes('pinterest.com') ||
+      emailAddr.includes('noreply') || emailAddr.includes('no-reply') ||
+      emailAddr.includes('unsubscribe') || emailAddr.includes('mailer-daemon')
+    )) {
+      await query(`UPDATE crm_leads SET statut = 'perdu', updated_at = NOW() WHERE id = $1`, [lead.id]);
+      skipped++; continue;
+    }
+    // Skip if name is too short (1-2 chars) or just numbers
+    if (nom.length < 3 || /^\d+$/.test(nom)) {
+      await query(`UPDATE crm_leads SET statut = 'perdu', updated_at = NOW() WHERE id = $1`, [lead.id]);
+      skipped++; continue;
+    }
+
     const prenom = getPrenom(lead.nom);
     const project = lead.service || lead.notes?.split('—')[0] || '';
     const isCommercial = lead.type === 'commercial';
