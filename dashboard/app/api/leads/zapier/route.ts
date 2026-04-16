@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
-import { isQuietHours } from '@/lib/telegram-utils';
 
 // POST /api/leads/zapier — receives Facebook leads forwarded by Zapier
 // Auth: header x-api-key must match ZAPIER_API_KEY (or ADMIN_API_KEY as fallback)
@@ -128,70 +127,64 @@ export async function POST(req: NextRequest) {
     ],
   ).catch(() => {});
 
-  // Only notify + trigger Aria for NEW leads (not duplicates)
+  // Only notify for NEW leads (not duplicates)
+  // NOTE: Aria auto-contact intentionally DISABLED — Luca/Jason will contact leads personally
   if (newLeadId) {
-    // Telegram notification
-    if (!isQuietHours()) {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
-      if (botToken && chatIds.length > 0) {
-        const lines = [
-          `🔥 <b>Nouveau lead Facebook!</b> (via Zapier)`,
-          ``,
-          `👤 ${escapeHtml(nom)}`,
-          email ? `📧 ${escapeHtml(email)}` : '',
-          telephone ? `📞 ${escapeHtml(telephone)}` : '',
-          espace ? `🏗 ${escapeHtml(espace)}` : '',
-          service ? `🔧 ${escapeHtml(service)}` : '',
-          superficie ? `📐 ${escapeHtml(superficie)} pi²` : '',
-          adresse ? `🏠 ${escapeHtml(adresse)}` : '',
-          adName ? `📢 ${escapeHtml(adName)}` : '',
-          ``,
-          `<i>Aria va le contacter automatiquement.</i>`,
-        ].filter(Boolean);
+    // Telegram notification — bypass quiet hours for FB leads (urgent, real-time)
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+    if (botToken && chatIds.length > 0) {
+      const lines = [
+        `🔥 <b>NOUVEAU LEAD FACEBOOK!</b>`,
+        `<b>⚡ Contacte-le ASAP — premier rendu gagne!</b>`,
+        ``,
+        `👤 ${escapeHtml(nom)}`,
+        email ? `📧 <code>${escapeHtml(email)}</code>` : '',
+        telephone ? `📞 <a href="tel:${escapeHtml(telephone)}">${escapeHtml(telephone)}</a>` : '',
+        espace ? `🏗 ${escapeHtml(espace)}` : '',
+        service ? `🔧 ${escapeHtml(service)}` : '',
+        superficie ? `📐 ${escapeHtml(superficie)} pi²` : '',
+        adresse ? `🏠 ${escapeHtml(adresse)}` : '',
+        adName ? `📢 Pub: ${escapeHtml(adName)}` : '',
+      ].filter(Boolean);
 
-        const buttons = {
-          inline_keyboard: [[
-            { text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' },
-          ]],
-        };
+      const buttons: Record<string, unknown> = { inline_keyboard: [] };
+      const row1: Record<string, string>[] = [];
+      if (telephone) row1.push({ text: '📞 Appeler', url: `tel:${telephone}` });
+      if (telephone) row1.push({ text: '💬 SMS', url: `sms:${telephone}` });
+      if (row1.length > 0) (buttons.inline_keyboard as unknown[]).push(row1);
+      (buttons.inline_keyboard as unknown[]).push([
+        { text: '📋 Voir dans CRM', url: `https://novus-epoxy.vercel.app/dashboard/crm` },
+      ]);
 
-        await Promise.all(chatIds.map(chatId =>
-          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: chatId.trim(),
-              text: lines.join('\n'),
-              parse_mode: 'HTML',
-              reply_markup: buttons,
-            }),
-          }).catch(() => {})
-        ));
-      }
+      await Promise.all(chatIds.map(chatId =>
+        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId.trim(),
+            text: lines.join('\n'),
+            parse_mode: 'HTML',
+            reply_markup: buttons,
+          }),
+        }).catch(() => {})
+      ));
     }
 
-    // SMS to Luca + Jason (respects quiet hours)
-    const smsMsg = `🔥 Nouveau lead Facebook! ${nom}${email ? ' - ' + email : ''}${telephone ? ' - ' + telephone : ''} — Aria va le contacter auto.`;
+    // SMS to Luca + Jason (sendSMS respects 8h-21h quiet hours internally)
+    const smsLines = [
+      `🔥 LEAD FB! Contacte ASAP!`,
+      nom,
+      telephone ? `📞 ${telephone}` : '',
+      email ? `📧 ${email}` : '',
+      service ? `Service: ${service}` : '',
+      espace ? `Espace: ${espace}` : '',
+    ].filter(Boolean);
+    const smsMsg = smsLines.join(' | ');
     const adminPhone = process.env.ADMIN_PHONE;
     const jasonPhone = process.env.JASON_PHONE;
     if (adminPhone) sendSMS(adminPhone, smsMsg).catch(() => {});
     if (jasonPhone) sendSMS(jasonPhone, smsMsg).catch(() => {});
-
-    // Trigger Aria immediately
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-      ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://novus-epoxy.vercel.app');
-    const adminKey = process.env.ADMIN_API_KEY;
-    if (adminKey) {
-      fetch(`${baseUrl}/api/leads/jason/prospect`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': adminKey,
-        },
-        body: JSON.stringify({ leadId: newLeadId }),
-      }).catch(err => console.error('[Zapier] Failed to trigger Aria:', err));
-    }
   }
 
   return NextResponse.json({
