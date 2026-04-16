@@ -131,8 +131,11 @@ export async function POST(req: NextRequest) {
   // NOTE: Aria auto-contact intentionally DISABLED — Luca/Jason will contact leads personally
   if (newLeadId) {
     // Telegram notification — bypass quiet hours for FB leads (urgent, real-time)
+    // Send to group + individual admin chats (group is primary, fallback to individual if missing)
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+    const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+    const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+    const chatIds = [groupId, ...adminIds].filter(Boolean);
     if (botToken && chatIds.length > 0) {
       const lines = [
         `🔥 <b>NOUVEAU LEAD FACEBOOK!</b>`,
@@ -162,7 +165,7 @@ export async function POST(req: NextRequest) {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            chat_id: chatId.trim(),
+            chat_id: chatId,
             text: lines.join('\n'),
             parse_mode: 'HTML',
             reply_markup: buttons,
