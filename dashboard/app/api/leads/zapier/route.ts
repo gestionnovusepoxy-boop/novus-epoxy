@@ -161,27 +161,34 @@ export async function POST(req: NextRequest) {
         adName ? `📢 Pub: ${escapeHtml(adName)}` : '',
       ].filter(Boolean);
 
-      const buttons: Record<string, unknown> = { inline_keyboard: [] };
-      const row1: Record<string, string>[] = [];
-      if (telephone) row1.push({ text: '📞 Appeler', url: `tel:${telephone}` });
-      if (telephone) row1.push({ text: '💬 SMS', url: `sms:${telephone}` });
-      if (row1.length > 0) (buttons.inline_keyboard as unknown[]).push(row1);
-      (buttons.inline_keyboard as unknown[]).push([
-        { text: '📋 Voir dans CRM', url: `https://novus-epoxy.vercel.app/dashboard/crm` },
-      ]);
+      // Note: Telegram inline keyboards don't support tel:/sms: URLs (rejected as invalid).
+      // Phone number is already clickable in the <a href="tel:..."> inside the message text on mobile.
+      const buttons: Record<string, unknown> = {
+        inline_keyboard: [[
+          { text: '📋 Voir dans CRM', url: `https://novus-epoxy.vercel.app/dashboard/crm` },
+        ]],
+      };
 
-      await Promise.all(chatIds.map(chatId =>
-        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: lines.join('\n'),
-            parse_mode: 'HTML',
-            reply_markup: buttons,
-          }),
-        }).catch(() => {})
-      ));
+      await Promise.all(chatIds.map(async (chatId) => {
+        try {
+          const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: lines.join('\n'),
+              parse_mode: 'HTML',
+              reply_markup: buttons,
+            }),
+          });
+          if (!r.ok) {
+            const err = await r.text();
+            console.error(`[zapier] Telegram ${chatId} failed: ${r.status} ${err}`);
+          }
+        } catch (e) {
+          console.error(`[zapier] Telegram ${chatId} exception:`, e);
+        }
+      }));
     }
 
     // SMS to Luca + Jason (sendSMS respects 8h-21h quiet hours internally)
