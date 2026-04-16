@@ -74,28 +74,46 @@ export async function POST(req: NextRequest) {
   ].filter(Boolean);
   const notes = noteParts.join(' — ');
 
-  // --- Insert into crm_leads (dedupe by email) ---
-  const crmResult = await query(
-    `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, source, statut, temperature, notes, type)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-     ON CONFLICT (email) DO NOTHING
-     RETURNING id`,
-    [
-      nom,
-      email || null,
-      telephone,
-      service,
-      superficie,
-      ville,
-      'facebook-zapier',
-      'nouveau',
-      'chaud', // FB leads are always warm by default
-      notes,
-      'residential',
-    ],
-  );
+  // --- Manual dedupe check (partial unique index doesn't work with ON CONFLICT) ---
+  let existingLead: { id: number } | null = null;
+  if (email) {
+    const dupRows = await query(
+      `SELECT id FROM crm_leads WHERE LOWER(email) = LOWER($1) LIMIT 1`,
+      [email],
+    );
+    if (dupRows.length > 0) existingLead = dupRows[0] as { id: number };
+  } else if (telephone) {
+    const dupRows = await query(
+      `SELECT id FROM crm_leads WHERE telephone = $1 LIMIT 1`,
+      [telephone],
+    );
+    if (dupRows.length > 0) existingLead = dupRows[0] as { id: number };
+  }
 
-  const newLeadId = (crmResult?.[0] as { id?: number } | undefined)?.id;
+  let newLeadId: number | undefined;
+  if (existingLead) {
+    newLeadId = undefined; // duplicate — skip insert
+  } else {
+    const crmResult = await query(
+      `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, source, statut, temperature, notes, type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       RETURNING id`,
+      [
+        nom,
+        email || null,
+        telephone,
+        service,
+        superficie,
+        ville,
+        'facebook-zapier',
+        'nouveau',
+        'chaud',
+        notes,
+        'residential',
+      ],
+    );
+    newLeadId = (crmResult?.[0] as { id?: number } | undefined)?.id;
+  }
 
   // Also insert into submissions (backwards compat)
   await query(
@@ -178,7 +196,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    lead_id: newLeadId ?? null,
+    lead_id: newLeadId ?? existingLead?.id ?? null,
     duplicate: !newLeadId,
     nom,
     email,
