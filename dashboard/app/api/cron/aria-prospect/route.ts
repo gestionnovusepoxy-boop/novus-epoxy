@@ -86,12 +86,12 @@ export async function GET(req: NextRequest) {
   const smsSent = Number(result.sms ?? 0);
 
   // Check how many are still pending
-  const remaining = await query(
+  const pendingRes = await query(
     `SELECT COUNT(*)::int as c FROM crm_leads WHERE statut = 'nouveau' AND prospect_sent_at IS NULL AND (
       (email IS NOT NULL AND email != '') OR (telephone IS NOT NULL AND telephone != '')
     )`
   );
-  const remainingCount = (remaining[0]?.c as number) || 0;
+  const remainingCount = (pendingRes[0]?.c as number) || 0;
 
   // Get deliverability stats for today
   const todayStats = await query(`
