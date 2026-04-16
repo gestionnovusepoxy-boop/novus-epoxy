@@ -1,0 +1,197 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { query } from '@/lib/db';
+import { sendSMS } from '@/lib/sms';
+import { escapeHtml } from '@/lib/utils';
+import { isQuietHours } from '@/lib/telegram-utils';
+
+// POST /api/leads/zapier — receives Facebook leads forwarded by Zapier
+// Auth: header x-api-key must match ZAPIER_API_KEY (or ADMIN_API_KEY as fallback)
+// Payload (flexible — Zapier can map any FB form fields):
+// {
+//   nom? / full_name? / name? : string
+//   email? : string
+//   telephone? / phone? / phone_number? : string
+//   service? / type_service? : string
+//   espace? / location? : string
+//   superficie? / surface? : string
+//   ville? / city? : string
+//   adresse? / address? : string
+//   message? / notes? : string
+//   ad_name? / campaign? : string
+//   form_name? : string
+//   leadgen_id? / lead_id? : string
+// }
+export async function POST(req: NextRequest) {
+  // --- Auth via API key ---
+  const apiKey = req.headers.get('x-api-key') ?? req.nextUrl.searchParams.get('api_key');
+  const expected = process.env.ZAPIER_API_KEY ?? process.env.ADMIN_API_KEY;
+  if (!expected || apiKey !== expected) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let body: any;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  // --- Flexible field mapping ---
+  const nom = (body.nom ?? body.full_name ?? body.name
+    ?? [body.first_name, body.last_name].filter(Boolean).join(' ')
+    ?? 'Lead Facebook').toString().trim().slice(0, 120);
+
+  const email = (body.email ?? '').toString().trim().toLowerCase().slice(0, 255);
+  const telephoneRaw = (body.telephone ?? body.phone ?? body.phone_number ?? '').toString();
+  const telephone = telephoneRaw.replace(/\D/g, '').slice(-10) || null;
+
+  const service  = (body.service ?? body.type_service ?? '').toString().slice(0, 120) || null;
+  const espace   = (body.espace ?? body.location ?? '').toString().slice(0, 120) || null;
+  const superficie = (body.superficie ?? body.surface ?? '').toString().slice(0, 50) || null;
+  const ville    = (body.ville ?? body.city ?? '').toString().slice(0, 120) || null;
+  const adresse  = (body.adresse ?? body.address ?? '').toString().slice(0, 255) || null;
+  const msg      = (body.message ?? body.notes ?? '').toString().slice(0, 1000) || null;
+  const adName   = (body.ad_name ?? body.campaign ?? '').toString().slice(0, 200) || null;
+  const formName = (body.form_name ?? '').toString().slice(0, 200) || null;
+  const leadId   = (body.leadgen_id ?? body.lead_id ?? '').toString().slice(0, 100) || null;
+
+  // Need at least email OR telephone to proceed
+  if (!email && !telephone) {
+    return NextResponse.json({ error: 'email or telephone required' }, { status: 400 });
+  }
+
+  // --- Build notes blob ---
+  const noteParts = [
+    leadId ? `Lead FB #${leadId}` : 'Lead Facebook (Zapier)',
+    adName ? `Ad: ${adName}` : null,
+    formName ? `Form: ${formName}` : null,
+    espace ? `Espace: ${espace}` : null,
+    service ? `Service: ${service}` : null,
+    superficie ? `Superficie: ${superficie}` : null,
+    adresse ? `Adresse: ${adresse}` : null,
+    msg ? `Message: ${msg}` : null,
+  ].filter(Boolean);
+  const notes = noteParts.join(' — ');
+
+  // --- Insert into crm_leads (dedupe by email) ---
+  const crmResult = await query(
+    `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, source, statut, temperature, notes, type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (email) DO NOTHING
+     RETURNING id`,
+    [
+      nom,
+      email || null,
+      telephone,
+      service,
+      superficie,
+      ville,
+      'facebook-zapier',
+      'nouveau',
+      'chaud', // FB leads are always warm by default
+      notes,
+      'residential',
+    ],
+  );
+
+  const newLeadId = (crmResult?.[0] as { id?: number } | undefined)?.id;
+
+  // Also insert into submissions (backwards compat)
+  await query(
+    `INSERT INTO submissions (nom, email, telephone, service, message, statut)
+     VALUES ($1, $2, $3, $4, $5, 'nouveau')`,
+    [
+      nom,
+      email || 'no-email@facebook.lead',
+      telephone,
+      'Facebook Lead Ad (Zapier)',
+      notes,
+    ],
+  ).catch(() => {});
+
+  // Only notify + trigger Aria for NEW leads (not duplicates)
+  if (newLeadId) {
+    // Telegram notification
+    if (!isQuietHours()) {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+      if (botToken && chatIds.length > 0) {
+        const lines = [
+          `🔥 <b>Nouveau lead Facebook!</b> (via Zapier)`,
+          ``,
+          `👤 ${escapeHtml(nom)}`,
+          email ? `📧 ${escapeHtml(email)}` : '',
+          telephone ? `📞 ${escapeHtml(telephone)}` : '',
+          espace ? `🏗 ${escapeHtml(espace)}` : '',
+          service ? `🔧 ${escapeHtml(service)}` : '',
+          superficie ? `📐 ${escapeHtml(superficie)} pi²` : '',
+          adresse ? `🏠 ${escapeHtml(adresse)}` : '',
+          adName ? `📢 ${escapeHtml(adName)}` : '',
+          ``,
+          `<i>Aria va le contacter automatiquement.</i>`,
+        ].filter(Boolean);
+
+        const buttons = {
+          inline_keyboard: [[
+            { text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' },
+          ]],
+        };
+
+        await Promise.all(chatIds.map(chatId =>
+          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId.trim(),
+              text: lines.join('\n'),
+              parse_mode: 'HTML',
+              reply_markup: buttons,
+            }),
+          }).catch(() => {})
+        ));
+      }
+    }
+
+    // SMS to Luca + Jason (respects quiet hours)
+    const smsMsg = `🔥 Nouveau lead Facebook! ${nom}${email ? ' - ' + email : ''}${telephone ? ' - ' + telephone : ''} — Aria va le contacter auto.`;
+    const adminPhone = process.env.ADMIN_PHONE;
+    const jasonPhone = process.env.JASON_PHONE;
+    if (adminPhone) sendSMS(adminPhone, smsMsg).catch(() => {});
+    if (jasonPhone) sendSMS(jasonPhone, smsMsg).catch(() => {});
+
+    // Trigger Aria immediately
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+      ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://novus-epoxy.vercel.app');
+    const adminKey = process.env.ADMIN_API_KEY;
+    if (adminKey) {
+      fetch(`${baseUrl}/api/leads/jason/prospect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': adminKey,
+        },
+        body: JSON.stringify({ leadId: newLeadId }),
+      }).catch(err => console.error('[Zapier] Failed to trigger Aria:', err));
+    }
+  }
+
+  return NextResponse.json({
+    ok: true,
+    lead_id: newLeadId ?? null,
+    duplicate: !newLeadId,
+    nom,
+    email,
+    telephone,
+  });
+}
+
+// Healthcheck for Zapier "test connection"
+export async function GET(req: NextRequest) {
+  const apiKey = req.headers.get('x-api-key') ?? req.nextUrl.searchParams.get('api_key');
+  const expected = process.env.ZAPIER_API_KEY ?? process.env.ADMIN_API_KEY;
+  if (!expected || apiKey !== expected) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  return NextResponse.json({ ok: true, endpoint: 'zapier-leads', version: 1 });
+}

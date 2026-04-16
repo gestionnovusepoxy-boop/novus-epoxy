@@ -148,6 +148,15 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
+  // Zapier inbound leads webhook
+  if (pathname === '/api/leads/zapier') {
+    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
+    if (isRateLimited(`zapier:${ip}`, 120, 60_000)) {
+      return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
+    }
+    return NextResponse.next();
+  }
+
   // Telegram admin bot webhook
   if (pathname === '/api/telegram/admin' && req.method === 'POST') {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
@@ -204,5 +213,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/upload', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis', '/api/sms/incoming', '/api/quotes/:path*', '/api/stripe/webhook'],
+  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/upload', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis', '/api/sms/incoming', '/api/quotes/:path*', '/api/stripe/webhook', '/api/leads/zapier'],
 };
