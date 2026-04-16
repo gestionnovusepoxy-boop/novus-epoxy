@@ -130,6 +130,16 @@ export async function POST(req: NextRequest) {
   // Only notify for NEW leads (not duplicates)
   // NOTE: Aria auto-contact intentionally DISABLED — Luca/Jason will contact leads personally
   if (newLeadId) {
+    // Build a one-line description summarizing the lead
+    const descParts: string[] = [];
+    if (espace) descParts.push(espace);
+    if (superficie) descParts.push(`${superficie} pi²`);
+    if (service) descParts.push(service);
+    if (ville) descParts.push(`à ${ville}`);
+    const summary = descParts.length > 0
+      ? descParts.join(' • ')
+      : (msg ? msg.slice(0, 120) : 'Nouveau lead — détails dans CRM');
+
     // Telegram notification — bypass quiet hours for FB leads (urgent, real-time)
     // Send to group + individual admin chats (group is primary, fallback to individual if missing)
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -141,13 +151,13 @@ export async function POST(req: NextRequest) {
         `🔥 <b>NOUVEAU LEAD FACEBOOK!</b>`,
         `<b>⚡ Contacte-le ASAP — premier rendu gagne!</b>`,
         ``,
+        `📝 <i>${escapeHtml(summary)}</i>`,
+        ``,
         `👤 ${escapeHtml(nom)}`,
         email ? `📧 <code>${escapeHtml(email)}</code>` : '',
         telephone ? `📞 <a href="tel:${escapeHtml(telephone)}">${escapeHtml(telephone)}</a>` : '',
-        espace ? `🏗 ${escapeHtml(espace)}` : '',
-        service ? `🔧 ${escapeHtml(service)}` : '',
-        superficie ? `📐 ${escapeHtml(superficie)} pi²` : '',
         adresse ? `🏠 ${escapeHtml(adresse)}` : '',
+        msg && descParts.length > 0 ? `💬 <i>${escapeHtml(msg.slice(0, 200))}</i>` : '',
         adName ? `📢 Pub: ${escapeHtml(adName)}` : '',
       ].filter(Boolean);
 
@@ -176,12 +186,11 @@ export async function POST(req: NextRequest) {
 
     // SMS to Luca + Jason (sendSMS respects 8h-21h quiet hours internally)
     const smsLines = [
-      `🔥 LEAD FB! Contacte ASAP!`,
+      `🔥 LEAD FB - Contacte ASAP!`,
       nom,
+      summary,
       telephone ? `📞 ${telephone}` : '',
       email ? `📧 ${email}` : '',
-      service ? `Service: ${service}` : '',
-      espace ? `Espace: ${espace}` : '',
     ].filter(Boolean);
     const smsMsg = smsLines.join(' | ');
     const adminPhone = process.env.ADMIN_PHONE;
