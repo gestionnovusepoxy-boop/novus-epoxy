@@ -11,7 +11,8 @@ import type { EventResizeDoneArg } from '@fullcalendar/interaction';
 import frLocaleBase from '@fullcalendar/core/locales/fr-ca';
 
 // Override firstDay to Sunday (fr-ca defaults to Monday)
-const frLocale = { ...frLocaleBase, week: { ...frLocaleBase.week, dow: 0 } };
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const frLocale = { ...frLocaleBase, week: { ...(frLocaleBase as any).week, dow: 0 } };
 
 interface Booking {
   id: number;
