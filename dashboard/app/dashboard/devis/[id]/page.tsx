@@ -351,35 +351,64 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       {/* Detail projet */}
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">
         <h3 className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-4">Projet</h3>
-        <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-          <div>
-            <p className="text-slate-500">Service</p>
-            <p className="text-white font-medium">{service.label}</p>
-          </div>
-          <div>
-            <p className="text-slate-500">Superficie</p>
-            <p className="text-white">{quote.superficie} pi²</p>
-          </div>
+        <div className="space-y-3 text-sm mb-4">
+          {/* Show items if available, otherwise show single service */}
+          {quote.items && quote.items.length > 0 ? (
+            <>
+              <p className="text-slate-500 text-xs uppercase">Services</p>
+              {quote.items.map((item, idx) => (
+                <div key={idx} className="flex justify-between bg-slate-900/50 rounded-lg px-3 py-2">
+                  <span className="text-white font-medium">{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service}</span>
+                  <span className="text-slate-300">{Number(item.superficie)} pi² @ {formatMoney(Number(item.prix_pied_carre))}/pi²</span>
+                </div>
+              ))}
+            </>
+          ) : (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <p className="text-slate-500">Service</p>
+                <p className="text-white font-medium">{service.label}</p>
+              </div>
+              <div>
+                <p className="text-slate-500">Superficie</p>
+                <p className="text-white">{quote.superficie} pi²</p>
+              </div>
+            </div>
+          )}
+
+          {/* Show extras if available */}
+          {quote.extras && quote.extras.length > 0 && (
+            <>
+              <p className="text-slate-500 text-xs uppercase mt-3">Extras</p>
+              {quote.extras.map((ex, idx) => (
+                <div key={idx} className="flex justify-between bg-slate-900/50 rounded-lg px-3 py-2">
+                  <span className="text-white">{ex.description} {Number(ex.quantite) > 1 ? `x${ex.quantite}` : ''}</span>
+                  <span className="text-slate-300">{formatMoney(Number(ex.sous_total))}</span>
+                </div>
+              ))}
+            </>
+          )}
+
           {quote.etat_plancher && (
-            <div className="col-span-2">
+            <div>
               <p className="text-slate-500">Etat du plancher</p>
               <p className="text-white">{quote.etat_plancher}</p>
             </div>
           )}
           {quote.couleur_flake && (
-            <div className="col-span-2">
+            <div>
               <p className="text-slate-500">Couleur de flake</p>
               <p className="text-white font-medium">{quote.couleur_flake}</p>
             </div>
           )}
           {quote.description_travaux && (
-            <div className="col-span-2">
+            <div>
               <p className="text-slate-500">Description des travaux</p>
               <p className="text-white whitespace-pre-line">{quote.description_travaux}</p>
             </div>
           )}
           {quote.notes && (
-            <div className="col-span-2">
+            <div>
               <p className="text-slate-500">Notes</p>
               <p className="text-white">{quote.notes}</p>
             </div>
@@ -391,22 +420,39 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       <div className="bg-slate-800 border border-amber-500/30 rounded-xl p-6">
         <h3 className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-4">Prix</h3>
         <div className="space-y-3 text-sm">
-          <div className="flex justify-between text-slate-300">
-            <span>{service.label} x {quote.superficie} pi² @ {formatMoney(Number(quote.prix_pied_carre))}/pi²</span>
-            <span>{formatMoney(Math.round(Number(quote.prix_pied_carre) * Number(quote.superficie) * 100) / 100)}</span>
-          </div>
+          {/* Show items breakdown if available */}
+          {quote.items && quote.items.length > 0 ? (
+            quote.items.map((item, idx) => (
+              <div key={idx} className="flex justify-between text-slate-300">
+                <span>{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service} x {Number(item.superficie)} pi²</span>
+                <span>{formatMoney(Number(item.sous_total))}</span>
+              </div>
+            ))
+          ) : (
+            <div className="flex justify-between text-slate-300">
+              <span>{service.label} x {quote.superficie} pi² @ {formatMoney(Number(quote.prix_pied_carre))}/pi²</span>
+              <span>{formatMoney(Math.round(Number(quote.prix_pied_carre) * Number(quote.superficie) * 100) / 100)}</span>
+            </div>
+          )}
+
+          {/* Extras in price breakdown */}
+          {quote.extras && quote.extras.map((ex, idx) => (
+            <div key={idx} className="flex justify-between text-slate-300">
+              <span>{ex.description} {Number(ex.quantite) > 1 ? `x${ex.quantite}` : ''}</span>
+              <span>{formatMoney(Number(ex.sous_total))}</span>
+            </div>
+          ))}
+
           {Number(quote.rabais_pct) > 0 && (
             <div className="flex justify-between text-green-400 font-medium">
-              <span>Rabais Avril {quote.rabais_pct}%</span>
+              <span>Rabais {quote.rabais_pct}%</span>
               <span>-{formatMoney(Number(quote.rabais_montant))}</span>
             </div>
           )}
-          {Number(quote.rabais_pct) > 0 && (
-            <div className="flex justify-between text-slate-300">
-              <span>Sous-total</span>
-              <span>{formatMoney(Number(quote.sous_total))}</span>
-            </div>
-          )}
+          <div className="flex justify-between text-slate-300 pt-1 border-t border-slate-700">
+            <span>Sous-total</span>
+            <span>{formatMoney(Number(quote.sous_total))}</span>
+          </div>
           <div className="flex justify-between text-slate-400">
             <span>TPS (5%)</span>
             <span>{formatMoney(Number(quote.tps))}</span>
@@ -474,6 +520,19 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex justify-between">
               <span className="text-slate-400">Solde paye le</span>
               <span className="text-emerald-400">{formatDate((quote as unknown as Record<string, unknown>).balance_paid_at as string)}</span>
+            </div>
+          )}
+          {!!(quote as unknown as Record<string, unknown>).stripe_deposit_session_id && (
+            <div className="mt-3 pt-3 border-t border-slate-700">
+              <a
+                href={`https://dashboard.stripe.com/payments/${(quote as unknown as Record<string, unknown>).stripe_deposit_session_id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-indigo-500/20 border border-indigo-500/30 text-indigo-300 hover:text-indigo-200 hover:bg-indigo-500/30 px-3 py-2 rounded-lg text-sm font-medium transition"
+              >
+                <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z"/></svg>
+                Voir sur Stripe
+              </a>
             </div>
           )}
         </div>
