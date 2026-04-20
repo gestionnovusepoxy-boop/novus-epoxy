@@ -6,17 +6,17 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 interface ActivityData {
-  marcel?:  { messages: number; label: string };
+  marcel?:  { messages: number; total_devis: number; total_leads: number; total_convos: number; total_emails: number; label: string };
   hunter?:  { chauds: number; tiedes: number; froids: number; nouveaux: number; total_leads: number; prospects_envoyes: number; prospects_semaine: number; last_action: string | null };
   aria?:    { emails_today: number; total_envoyes: number; ouverts: number; cliques: number; semaine: number; last_action: string | null; leads_importes_today: number; closer_today: number; suivis_semaine: number; reponses_semaine: number; offres_today: number };
-  rex?:     { devis_today: number; en_attente: number; envoyes: number; total: number };
-  iris?:    { confirmes: string; pipeline: string; actifs: number };
+  rex?:     { devis_today: number; en_attente: number; envoyes: number; total_sent: number; total: number; sms_relances: number; sms_semaine: number };
+  iris?:    { confirmes: string; pipeline: string; depots: string; depenses: string; profit: string; actifs: number; total_devis: number; total_factures: number; factures_envoyees: number };
   sage?:    { total_photos: number; total_videos: number; featured: number; total_items: number; last_scan: string | null };
-  zara?:    { a_venir: number; confirmees_today: number; total_confirmes: number; prochain: string | null };
-  bolt?:    { notifications: number };
-  echo?:    { env_ok: number; env_total: number; env_missing: string[] };
-  nova?:    { today: number; en_attente: number; devis_today: number; total_devis: number; total_convos: number };
-  jason?:   { total_leads: number; chauds: number; emails_envoyes: number; relances: number; convertis: number; leads_semaine: number };
+  zara?:    { a_venir: number; confirmees_today: number; total_confirmes: number; en_attente: number; prochain: string | null; total_bookings: number };
+  bolt?:    { notifications: number; last_action: string | null };
+  echo?:    { env_ok: number; env_total: number; env_missing: string[]; last_check: string | null };
+  nova?:    { today: number; en_attente: number; devis_today: number; total_devis: number; total_convos: number; total_messages: number; messages_today: number; reponses_ia: number };
+  jason?:   { total_leads: number; chauds: number; emails_envoyes: number; relances: number; convertis: number; leads_semaine: number; total_prospect_emails: number; emails_semaine: number };
   health?:  Record<string, 'green' | 'yellow' | 'red'>;
 }
 
@@ -220,10 +220,16 @@ function getConseil(id: AgentId, activity: ActivityData): string {
   }
 
   switch (id) {
-    case 'marcel':
-      return activity.marcel?.messages
-        ? `${activity.marcel.messages} messages en mémoire partagée`
-        : 'Demande-moi n\'importe quoi!';
+    case 'marcel': {
+      const m = activity.marcel;
+      if (!m) return 'Demande-moi n\'importe quoi!';
+      const parts = [];
+      if (m.total_devis > 0) parts.push(`${m.total_devis} devis`);
+      if (m.total_leads > 0) parts.push(`${m.total_leads} leads`);
+      if (m.total_emails > 0) parts.push(`${m.total_emails} emails`);
+      if (parts.length > 0) return parts.join(' · ') + (m.messages > 0 ? ` · ${m.messages} msgs en memoire` : '');
+      return m.messages > 0 ? `${m.messages} messages en memoire partagee` : 'Demande-moi n\'importe quoi!';
+    }
     case 'hunter': {
       const h = activity.hunter;
       if (!h) return 'Score tes leads maintenant';
@@ -245,16 +251,25 @@ function getConseil(id: AgentId, activity: ActivityData): string {
     }
     case 'rex': {
       const r = activity.rex;
-      if (!r) return 'Génère des relances SMS';
-      if (r.en_attente > 0) return `${r.en_attente} devis en attente — relance par SMS!`;
-      if (r.devis_today > 0) return `${r.devis_today} devis créé${r.devis_today > 1 ? 's' : ''} aujourd'hui · ${r.envoyes} envoyés`;
-      return `${r.total} devis au total · ${r.envoyes} envoyés`;
+      if (!r) return 'Genere des relances SMS';
+      if (r.en_attente > 0) return `${r.en_attente} devis en attente — relance par SMS!${r.sms_relances > 0 ? ` · ${r.sms_relances} relances envoyees` : ''}`;
+      if (r.devis_today > 0) return `${r.devis_today} devis cree${r.devis_today > 1 ? 's' : ''} aujourd'hui · ${r.envoyes} envoyes`;
+      const parts = [];
+      if (r.total > 0) parts.push(`${r.total} devis au total`);
+      if (r.envoyes > 0) parts.push(`${r.envoyes} envoyes`);
+      if (r.sms_relances > 0) parts.push(`${r.sms_relances} relances SMS`);
+      return parts.length > 0 ? parts.join(' · ') : 'Aucun devis pour le moment';
     }
     case 'iris': {
       const i = activity.iris;
       if (!i) return 'Analyse tes finances';
-      if (i.actifs > 0) return `${i.actifs} devis actifs · Pipeline: ${i.pipeline}`;
-      return `Revenus confirmés: ${i.confirmes}`;
+      const parts = [];
+      if (i.confirmes !== '0$') parts.push(`Revenus: ${i.confirmes}`);
+      if (i.profit !== '0$') parts.push(`Profit: ${i.profit}`);
+      if (i.actifs > 0) parts.push(`${i.actifs} devis actifs`);
+      if (i.pipeline !== '0$') parts.push(`Pipeline: ${i.pipeline}`);
+      if (i.total_factures > 0) parts.push(`${i.total_factures} factures`);
+      return parts.length > 0 ? parts.join(' · ') : 'Aucune donnee financiere';
     }
     case 'sage': {
       const s = activity.sage;
@@ -271,14 +286,19 @@ function getConseil(id: AgentId, activity: ActivityData): string {
       }
       return z.a_venir > 0 ? `${z.a_venir} réservation${z.a_venir > 1 ? 's' : ''} à venir` : 'Aucune réservation planifiée';
     }
-    case 'bolt':
-      return 'Envoie un update à l\'équipe';
+    case 'bolt': {
+      const b = activity.bolt;
+      if (!b) return 'Envoie un update a l\'equipe';
+      if (b.notifications > 0) return `${b.notifications} notifications Telegram${b.last_action ? ` · Dernier: ${b.last_action}` : ''}`;
+      return 'Envoie un update a l\'equipe';
+    }
     case 'echo': {
       const e = activity.echo;
-      if (!e) return 'Vérifie le système';
+      if (!e) return 'Verifie le systeme';
       const missing = e.env_total - e.env_ok;
-      if (missing > 0) return `⚠️ ${missing} var${missing > 1 ? 's' : ''} manquante${missing > 1 ? 's' : ''}: ${e.env_missing?.join(', ')}`;
-      return `✅ ${e.env_ok}/${e.env_total} vars configurées — système opérationnel`;
+      const checkInfo = e.last_check ? ` · Check ${e.last_check}` : '';
+      if (missing > 0) return `${missing} var${missing > 1 ? 's' : ''} manquante${missing > 1 ? 's' : ''}: ${e.env_missing?.join(', ')}${checkInfo}`;
+      return `${e.env_ok}/${e.env_total} vars configurees — systeme operationnel${checkInfo}`;
     }
     case 'nova': {
       const n = activity.nova;
@@ -300,9 +320,15 @@ function getConseil(id: AgentId, activity: ActivityData): string {
 
 function getMetrics(id: AgentId, activity: ActivityData): { label: string; value: string }[] {
   switch (id) {
-    case 'marcel': return [
-      { label: 'Mémoire', value: `${activity.marcel?.messages ?? 0} msgs` },
-    ];
+    case 'marcel': {
+      const m = activity.marcel;
+      return [
+        { label: 'Devis', value: String(m?.total_devis ?? 0) },
+        { label: 'Leads', value: String(m?.total_leads ?? 0) },
+        { label: 'Emails', value: String(m?.total_emails ?? 0) },
+        { label: 'Memoire', value: `${m?.messages ?? 0} msgs` },
+      ];
+    }
     case 'hunter': {
       const h = activity.hunter;
       return [
@@ -323,17 +349,26 @@ function getMetrics(id: AgentId, activity: ActivityData): { label: string; value
         { label: 'Emails total', value: String(a?.total_envoyes ?? 0) },
       ];
     }
-    case 'rex': return [
-      { label: 'Devis envoyés', value: String(activity.rex?.envoyes ?? 0) },
-      { label: 'En attente', value: String(activity.rex?.en_attente ?? 0) },
-      { label: "Aujourd'hui", value: String(activity.rex?.devis_today ?? 0) },
-      { label: 'Total devis', value: String(activity.rex?.total ?? 0) },
-    ];
-    case 'iris': return [
-      { label: 'Confirmés', value: activity.iris?.confirmes ?? '0$' },
-      { label: 'Pipeline', value: activity.iris?.pipeline ?? '0$' },
-      { label: 'Devis actifs', value: String(activity.iris?.actifs ?? 0) },
-    ];
+    case 'rex': {
+      const r = activity.rex;
+      return [
+        { label: 'Devis envoyes', value: String(r?.envoyes ?? 0) },
+        { label: 'En attente', value: String(r?.en_attente ?? 0) },
+        { label: 'Relances SMS', value: String(r?.sms_relances ?? 0) },
+        { label: 'Total devis', value: String(r?.total ?? 0) },
+      ];
+    }
+    case 'iris': {
+      const i = activity.iris;
+      return [
+        { label: 'Revenus', value: i?.confirmes ?? '0$' },
+        { label: 'Pipeline', value: i?.pipeline ?? '0$' },
+        { label: 'Depenses', value: i?.depenses ?? '0$' },
+        { label: 'Profit', value: i?.profit ?? '0$' },
+        { label: 'Devis actifs', value: String(i?.actifs ?? 0) },
+        { label: 'Factures', value: String(i?.total_factures ?? 0) },
+      ];
+    }
     case 'sage': {
       const s = activity.sage;
       return [
@@ -349,14 +384,18 @@ function getMetrics(id: AgentId, activity: ActivityData): { label: string; value
         ? new Date(z.prochain).toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' })
         : '—';
       return [
-        { label: 'À venir', value: String(z?.a_venir ?? 0) },
-        { label: 'Confirmées', value: String(z?.total_confirmes ?? 0) },
+        { label: 'A venir', value: String(z?.a_venir ?? 0) },
+        { label: 'Confirmees', value: String(z?.total_confirmes ?? 0) },
+        { label: 'En attente', value: String(z?.en_attente ?? 0) },
         { label: 'Prochain job', value: prochainLabel },
       ];
     }
-    case 'bolt': return [
-      { label: 'Notifications', value: String(activity.bolt?.notifications ?? 0) },
-    ];
+    case 'bolt': {
+      const b = activity.bolt;
+      return [
+        { label: 'Notifications', value: String(b?.notifications ?? 0) },
+      ];
+    }
     case 'echo': {
       const e = activity.echo;
       const missing = (e?.env_missing?.length ?? 0);
@@ -370,8 +409,10 @@ function getMetrics(id: AgentId, activity: ActivityData): { label: string; value
       return [
         { label: "Aujourd'hui", value: String(n?.today ?? 0) },
         { label: 'Attente appro', value: String(n?.en_attente ?? 0) },
-        { label: 'Devis générés', value: String(n?.total_devis ?? 0) },
+        { label: 'Devis generes', value: String(n?.total_devis ?? 0) },
         { label: 'Total convos', value: String(n?.total_convos ?? 0) },
+        { label: 'Messages', value: String(n?.total_messages ?? 0) },
+        { label: 'Reponses IA', value: String(n?.reponses_ia ?? 0) },
       ];
     }
     case 'jason': {
@@ -379,8 +420,10 @@ function getMetrics(id: AgentId, activity: ActivityData): { label: string; value
       return [
         { label: 'Leads', value: String(j?.total_leads ?? 0) },
         { label: 'Chauds', value: String(j?.chauds ?? 0) },
-        { label: 'Emails envoyés', value: String(j?.emails_envoyes ?? 0) },
+        { label: 'Emails envoyes', value: String(j?.emails_envoyes ?? 0) },
+        { label: 'Relances', value: String(j?.relances ?? 0) },
         { label: 'Convertis', value: String(j?.convertis ?? 0) },
+        { label: 'Cette semaine', value: String(j?.leads_semaine ?? 0) },
       ];
     }
     default: return [];

@@ -15,17 +15,25 @@ export async function GET() {
 
   const [
     hunterStats,
-    hunterCampaigns,
+    hunterProspects,
     ariaStats,
     ariaLastAction,
-    rexStats,
-    irisStats,
+    rexQuoteStats,
+    rexSmsStats,
+    irisQuoteStats,
+    irisInvoiceStats,
+    irisExpenseStats,
     zaraStats,
     novaStats,
+    novaMessages,
     marcelHistory,
+    marcelOverview,
     sageStats,
     sageLastScan,
     jasonStats,
+    jasonEmailStats,
+    boltStats,
+    echoHealthCheck,
   ] = await Promise.all([
     // Hunter: leads par température + prospects envoyés
     safeQuery(`SELECT
@@ -35,12 +43,12 @@ export async function GET() {
       COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as nouveaux,
       COUNT(*) as total
       FROM crm_leads WHERE statut NOT IN ('ferme','perdu')`),
-    // Hunter: campagnes/prospects envoyés
+    // Hunter: prospects envoyés (from crm_leads directly, not lead_campaigns)
     safeQuery(`SELECT
-      COUNT(*) as total_campaigns,
-      COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as semaine,
-      MAX(created_at) as last_action
-      FROM lead_campaigns`),
+      COUNT(*) FILTER (WHERE prospect_sent_at IS NOT NULL) as total_prospects,
+      COUNT(*) FILTER (WHERE prospect_sent_at >= NOW() - INTERVAL '7 days') as semaine,
+      MAX(GREATEST(prospect_sent_at, updated_at)) as last_action
+      FROM crm_leads WHERE statut NOT IN ('ferme','perdu')`),
     // Aria: emails envoyés + ouverts + cliqués
     safeQuery(`SELECT
       COUNT(*) as total_envoyes,
@@ -58,25 +66,48 @@ export async function GET() {
       (SELECT COUNT(*) FROM crm_leads WHERE prospect_relance_1_at IS NOT NULL AND prospect_relance_1_at >= NOW() - INTERVAL '7 days') as suivis_semaine,
       (SELECT COUNT(*) FROM crm_leads WHERE statut = 'interesse' AND updated_at >= NOW() - INTERVAL '7 days') as reponses_semaine,
       (SELECT COUNT(*) FROM crm_leads WHERE prospect_sent_at IS NOT NULL AND prospect_sent_at::date = CURRENT_DATE) as offres_today`),
-    // Rex: devis en attente + envoyés
+    // Rex: devis en attente + envoyés (quote follow-ups)
     safeQuery(`SELECT
       COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as devis_today,
       COUNT(*) FILTER (WHERE statut IN ('brouillon','en_attente')) as en_attente,
       COUNT(*) FILTER (WHERE statut = 'envoye') as envoyes,
+      COUNT(*) FILTER (WHERE sent_at IS NOT NULL) as total_sent,
       COUNT(*) as total
       FROM quotes`),
-    // Iris: finances
+    // Rex: SMS count from email_logs (SMS notifications are logged there)
     safeQuery(`SELECT
-      COALESCE(SUM(total),0) FILTER (WHERE statut IN ('contrat_signe','depot_paye','planifie','complete')) as confirmes,
-      COALESCE(SUM(total),0) FILTER (WHERE statut = 'envoye') as pipeline,
-      COUNT(*) FILTER (WHERE statut IN ('en_attente','approuve','envoye')) as actifs
+      COUNT(*) FILTER (WHERE sujet ILIKE '%sms%' OR sujet ILIKE '%relance%') as sms_relances,
+      COUNT(*) FILTER (WHERE sujet ILIKE '%sms%' AND created_at >= NOW() - INTERVAL '7 days') as sms_semaine
+      FROM email_logs`),
+    // Iris: quote-based revenue (FIXED: FILTER goes on the aggregate, not COALESCE)
+    safeQuery(`SELECT
+      COALESCE(SUM(total) FILTER (WHERE statut IN ('contrat_signe','depot_paye','planifie','complete')), 0) as confirmes,
+      COALESCE(SUM(total) FILTER (WHERE statut = 'envoye'), 0) as pipeline,
+      COUNT(*) FILTER (WHERE statut IN ('en_attente','approuve','envoye')) as actifs,
+      COUNT(*) as total_devis
       FROM quotes`),
+    // Iris: invoice revenue
+    safeQuery(`SELECT
+      COALESCE(SUM(total), 0) as total_facture,
+      COALESCE(SUM(total) FILTER (WHERE statut IN ('completee','depot_recu','travaux_en_cours')), 0) as revenus_confirmes,
+      COALESCE(SUM(CASE WHEN depot_paye THEN depot_montant ELSE 0 END), 0) as depots_recus,
+      COUNT(*) as total_factures,
+      COUNT(*) FILTER (WHERE statut = 'envoyee') as factures_envoyees
+      FROM invoices`),
+    // Iris: expenses
+    safeQuery(`SELECT
+      COALESCE(SUM(montant_ttc), 0) as total_depenses,
+      COALESCE(SUM(montant_ttc) FILTER (WHERE date_depense >= date_trunc('month', CURRENT_DATE)), 0) as depenses_mois,
+      COUNT(*) as total_count
+      FROM expenses`),
     // Zara: bookings
     safeQuery(`SELECT
       COUNT(*) FILTER (WHERE jour1_date >= CURRENT_DATE) as a_venir,
       COUNT(*) FILTER (WHERE statut = 'confirme' AND created_at::date = CURRENT_DATE) as confirmees_today,
       COUNT(*) FILTER (WHERE statut = 'confirme') as total_confirmes,
-      MIN(jour1_date) FILTER (WHERE jour1_date >= CURRENT_DATE AND statut = 'confirme') as prochain
+      COUNT(*) FILTER (WHERE statut = 'en_attente') as en_attente,
+      MIN(jour1_date) FILTER (WHERE jour1_date >= CURRENT_DATE AND statut = 'confirme') as prochain,
+      COUNT(*) as total_bookings
       FROM bookings`),
     // Nova: conversations chatbot
     safeQuery(`SELECT
@@ -86,8 +117,20 @@ export async function GET() {
       COUNT(*) FILTER (WHERE quote_id IS NOT NULL) as total_devis,
       COUNT(*) as total_convos
       FROM conversations`),
+    // Nova: messages count
+    safeQuery(`SELECT
+      COUNT(*) as total_messages,
+      COUNT(*) FILTER (WHERE created_at::date = CURRENT_DATE) as messages_today,
+      COUNT(*) FILTER (WHERE role = 'assistant') as reponses_ia
+      FROM messages`),
     // Marcel: mémoire partagée
     safeQuery(`SELECT value FROM kv_store WHERE key = 'marcel_history_shared'`),
+    // Marcel: overview stats (total devis + leads + conversations managed)
+    safeQuery(`SELECT
+      (SELECT COUNT(*) FROM quotes) as total_devis,
+      (SELECT COUNT(*) FROM crm_leads) as total_leads,
+      (SELECT COUNT(*) FROM conversations) as total_convos,
+      (SELECT COUNT(*) FROM email_logs) as total_emails`),
     // Sage: portfolio stats
     safeQuery(`SELECT
       COUNT(*) as total_items,
@@ -108,17 +151,36 @@ export async function GET() {
       COUNT(*) FILTER (WHERE statut IN ('interesse','qualification','negocie','gagne')) as convertis,
       COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as leads_semaine
       FROM crm_leads WHERE source = 'jason'`),
+    // Jason: email stats for prospection
+    safeQuery(`SELECT
+      COUNT(*) as total_prospect_emails,
+      COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as emails_semaine
+      FROM email_logs WHERE sujet ILIKE '%prospect%' OR sujet ILIKE '%offre%'`),
+    // Bolt: Telegram notification count from kv_store
+    safeQuery(`SELECT
+      (SELECT value FROM kv_store WHERE key = 'telegram_msg_count') as msg_count,
+      (SELECT updated_at FROM kv_store WHERE key = 'telegram_msg_count') as last_telegram,
+      (SELECT COUNT(*) FROM kv_store WHERE key LIKE 'telegram_%') as telegram_entries`),
+    // Echo: last health check
+    safeQuery(`SELECT value, updated_at FROM kv_store WHERE key = 'last_health_check'`),
   ]);
 
   const h = hunterStats[0] as Record<string, string | number>;
-  const hc = hunterCampaigns[0] as Record<string, string | number>;
+  const hp = hunterProspects[0] as Record<string, string | number>;
   const a = ariaStats[0] as Record<string, string | number>;
-  const r = rexStats[0] as Record<string, string | number>;
-  const i = irisStats[0] as Record<string, string | number>;
+  const rq = rexQuoteStats[0] as Record<string, string | number>;
+  const rs = rexSmsStats[0] as Record<string, string | number>;
+  const iq = irisQuoteStats[0] as Record<string, string | number>;
+  const ii = irisInvoiceStats[0] as Record<string, string | number>;
+  const ie = irisExpenseStats[0] as Record<string, string | number>;
   const z = zaraStats[0] as Record<string, string | number>;
   const n = novaStats[0] as Record<string, string | number>;
+  const nm = novaMessages[0] as Record<string, string | number>;
   const sg = sageStats[0] as Record<string, string | number>;
   const js = jasonStats[0] as Record<string, string | number>;
+  const je = jasonEmailStats[0] as Record<string, string | number>;
+  const bt = boltStats[0] as Record<string, string | number>;
+  const mo = marcelOverview[0] as Record<string, string | number>;
 
   let marcelMsgCount = 0;
   try {
@@ -147,8 +209,24 @@ export async function GET() {
   // Health checks for live status
   const ariaExtra = ariaLastAction[0] as Record<string, string | number>;
   const ariaLastDate = ariaExtra?.last_email as string | undefined;
-  const hunterLastDate = hc.last_action as string | undefined;
+  const hunterLastDate = hp.last_action as string | undefined;
   const sageLastDate = sageLastScan[0]?.created_at as string | undefined;
+
+  // Determine last activity timestamps for all agents
+  const rexLastDate = rq.total ? undefined : undefined; // Rex is always-on if quotes exist
+  const novaLastConvo = n.today ? undefined : undefined; // checked via conversations
+  const echoLastCheck = echoHealthCheck[0]?.updated_at as string | undefined;
+
+  // Compute Iris revenue numbers
+  const irisConfirmes = Number(iq.confirmes ?? 0) + Number(ii.revenus_confirmes ?? 0);
+  const irisPipeline = Number(iq.pipeline ?? 0);
+  const irisDepots = Number(ii.depots_recus ?? 0);
+  const irisDepenses = Number(ie.total_depenses ?? 0);
+  const irisProfit = irisConfirmes - irisDepenses;
+
+  // Bolt message count
+  const boltMsgCount = Number(bt.msg_count ?? 0) || Number(bt.telegram_entries ?? 0);
+  const boltLastDate = bt.last_telegram as string | undefined;
 
   const health: Record<string, 'green' | 'yellow' | 'red'> = {
     marcel: process.env.ANTHROPIC_API_KEY ? 'green' : 'red',
@@ -173,6 +251,21 @@ export async function GET() {
   checkStale('aria', ariaLastDate);
   checkStale('hunter', hunterLastDate);
   checkStale('sage', sageLastDate);
+  checkStale('bolt', boltLastDate);
+
+  // Check if Echo health-check is stale
+  if (echoLastCheck) {
+    const daysSince = (Date.now() - new Date(echoLastCheck).getTime()) / 86400000;
+    if (daysSince > 1) health['echo'] = 'yellow';
+  }
+
+  // Check activity-based health: if agent has recent data = green
+  // Aria: if emails sent recently
+  if (health['aria'] === 'green' && Number(a.total_envoyes ?? 0) === 0) health['aria'] = 'yellow';
+  // Rex: if Twilio is configured but no quotes exist
+  if (health['rex'] === 'green' && Number(rq.total ?? 0) === 0) health['rex'] = 'yellow';
+  // Zara: if no bookings at all
+  if (Number(z.total_bookings ?? 0) === 0 && health['zara'] === 'green') health['zara'] = 'yellow';
 
   const envVars = [
     'ANTHROPIC_API_KEY','DATABASE_URL','TELEGRAM_BOT_TOKEN',
@@ -182,15 +275,22 @@ export async function GET() {
   const envMissing = envVars.filter(v => !process.env[v]);
 
   return NextResponse.json({
-    marcel:  { messages: marcelMsgCount, label: `${marcelMsgCount} msgs en mémoire` },
-    hunter:  {
+    marcel: {
+      messages: marcelMsgCount,
+      total_devis: Number(mo.total_devis ?? 0),
+      total_leads: Number(mo.total_leads ?? 0),
+      total_convos: Number(mo.total_convos ?? 0),
+      total_emails: Number(mo.total_emails ?? 0),
+      label: `${marcelMsgCount} msgs en mémoire`,
+    },
+    hunter: {
       chauds: Number(h.chauds ?? 0),
       tiedes: Number(h.tiedes ?? 0),
       froids: Number(h.froids ?? 0),
       nouveaux: Number(h.nouveaux ?? 0),
       total_leads: Number(h.total ?? 0),
-      prospects_envoyes: Number(hc.total_campaigns ?? 0),
-      prospects_semaine: Number(hc.semaine ?? 0),
+      prospects_envoyes: Number(hp.total_prospects ?? 0),
+      prospects_semaine: Number(hp.semaine ?? 0),
       last_action: timeAgo(hunterLastDate),
     },
     aria: {
@@ -207,15 +307,24 @@ export async function GET() {
       offres_today: Number(ariaExtra?.offres_today ?? 0),
     },
     rex: {
-      devis_today: Number(r.devis_today ?? 0),
-      en_attente: Number(r.en_attente ?? 0),
-      envoyes: Number(r.envoyes ?? 0),
-      total: Number(r.total ?? 0),
+      devis_today: Number(rq.devis_today ?? 0),
+      en_attente: Number(rq.en_attente ?? 0),
+      envoyes: Number(rq.envoyes ?? 0),
+      total_sent: Number(rq.total_sent ?? 0),
+      total: Number(rq.total ?? 0),
+      sms_relances: Number(rs.sms_relances ?? 0),
+      sms_semaine: Number(rs.sms_semaine ?? 0),
     },
     iris: {
-      confirmes: fmt(i.confirmes),
-      pipeline: fmt(i.pipeline),
-      actifs: Number(i.actifs ?? 0),
+      confirmes: fmt(irisConfirmes),
+      pipeline: fmt(irisPipeline),
+      depots: fmt(irisDepots),
+      depenses: fmt(irisDepenses),
+      profit: fmt(irisProfit),
+      actifs: Number(iq.actifs ?? 0),
+      total_devis: Number(iq.total_devis ?? 0),
+      total_factures: Number(ii.total_factures ?? 0),
+      factures_envoyees: Number(ii.factures_envoyees ?? 0),
     },
     sage: {
       total_photos: Number(sg.total_photos ?? 0),
@@ -228,13 +337,19 @@ export async function GET() {
       a_venir: Number(z.a_venir ?? 0),
       confirmees_today: Number(z.confirmees_today ?? 0),
       total_confirmes: Number(z.total_confirmes ?? 0),
+      en_attente: Number(z.en_attente ?? 0),
       prochain: z.prochain ?? null,
+      total_bookings: Number(z.total_bookings ?? 0),
     },
-    bolt: { notifications: 0 },
+    bolt: {
+      notifications: boltMsgCount,
+      last_action: timeAgo(boltLastDate),
+    },
     echo: {
       env_ok: envOk,
       env_total: envVars.length,
       env_missing: envMissing,
+      last_check: timeAgo(echoLastCheck),
     },
     nova: {
       today: Number(n.today ?? 0),
@@ -242,6 +357,9 @@ export async function GET() {
       devis_today: Number(n.devis_today ?? 0),
       total_devis: Number(n.total_devis ?? 0),
       total_convos: Number(n.total_convos ?? 0),
+      total_messages: Number(nm.total_messages ?? 0),
+      messages_today: Number(nm.messages_today ?? 0),
+      reponses_ia: Number(nm.reponses_ia ?? 0),
     },
     jason: {
       total_leads: Number(js.total_leads ?? 0),
@@ -250,6 +368,8 @@ export async function GET() {
       relances: Number(js.relances ?? 0),
       convertis: Number(js.convertis ?? 0),
       leads_semaine: Number(js.leads_semaine ?? 0),
+      total_prospect_emails: Number(je.total_prospect_emails ?? 0),
+      emails_semaine: Number(je.emails_semaine ?? 0),
     },
     health,
   });
