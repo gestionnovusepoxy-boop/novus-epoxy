@@ -67,7 +67,17 @@ export async function POST(req: NextRequest) {
   // Normalize FB form answers to CRM service codes
   const service = normalizeService(serviceRaw);
   const espace   = (body.espace ?? body.location ?? '').toString().slice(0, 120) || null;
-  const superficie = (body.superficie ?? body.surface ?? '').toString().slice(0, 50) || null;
+  const superficieRaw = (body.superficie ?? body.surface ?? '').toString().slice(0, 50) || null;
+  // Clean superficie: extract numeric value, handle "25x15" multiplication
+  let superficie = superficieRaw;
+  if (superficieRaw) {
+    if (/^\d+\s*x\s*\d+$/i.test(superficieRaw)) {
+      const parts = superficieRaw.split(/x/i).map((s: string) => parseFloat(s.trim()));
+      superficie = String(Math.round(parts[0] * parts[1]));
+    } else {
+      superficie = superficieRaw.replace(/\s*(sf|pi2?|pi²|pieds?\s*carr[eé]s?|sqft|p2|pc)\s*$/i, '').trim() || superficieRaw;
+    }
+  }
   const ville    = (body.ville ?? body.city ?? '').toString().slice(0, 120) || null;
   const adresse  = (body.adresse ?? body.address ?? '').toString().slice(0, 255) || null;
   const msg      = (body.message ?? body.notes ?? '').toString().slice(0, 1000) || null;

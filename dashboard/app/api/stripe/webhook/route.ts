@@ -120,40 +120,7 @@ export async function POST(req: NextRequest) {
         [session.id, parseInt(quoteId)]
       );
 
-      // Create invoice + payment record
-      try {
-        const depot = Number(quote.depot_requis);
-        const solde = Number(quote.total) - depot;
-        // Find or create client
-        let clientId: number | null = null;
-        const existingClients = await query(`SELECT id FROM clients WHERE email = $1`, [clientEmail]);
-        if (existingClients.length > 0) {
-          clientId = existingClients[0].id as number;
-        } else {
-          const newClient = await query(
-            `INSERT INTO clients (nom, email, telephone, adresse) VALUES ($1, $2, $3, $4) RETURNING id`,
-            [clientName, clientEmail, quote.client_tel, quote.client_adresse]
-          );
-          clientId = newClient[0].id as number;
-        }
-        // Generate invoice number
-        const lastInv = await query(`SELECT numero FROM invoices ORDER BY id DESC LIMIT 1`);
-        const lastNum = lastInv.length > 0 ? parseInt((lastInv[0].numero as string).split('-').pop()!) : 0;
-        const numero = `NE-2026-${String(lastNum + 1).padStart(3, '0')}`;
-        // Create invoice
-        const inv = await query(
-          `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, sous_total, tps, tvq, total, depot_montant, final_montant, depot_paye, final_paye, depot_paye_at, depot_methode, statut, rabais_pct, rabais_montant)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true, false, NOW(), 'carte', 'depot_recu', $13, $14) RETURNING id`,
-          [numero, parseInt(quoteId), clientId, quote.type_service, quote.superficie, quote.prix_pied_carre, quote.sous_total, quote.tps, quote.tvq, quote.total, depot, solde, Number(quote.rabais_pct || 0), Number(quote.rabais_montant || 0)]
-        );
-        // Record payment
-        await query(
-          `INSERT INTO payments (invoice_id, montant, type, methode) VALUES ($1, $2, 'depot', 'carte')`,
-          [inv[0].id, depot]
-        );
-      } catch (err) {
-        console.error('Failed to create invoice for Stripe deposit:', err);
-      }
+      // Invoice + payment creation is handled by the IRIS block below (with idempotency guards)
 
       // Send confirmation email
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';
@@ -199,31 +166,48 @@ ${calendarHtml}
         : `Novus Epoxy: Depot recu pour devis #${quoteId} MAIS dates en conflit! ${formatMoney(Number(quote.depot_requis))} de ${clientName}. Verifier ASAP!\nhttps://novus-epoxy.vercel.app/dashboard/devis`;
       await Promise.all(adminPhones.map(phone => sendSMS(phone, smsMsg)));
 
-      // === IRIS: Auto-create invoice + payment record ===
+      // === Auto-create client + invoice + payment (idempotent) ===
       try {
         const depotMontant = Number(quote.depot_requis) || Number(quote.total) * 0.3;
+
+        // Find or create client
+        const existingClients = await query(`SELECT id FROM clients WHERE email = $1`, [clientEmail]);
+        if (existingClients.length === 0) {
+          await query(
+            `INSERT INTO clients (nom, email, telephone, adresse) VALUES ($1, $2, $3, $4)`,
+            [clientName, clientEmail, quote.client_tel, quote.client_adresse]
+          ).catch(() => {}); // ignore if duplicate
+        }
+        const clientRows = await query(`SELECT id FROM clients WHERE email = $1`, [clientEmail]);
+        const clientId = clientRows.length > 0 ? clientRows[0].id as number : null;
+
+        // Idempotency: skip if invoice already exists for this quote
         let invoiceId: number | null = null;
         const existingInv = await query(`SELECT id FROM invoices WHERE quote_id = $1 LIMIT 1`, [parseInt(quoteId)]);
         if (existingInv.length > 0) {
           invoiceId = existingInv[0].id as number;
         } else {
+          // Atomic numero generation: use COALESCE + subquery to avoid race condition
           const yearStr = new Date().getFullYear().toString();
-          const lastInv = await query(`SELECT numero FROM invoices WHERE numero LIKE $1 ORDER BY numero DESC LIMIT 1`, [`NE-${yearStr}-%`]);
-          const nextNum = lastInv.length > 0 ? parseInt((lastInv[0].numero as string).split('-')[2]) + 1 : 1;
-          const numero = `NE-${yearStr}-${String(nextNum).padStart(3, '0')}`;
+          const prefix = `NE-${yearStr}-`;
           const invRows = await query(
-            `INSERT INTO invoices (numero, quote_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant, statut, date_emission)
-             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,'depot_recu',CURRENT_DATE) RETURNING id`,
-            [numero, parseInt(quoteId), quote.type_service, quote.superficie, quote.prix_pied_carre, quote.rabais_pct ?? 0, quote.rabais_montant ?? 0, quote.sous_total, quote.tps, quote.tvq, quote.total, depotMontant, Number(quote.total) - depotMontant]
+            `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant, statut, date_emission)
+             VALUES (
+               $1 || LPAD((COALESCE((SELECT MAX(CAST(SPLIT_PART(numero,'-',3) AS INT)) FROM invoices WHERE numero LIKE $2), 0) + 1)::text, 3, '0'),
+               $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'depot_recu',CURRENT_DATE
+             ) RETURNING id`,
+            [prefix, `${prefix}%`, parseInt(quoteId), clientId, quote.type_service, quote.superficie, quote.prix_pied_carre, quote.rabais_pct ?? 0, quote.rabais_montant ?? 0, quote.sous_total, quote.tps, quote.tvq, quote.total, depotMontant, Number(quote.total) - depotMontant]
           );
           invoiceId = invRows[0].id as number;
         }
+
+        // Idempotent payment: only insert if no deposit payment exists
         const existingPay = await query(`SELECT id FROM payments WHERE invoice_id = $1 AND type = 'depot' LIMIT 1`, [invoiceId]);
         if (existingPay.length === 0) {
           await query(`INSERT INTO payments (invoice_id, type, montant, methode, paid_at) VALUES ($1, 'depot', $2, 'carte', NOW())`, [invoiceId, depotMontant]);
         }
         await query(`UPDATE invoices SET depot_paye = true, depot_paye_at = NOW(), depot_methode = 'carte', statut = 'depot_recu' WHERE id = $1`, [invoiceId]);
-      } catch (err) { console.error('[Iris] Stripe auto-invoice failed:', err); }
+      } catch (err) { console.error('[Stripe] Auto-invoice failed:', err); }
 
       // Notify admins via Telegram
       const telegramMsg = datesAvailable
