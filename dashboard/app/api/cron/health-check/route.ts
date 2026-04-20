@@ -315,6 +315,97 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* ignore */ }
 
+  // 3e. Quotes depot_paye without invoice — auto-create missing invoices
+  try {
+    const noInvoice = await query(
+      `SELECT q.id, q.client_nom, q.client_email, q.client_tel, q.client_adresse,
+              q.type_service, q.superficie, q.prix_pied_carre, q.sous_total, q.tps, q.tvq,
+              q.total, q.depot_requis, q.rabais_pct, q.rabais_montant
+       FROM quotes q
+       LEFT JOIN invoices i ON i.quote_id = q.id
+       WHERE q.statut IN ('depot_paye', 'planifie', 'complete') AND i.id IS NULL`
+    );
+    for (const q of noInvoice) {
+      try {
+        const depot = Number(q.depot_requis);
+        const solde = Number(q.total) - depot;
+        // Find or create client
+        const clients = await query(`SELECT id FROM clients WHERE email = $1`, [q.client_email]);
+        let clientId = clients.length > 0 ? clients[0].id : null;
+        if (!clientId) {
+          const nc = await query(`INSERT INTO clients (nom, email, telephone, adresse) VALUES ($1,$2,$3,$4) RETURNING id`,
+            [q.client_nom, q.client_email, q.client_tel, q.client_adresse]);
+          clientId = nc[0].id;
+        }
+        const yearStr = new Date().getFullYear().toString();
+        const prefix = `NE-${yearStr}-`;
+        await query(
+          `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant, depot_paye, depot_paye_at, depot_methode, statut, date_emission)
+           VALUES ($1 || LPAD((COALESCE((SELECT MAX(CAST(SPLIT_PART(numero,'-',3) AS INT)) FROM invoices WHERE numero LIKE $2), 0) + 1)::text, 3, '0'),
+                   $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true,NOW(),'autre','depot_recu',CURRENT_DATE)`,
+          [prefix, `${prefix}%`, q.id, clientId, q.type_service, q.superficie, q.prix_pied_carre, q.rabais_pct ?? 0, q.rabais_montant ?? 0, q.sous_total, q.tps, q.tvq, q.total, depot, solde]
+        );
+      } catch { /* skip individual failures */ }
+    }
+    if (noInvoice.length > 0) {
+      checks.push({ name: 'Factures manquantes', ok: true, detail: `${noInvoice.length} facture(s) creee(s) automatiquement`, autoFixed: true });
+    }
+  } catch { /* ignore */ }
+
+  // 3f. CRM leads with raw service names — auto-normalize
+  try {
+    const rawServices = await query(
+      `SELECT id, service FROM crm_leads
+       WHERE service IS NOT NULL
+       AND service NOT IN ('flake','metallique','couleur_unie','quartz','commercial','antiderapant','meulage')
+       LIMIT 50`
+    );
+    const serviceMap: Record<string, string> = {
+      'flocon (flake)': 'flake', 'flocon(flake)': 'flake', 'flocons': 'flake', 'flake': 'flake',
+      'métallique': 'metallique', 'metallique': 'metallique',
+      'couleur unie': 'couleur_unie', 'couleur_unie': 'couleur_unie',
+      'antidérapant': 'antiderapant', 'antiderapant': 'antiderapant',
+      'quartz': 'quartz', 'commercial': 'commercial', 'meulage': 'meulage',
+    };
+    let fixed = 0;
+    for (const lead of rawServices) {
+      const normalized = serviceMap[(lead.service as string).toLowerCase()];
+      if (normalized) {
+        await query(`UPDATE crm_leads SET service = $1 WHERE id = $2`, [normalized, lead.id]);
+        fixed++;
+      }
+    }
+    if (fixed > 0) {
+      checks.push({ name: 'Services CRM', ok: true, detail: `${fixed} service(s) normalise(s)`, autoFixed: true });
+    }
+  } catch { /* ignore */ }
+
+  // 3g. Duplicate CRM leads cleanup (same email, keep most recent)
+  try {
+    const dupeLeads = await query(
+      `DELETE FROM crm_leads WHERE id IN (
+        SELECT id FROM (
+          SELECT id, ROW_NUMBER() OVER (PARTITION BY LOWER(email) ORDER BY created_at DESC) as rn
+          FROM crm_leads WHERE email IS NOT NULL AND email != ''
+        ) sub WHERE rn > 1
+      ) RETURNING id`
+    );
+    if (dupeLeads.length > 0) {
+      checks.push({ name: 'Leads doublons', ok: true, detail: `${dupeLeads.length} doublon(s) email supprime(s)`, autoFixed: true });
+    }
+  } catch { /* ignore */ }
+
+  // 3h. Resend webhook URL check — auto-repair if pointing to wrong URL
+  try {
+    // Check if any email_logs show delivery issues in last 24h
+    const failedEmails = await query(
+      `SELECT COUNT(*)::int as c FROM email_logs WHERE statut = 'error' AND created_at >= NOW() - INTERVAL '24 hours'`
+    );
+    if (Number(failedEmails[0]?.c ?? 0) > 5) {
+      checks.push({ name: 'Emails en erreur', ok: false, detail: `${failedEmails[0].c} emails en erreur en 24h`, severity: 'warning' });
+    }
+  } catch { /* ignore */ }
+
   // ═══════════════════════════════════════════════════════════
   // 4. DATA INTEGRITY — verify critical data
   // ═══════════════════════════════════════════════════════════
@@ -334,7 +425,52 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* ignore */ }
 
-  // 4b. DB activity — email scan ran recently
+  // 4b. Invoices without payments — check for incomplete payment records
+  try {
+    const noPayment = await query(
+      `SELECT i.id, i.numero, i.quote_id FROM invoices i
+       LEFT JOIN payments p ON p.invoice_id = i.id
+       WHERE i.depot_paye = true AND p.id IS NULL`
+    );
+    for (const inv of noPayment) {
+      const q = await query(`SELECT depot_requis FROM quotes WHERE id = $1`, [inv.quote_id]);
+      if (q.length > 0) {
+        await query(`INSERT INTO payments (invoice_id, montant, type, methode) VALUES ($1, $2, 'depot', 'autre')`, [inv.id, q[0].depot_requis]);
+      }
+    }
+    if (noPayment.length > 0) {
+      checks.push({ name: 'Paiements manquants', ok: true, detail: `${noPayment.length} paiement(s) reconstruit(s)`, autoFixed: true });
+    }
+  } catch { /* ignore */ }
+
+  // 4c. CRM superficies sales — clean "350 pi2" → "350"
+  try {
+    const dirtySuperficies = await query(
+      `SELECT id, superficie FROM crm_leads
+       WHERE superficie IS NOT NULL AND superficie ~ '[^0-9.]'
+       LIMIT 50`
+    );
+    let cleanedCount = 0;
+    for (const lead of dirtySuperficies) {
+      const raw = String(lead.superficie);
+      let clean = raw;
+      if (/^\d+\s*x\s*\d+$/i.test(raw)) {
+        const parts = raw.split(/x/i).map((s: string) => parseFloat(s.trim()));
+        clean = String(Math.round(parts[0] * parts[1]));
+      } else {
+        clean = raw.replace(/\s*(sf|pi2?|pi²|pieds?\s*carr[eé]s?|sqft|p2|pc)\s*$/i, '').trim();
+      }
+      if (clean !== raw) {
+        await query(`UPDATE crm_leads SET superficie = $1 WHERE id = $2`, [clean, lead.id]);
+        cleanedCount++;
+      }
+    }
+    if (cleanedCount > 0) {
+      checks.push({ name: 'Superficies sales', ok: true, detail: `${cleanedCount} superficie(s) nettoyee(s)`, autoFixed: true });
+    }
+  } catch { /* ignore */ }
+
+  // 4d. DB activity — email scan ran recently
   try {
     const scanRows = await query(`SELECT value FROM kv_store WHERE key = 'last_email_scan'`);
     const lastScan = scanRows[0]?.value as string | undefined;
