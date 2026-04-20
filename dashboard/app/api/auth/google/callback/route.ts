@@ -15,8 +15,8 @@ export async function GET(req: NextRequest) {
   }
 
   const oauth2 = new google.auth.OAuth2(
-    process.env.GOOGLE_CLIENT_ID,
-    process.env.GOOGLE_CLIENT_SECRET,
+    process.env.GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_CLIENT_ID,
+    process.env.GOOGLE_WEB_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET,
     'https://novus-epoxy.vercel.app/api/auth/google/callback'
   );
 
