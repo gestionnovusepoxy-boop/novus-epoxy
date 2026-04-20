@@ -3,6 +3,24 @@ import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
 
+// Map FB form free-text answers to CRM service codes
+function normalizeService(raw: string | null): string | null {
+  if (!raw) return null;
+  const t = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+  // Exact code match
+  const codes = ['flake', 'metallique', 'couleur_unie', 'quartz', 'commercial', 'antiderapant', 'meulage'];
+  if (codes.includes(t)) return t;
+  // Fuzzy match on keywords
+  if (t.includes('flocon') || t.includes('flake') || t.includes('garage')) return 'flake';
+  if (t.includes('metal')) return 'metallique';
+  if (t.includes('couleur') || t.includes('uni') || t.includes('solid')) return 'couleur_unie';
+  if (t.includes('quartz')) return 'quartz';
+  if (t.includes('commercial') || t.includes('industriel') || t.includes('entrepot')) return 'commercial';
+  if (t.includes('antiderapant') || t.includes('anti-derapant') || t.includes('anti derapant') || t.includes('patio') || t.includes('balcon') || t.includes('escalier') || t.includes('marche')) return 'antiderapant';
+  if (t.includes('meulage') || t.includes('diamant') || t.includes('poli')) return 'meulage';
+  return raw; // return original if no match
+}
+
 // POST /api/leads/zapier — receives Facebook leads forwarded by Zapier
 // Auth: header x-api-key must match ZAPIER_API_KEY (or ADMIN_API_KEY as fallback)
 // Payload (flexible — Zapier can map any FB form fields):
@@ -45,7 +63,9 @@ export async function POST(req: NextRequest) {
   const telephoneRaw = (body.telephone ?? body.phone ?? body.phone_number ?? '').toString();
   const telephone = telephoneRaw.replace(/\D/g, '').slice(-10) || null;
 
-  const service  = (body.service ?? body.type_service ?? '').toString().slice(0, 120) || null;
+  const serviceRaw  = (body.service ?? body.type_service ?? '').toString().slice(0, 120) || null;
+  // Normalize FB form answers to CRM service codes
+  const service = normalizeService(serviceRaw);
   const espace   = (body.espace ?? body.location ?? '').toString().slice(0, 120) || null;
   const superficie = (body.superficie ?? body.surface ?? '').toString().slice(0, 50) || null;
   const ville    = (body.ville ?? body.city ?? '').toString().slice(0, 120) || null;
@@ -138,17 +158,24 @@ export async function POST(req: NextRequest) {
     const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
     const chatIds = [groupId, ...adminIds].filter(Boolean);
     if (botToken && chatIds.length > 0) {
+      const SERVICE_LABELS: Record<string, string> = {
+        flake: 'Flocon (Flake)', metallique: 'Métallique', couleur_unie: 'Couleur unie',
+        quartz: 'Quartz', commercial: 'Commercial', antiderapant: 'Antidérapant', meulage: 'Meulage',
+      };
+      const serviceLabel = service ? (SERVICE_LABELS[service] ?? service) : null;
       const lines = [
         `🔥 <b>NOUVEAU LEAD FACEBOOK!</b>`,
         `<b>⚡ Contacte-le ASAP — premier rendu gagne!</b>`,
         ``,
-        `📝 <i>${escapeHtml(summary)}</i>`,
-        ``,
-        `👤 ${escapeHtml(nom)}`,
-        email ? `📧 <code>${escapeHtml(email)}</code>` : '',
+        `👤 <b>${escapeHtml(nom)}</b>`,
         telephone ? `📞 <a href="tel:${escapeHtml(telephone)}">${escapeHtml(telephone)}</a>` : '',
+        email ? `📧 ${escapeHtml(email)}` : '',
+        ``,
+        serviceLabel ? `🔧 Service: <b>${escapeHtml(serviceLabel)}</b>` : '',
+        superficie ? `📐 Superficie: <b>${escapeHtml(superficie)} pi²</b>` : '',
+        espace ? `📍 Espace: ${escapeHtml(espace)}` : '',
+        ville ? `🏠 Ville: ${escapeHtml(ville)}` : '',
         adresse ? `🏠 ${escapeHtml(adresse)}` : '',
-        msg && descParts.length > 0 ? `💬 <i>${escapeHtml(msg.slice(0, 200))}</i>` : '',
         adName ? `📢 Pub: ${escapeHtml(adName)}` : '',
       ].filter(Boolean);
 

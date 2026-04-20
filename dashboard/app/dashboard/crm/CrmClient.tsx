@@ -7,6 +7,11 @@ type Statut = 'nouveau' | 'offre_envoyee' | 'contacte' | 'devis_envoye' | 'rdv_p
 type Temperature = 'chaud' | 'tiede' | 'froid';
 type LeadType = 'residentiel' | 'commercial';
 
+const SERVICE_LABELS: Record<string, string> = {
+  flake: 'Flocon (Flake)', metallique: 'Métallique', couleur_unie: 'Couleur unie',
+  quartz: 'Quartz', commercial: 'Commercial', antiderapant: 'Antidérapant', meulage: 'Meulage',
+};
+
 interface Lead {
   id: number;
   nom: string;
@@ -257,7 +262,7 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
         {lead.email ?? <span className="text-slate-600">—</span>}
       </td>
       <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">
-        {lead.service ?? <span className="text-slate-600">—</span>}
+        {lead.service ? (SERVICE_LABELS[lead.service] ?? lead.service) : <span className="text-slate-600">—</span>}
       </td>
       <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">
         {lead.ville ?? <span className="text-slate-600">—</span>}
