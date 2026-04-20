@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, ReactNode } from 'react';
+import { useState, useEffect, ReactNode } from 'react';
 
 interface DashboardShellProps {
   email: string;
@@ -11,6 +11,19 @@ interface DashboardShellProps {
 
 export function DashboardShell({ email, signOutAction, sidebar, children }: DashboardShellProps) {
   const [open, setOpen] = useState(false);
+
+  // Global 401 interceptor — redirect to login on expired session
+  useEffect(() => {
+    const originalFetch = window.fetch;
+    window.fetch = async (...args) => {
+      const res = await originalFetch(...args);
+      if (res.status === 401 && typeof args[0] === 'string' && args[0].startsWith('/api/')) {
+        window.location.href = '/auth/signin';
+      }
+      return res;
+    };
+    return () => { window.fetch = originalFetch; };
+  }, []);
 
   return (
     <div className="min-h-screen bg-slate-900 flex">

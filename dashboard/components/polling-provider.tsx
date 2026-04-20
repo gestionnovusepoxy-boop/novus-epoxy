@@ -37,6 +37,11 @@ export function PollingProvider({ children, onRefresh, intervalMs = 30_000 }: Pr
     try {
       await onRefresh();
       setLastRefresh(new Date());
+    } catch (err) {
+      // If session expired, redirect to login
+      if (err instanceof Error && err.message.includes('expir')) {
+        window.location.href = '/auth/signin';
+      }
     } finally {
       runningRef.current = false;
       setIsRefreshing(false);

@@ -103,6 +103,7 @@ function PageContent() {
     if (search) qs.set('search', search);
 
     const res = await fetch(`/api/invoices?${qs}`);
+    if (res.status === 401) { window.location.href = '/auth/signin'; return; }
     const json = await res.json();
     setData(json.data ?? []);
     setTotal(json.total ?? 0);
