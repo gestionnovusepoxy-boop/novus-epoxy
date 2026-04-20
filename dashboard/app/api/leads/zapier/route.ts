@@ -67,6 +67,11 @@ export async function POST(req: NextRequest) {
   // Normalize FB form answers to CRM service codes
   const service = normalizeService(serviceRaw);
   const espace   = (body.espace ?? body.location ?? '').toString().slice(0, 120) || null;
+  // Facebook pre-filled address fields (from user's FB profile)
+  const fbStreet = (body.street_address ?? body.street ?? body.rue ?? '').toString().trim();
+  const fbCity = (body.city ?? body.ville ?? '').toString().trim();
+  const fbState = (body.state ?? body.province ?? '').toString().trim();
+  const fbZip = (body.zip_code ?? body.zip ?? body.code_postal ?? '').toString().trim();
   const superficieRaw = (body.superficie ?? body.surface ?? '').toString().slice(0, 50) || null;
   // Clean superficie: extract numeric value, handle "25x15" multiplication
   let superficie = superficieRaw;
@@ -78,8 +83,11 @@ export async function POST(req: NextRequest) {
       superficie = superficieRaw.replace(/\s*(sf|pi2?|pi²|pieds?\s*carr[eé]s?|sqft|p2|pc)\s*$/i, '').trim() || superficieRaw;
     }
   }
-  const ville    = (body.ville ?? body.city ?? '').toString().slice(0, 120) || null;
-  const adresse  = (body.adresse ?? body.address ?? '').toString().slice(0, 255) || null;
+  const ville    = (body.ville ?? fbCity ?? '').toString().slice(0, 120) || null;
+  // Build full address from FB fields or use manual field
+  const manualAdresse = (body.adresse ?? body.address ?? '').toString().trim();
+  const fbAdresse = [fbStreet, fbCity, fbState, fbZip].filter(Boolean).join(', ');
+  const adresse  = (manualAdresse || fbAdresse || null)?.slice(0, 255) ?? null;
   const msg      = (body.message ?? body.notes ?? '').toString().slice(0, 1000) || null;
   const adName   = (body.ad_name ?? body.campaign ?? '').toString().slice(0, 200) || null;
   const formName = (body.form_name ?? '').toString().slice(0, 200) || null;
