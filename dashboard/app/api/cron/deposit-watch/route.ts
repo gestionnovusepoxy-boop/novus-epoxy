@@ -127,7 +127,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // --- 2. Completed bookings with no final payment ---
+  // --- 2. Completed bookings with no final payment (alert once per day max via kv_store) ---
   const completedNoFinal = await query(`
     SELECT q.id, q.client_nom, q.total, q.depot_requis
     FROM quotes q
@@ -144,6 +144,17 @@ export async function GET(req: NextRequest) {
   for (const q of completedNoFinal) {
     const balance = Number(q.total ?? 0) - Number(q.depot_requis ?? 0);
     if (balance <= 0) continue;
+
+    // Dedup: only alert once per quote per day
+    const alertKey = `balance_alert_${q.id}`;
+    const lastAlert = await query(`SELECT value FROM kv_store WHERE key = $1`, [alertKey]);
+    const today = new Date().toISOString().split('T')[0];
+    if (lastAlert.length > 0 && (lastAlert[0].value as string).includes(today)) continue;
+
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [alertKey, JSON.stringify({ alerted_at: today })]
+    );
 
     const chatIds = ADMIN_CHAT_IDS();
     const msg = `Travaux termines pour <b>#${q.id}</b> -- balance <b>${formatMoney(balance)}</b> en attente\nClient: ${q.client_nom}`;

@@ -73,45 +73,36 @@ export async function POST(req: NextRequest) {
   ].filter(Boolean);
   const notes = noteParts.join(' — ');
 
-  // --- Manual dedupe check (partial unique index doesn't work with ON CONFLICT) ---
-  let existingLead: { id: number } | null = null;
-  if (email) {
-    const dupRows = await query(
-      `SELECT id FROM crm_leads WHERE LOWER(email) = LOWER($1) LIMIT 1`,
-      [email],
-    );
-    if (dupRows.length > 0) existingLead = dupRows[0] as { id: number };
-  } else if (telephone) {
+  // --- Atomic dedupe via INSERT ... ON CONFLICT (race-condition safe) ---
+  let newLeadId: number | undefined;
+  const crmResult = await query(
+    `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, source, statut, temperature, notes, type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+     ON CONFLICT (email) WHERE email IS NOT NULL AND email != '' DO NOTHING
+     RETURNING id`,
+    [
+      nom,
+      email || null,
+      telephone,
+      service,
+      superficie,
+      ville,
+      'facebook-zapier',
+      'nouveau',
+      'chaud',
+      notes,
+      'residential',
+    ],
+  );
+  newLeadId = (crmResult?.[0] as { id?: number } | undefined)?.id;
+
+  // If ON CONFLICT hit on email, also check phone dedup
+  if (!newLeadId && !email && telephone) {
     const dupRows = await query(
       `SELECT id FROM crm_leads WHERE telephone = $1 LIMIT 1`,
       [telephone],
     );
-    if (dupRows.length > 0) existingLead = dupRows[0] as { id: number };
-  }
-
-  let newLeadId: number | undefined;
-  if (existingLead) {
-    newLeadId = undefined; // duplicate — skip insert
-  } else {
-    const crmResult = await query(
-      `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, source, statut, temperature, notes, type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-       RETURNING id`,
-      [
-        nom,
-        email || null,
-        telephone,
-        service,
-        superficie,
-        ville,
-        'facebook-zapier',
-        'nouveau',
-        'chaud',
-        notes,
-        'residential',
-      ],
-    );
-    newLeadId = (crmResult?.[0] as { id?: number } | undefined)?.id;
+    if (dupRows.length > 0) newLeadId = undefined; // duplicate
   }
 
   // Also insert into submissions (backwards compat)
@@ -208,7 +199,7 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    lead_id: newLeadId ?? existingLead?.id ?? null,
+    lead_id: newLeadId ?? null,
     duplicate: !newLeadId,
     nom,
     email,

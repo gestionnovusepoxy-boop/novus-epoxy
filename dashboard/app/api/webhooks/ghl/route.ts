@@ -35,6 +35,13 @@ async function notifyTelegram(text: string) {
 }
 
 export async function POST(req: NextRequest) {
+  // Verify GHL webhook secret
+  const ghlSecret = process.env.GHL_WEBHOOK_SECRET;
+  const headerSecret = req.headers.get('x-webhook-secret') ?? req.nextUrl.searchParams.get('secret') ?? '';
+  if (!ghlSecret || headerSecret !== ghlSecret) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   try {
     const body = await req.json();
     const type = body.type;

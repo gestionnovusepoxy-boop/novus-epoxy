@@ -331,7 +331,12 @@ function PageContent() {
                   <div className="mt-4">
                     <h4 className="text-slate-400 text-xs font-medium uppercase tracking-wider mb-2">Contenu</h4>
                     <div className="bg-white rounded-lg p-4 overflow-auto max-h-[60vh]">
-                      <div dangerouslySetInnerHTML={{ __html: selected.html_body }} />
+                      <iframe
+                        srcDoc={selected.html_body}
+                        sandbox=""
+                        className="w-full min-h-[400px] border-0"
+                        title="Email content"
+                      />
                     </div>
                   </div>
                 ) : (

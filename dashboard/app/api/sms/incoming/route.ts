@@ -63,9 +63,34 @@ function isQuietHours(): boolean {
 // Configure in Twilio console: Messaging > Phone Number > Webhook URL
 // POST https://novus-epoxy.vercel.app/api/sms/incoming
 export async function POST(req: NextRequest) {
+  // Validate Twilio signature to prevent forged requests
+  const twilioSignature = req.headers.get('x-twilio-signature') ?? '';
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  if (!authToken || !twilioSignature) {
+    return new NextResponse(
+      '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+      { status: 403, headers: { 'Content-Type': 'text/xml' } }
+    );
+  }
+  // Twilio signature validation using HMAC-SHA1
+  const { createHmac } = await import('crypto');
+  const url = process.env.NEXTAUTH_URL
+    ? `${process.env.NEXTAUTH_URL}/api/sms/incoming`
+    : 'https://novus-epoxy.vercel.app/api/sms/incoming';
   const formData = await req.formData();
-  const from = formData.get('From') as string | null;
-  const body = formData.get('Body') as string | null;
+  const params: Record<string, string> = {};
+  formData.forEach((value, key) => { params[key] = String(value); });
+  const sortedParams = Object.keys(params).sort().reduce((acc, key) => acc + key + params[key], '');
+  const expectedSig = createHmac('sha1', authToken).update(url + sortedParams).digest('base64');
+  if (expectedSig !== twilioSignature) {
+    return new NextResponse(
+      '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
+      { status: 403, headers: { 'Content-Type': 'text/xml' } }
+    );
+  }
+
+  const from = params['From'] ?? null;
+  const body = params['Body'] ?? null;
 
   if (!from || !body) {
     // Return valid TwiML even on error so Twilio doesn't retry

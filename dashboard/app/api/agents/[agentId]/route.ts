@@ -119,7 +119,7 @@ function buildTools(agentId: AgentId) {
         client_tel: z.string(),
         client_email: z.string().optional().default(''),
         client_adresse: z.string().optional().default(''),
-        type_service: z.enum(['flake', 'metallique', 'commercial']),
+        type_service: z.enum(['flake', 'metallique', 'commercial', 'quartz', 'couleur_unie', 'antiderapant', 'meulage']),
         superficie: z.number(),
         couleur_flake: z.string().optional().default(''),
         notes: z.string().optional().default(''),
@@ -1221,7 +1221,7 @@ export async function POST(
   const userContent = `[${authorName}]: ${lastUserMsg.content}`;
 
   const result = streamText({
-    model: anthropic('claude-opus-4-6'),
+    model: anthropic('claude-sonnet-4-6'),
     system: getSystemPrompt(agentId),
     messages: [
       ...historyMsgs,
@@ -1233,7 +1233,7 @@ export async function POST(
       const current = await getKv(historyKey) as Array<{ role: string; content: string; author?: string; ts: number }>;
       current.push({ role: 'user', content: userContent, author: authorName, ts: Date.now() });
       current.push({ role: 'assistant', content: text, author: agentId, ts: Date.now() });
-      const trimmed = current.slice(-60);
+      const trimmed = current.slice(-30);
       await setKv(historyKey, trimmed);
     },
   });

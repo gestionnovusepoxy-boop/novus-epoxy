@@ -126,7 +126,7 @@ export default function ContratPage() {
       })
       .catch(() => setError('Erreur de connexion'))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, token]);
 
   async function handleSign() {
     if (!quote || !signatureNom.trim() || !accepted || signing) return;
@@ -197,15 +197,15 @@ export default function ContratPage() {
           <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '20px', border: '1px solid #334155', textAlign: 'left' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
               <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#fff' }}>{'\u2713'}</div>
-              <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>Choisir vos dates</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#fff' }}>{'\u2713'}</div>
               <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>Signer le contrat</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isPaid ? '#22c55e' : '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: isPaid ? '#fff' : '#0f172a' }}>{isPaid ? '\u2713' : '3'}</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: isPaid ? '#22c55e' : '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: isPaid ? '#fff' : '#0f172a' }}>{isPaid ? '\u2713' : '2'}</div>
               <span style={{ color: isPaid ? '#94a3b8' : '#f8fafc', fontSize: '14px', fontWeight: isPaid ? 400 : 700, textDecoration: isPaid ? 'line-through' : 'none' }}>Payer le depot (30%)</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#94a3b8' }}>3</div>
+              <span style={{ color: '#64748b', fontSize: '14px' }}>Dates confirmees par Novus Epoxy</span>
             </div>
           </div>
 
@@ -260,15 +260,15 @@ export default function ContratPage() {
           <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '20px', border: '1px solid #334155', textAlign: 'left' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
               <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#fff' }}>{'\u2713'}</div>
-              <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>Choisir vos dates</span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#22c55e', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#fff' }}>{'\u2713'}</div>
               <span style={{ color: '#94a3b8', fontSize: '14px', textDecoration: 'line-through' }}>Signer le contrat</span>
             </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#0f172a' }}>3</div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#0f172a' }}>2</div>
               <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: 700 }}>Payer le depot (30%)</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#94a3b8' }}>3</div>
+              <span style={{ color: '#64748b', fontSize: '14px' }}>Dates confirmees par Novus Epoxy</span>
             </div>
           </div>
 
@@ -327,16 +327,16 @@ export default function ContratPage() {
         {/* Progress steps */}
         <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '16px', border: '1px solid #334155' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: quote.booking_jour1_date ? '#22c55e' : '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: quote.booking_jour1_date ? '#fff' : '#94a3b8' }}>{quote.booking_jour1_date ? '\u2713' : '1'}</div>
-            <span style={{ color: quote.booking_jour1_date ? '#94a3b8' : '#f8fafc', fontSize: '14px', textDecoration: quote.booking_jour1_date ? 'line-through' : 'none' }}>Choisir vos dates</span>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#0f172a' }}>1</div>
+            <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: 700 }}>Signer le contrat</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '12px' }}>
-            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#f59e0b', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#0f172a' }}>2</div>
-            <span style={{ color: '#f8fafc', fontSize: '14px', fontWeight: 700 }}>Signer le contrat</span>
+            <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#94a3b8' }}>2</div>
+            <span style={{ color: '#64748b', fontSize: '14px' }}>Payer le depot (30%)</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: '#334155', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '14px', fontWeight: 700, flexShrink: 0, color: '#94a3b8' }}>3</div>
-            <span style={{ color: '#64748b', fontSize: '14px' }}>Payer le depot (30%)</span>
+            <span style={{ color: '#64748b', fontSize: '14px' }}>Dates confirmees par Novus Epoxy</span>
           </div>
         </div>
 

@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
   // Upcoming bookings (next 7 days)
   const upcomingBookings = await query(
     `SELECT b.jour1_date, b.jour2_date, b.jour2_slot, q.client_nom, q.type_service
-     FROM bookings b JOIN quotes q ON q.booking_id = b.id
+     FROM bookings b JOIN quotes q ON b.quote_id = q.id
      WHERE b.statut = 'confirme' AND b.jour1_date BETWEEN CURRENT_DATE AND CURRENT_DATE + 7
      ORDER BY b.jour1_date ASC`,
     []

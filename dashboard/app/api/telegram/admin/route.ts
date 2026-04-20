@@ -1105,15 +1105,25 @@ IMPORTANT:
 
 // POST — Telegram webhook for admin bot
 export async function POST(req: NextRequest) {
-  // Verify Telegram webhook secret token (if configured)
+  // Verify Telegram webhook secret token (REQUIRED)
   const telegramSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
   const headerSecret = req.headers.get('x-telegram-bot-api-secret-token') ?? '';
-  if (telegramSecret && headerSecret && !safeCompare(telegramSecret, headerSecret)) {
+  if (!telegramSecret || !headerSecret || !safeCompare(telegramSecret, headerSecret)) {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ ok: true });
+
+  // Validate sender is an authorized admin
+  const allowedChatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const incomingMsg = body.message;
+  const incomingCallback = body.callback_query;
+  const incomingSenderId = String(incomingMsg?.from?.id ?? incomingCallback?.from?.id ?? '');
+  const incomingChatId = String(incomingMsg?.chat?.id ?? incomingCallback?.message?.chat?.id ?? '');
+  if (!allowedChatIds.includes(incomingSenderId) && !allowedChatIds.includes(incomingChatId)) {
+    return NextResponse.json({ ok: true }); // silently ignore unauthorized senders
+  }
 
   // Auto-heal: check & repair all systems every 5 min
   autoHeal().catch(() => {});
