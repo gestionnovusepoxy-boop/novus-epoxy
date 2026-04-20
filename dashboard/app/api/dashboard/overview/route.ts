@@ -6,24 +6,17 @@ export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
-  // 1. Revenue — actually collected money
-  const invoices = await query(`
-    SELECT
+  // Run ALL independent queries in parallel for speed
+  const [invoices, pipeline, expenses, labor] = await Promise.all([
+    query(`SELECT
       COALESCE(SUM(CASE WHEN depot_paye THEN depot_montant ELSE 0 END), 0)::numeric AS depots_recus,
       COALESCE(SUM(CASE WHEN final_paye THEN final_montant ELSE 0 END), 0)::numeric AS soldes_recus,
       COALESCE(SUM(CASE WHEN statut = 'completee' THEN total ELSE 0 END), 0)::numeric AS total_facture,
       COUNT(CASE WHEN statut = 'completee' THEN 1 END)::int AS factures_completees,
       COUNT(CASE WHEN NOT final_paye AND depot_paye THEN 1 END)::int AS soldes_en_attente,
       COALESCE(SUM(CASE WHEN NOT final_paye AND depot_paye THEN final_montant ELSE 0 END), 0)::numeric AS soldes_a_recevoir
-    FROM invoices
-  `);
-  const inv = invoices[0];
-  const encaisse = Number(inv.depots_recus) + Number(inv.soldes_recus);
-  const a_recevoir = Number(inv.soldes_a_recevoir);
-
-  // 2. Pipeline — quotes sent but not signed/paid
-  const pipeline = await query(`
-    SELECT
+    FROM invoices`),
+    query(`SELECT
       COUNT(CASE WHEN statut = 'envoye' THEN 1 END)::int AS devis_envoyes,
       COALESCE(SUM(CASE WHEN statut = 'envoye' THEN total ELSE 0 END), 0)::numeric AS montant_envoyes,
       COUNT(CASE WHEN statut IN ('approuve', 'contrat_signe') THEN 1 END)::int AS devis_signes,
@@ -32,82 +25,47 @@ export async function GET() {
       COALESCE(SUM(CASE WHEN statut = 'depot_paye' THEN total ELSE 0 END), 0)::numeric AS montant_depot_paye,
       COUNT(CASE WHEN statut = 'complete' THEN 1 END)::int AS completes,
       COALESCE(SUM(CASE WHEN statut = 'complete' THEN total ELSE 0 END), 0)::numeric AS montant_completes
-    FROM quotes
-  `);
-  const pipe = pipeline[0];
-
-  // 3. Expenses + Labor costs
-  const expenses = await query(`SELECT COALESCE(SUM(montant_ttc), 0)::numeric AS total FROM expenses`);
-  const labor = await query(`
-    SELECT COALESCE(SUM(t.heures * e.taux_horaire), 0)::numeric AS total,
+    FROM quotes`),
+    query(`SELECT COALESCE(SUM(montant_ttc), 0)::numeric AS total FROM expenses`),
+    query(`SELECT COALESCE(SUM(t.heures * e.taux_horaire), 0)::numeric AS total,
            COALESCE(SUM(t.heures), 0)::numeric AS heures
-    FROM time_entries t JOIN employees e ON e.id = t.employee_id
-  `);
+    FROM time_entries t JOIN employees e ON e.id = t.employee_id`),
+  ]);
+  const inv = invoices[0];
+  const encaisse = Number(inv.depots_recus) + Number(inv.soldes_recus);
+  const a_recevoir = Number(inv.soldes_a_recevoir);
+  const pipe = pipeline[0];
   const totalDepenses = Number(expenses[0].total);
   const totalSalaires = Number(labor[0].total);
   const totalHeures = Number(labor[0].heures);
   const profit = encaisse - totalDepenses - totalSalaires;
 
-  // 4. Leads summary
-  const leads = await query(`
-    SELECT
-      COUNT(*)::int AS total,
+  // 4-11: All independent queries in parallel
+  const [leads, bookings, recentQuotes, recentLeads, expByCat, monthlyRev, submissions, leadSources, chatbot] = await Promise.all([
+    query(`SELECT COUNT(*)::int AS total,
       COUNT(CASE WHEN temperature = 'chaud' THEN 1 END)::int AS chauds,
       COUNT(CASE WHEN temperature = 'tiede' THEN 1 END)::int AS tiedes,
       COUNT(CASE WHEN temperature = 'froid' THEN 1 END)::int AS froids,
       COUNT(CASE WHEN statut = 'nouveau' OR statut = 'contacte' THEN 1 END)::int AS actifs,
       COUNT(CASE WHEN created_at > NOW() - INTERVAL '7 days' THEN 1 END)::int AS nouveaux_7j
-    FROM crm_leads
-  `);
-
-  // 5. Bookings / upcoming work
-  const bookings = await query(`
-    SELECT b.jour1_date, b.jour2_date, b.statut, q.client_nom, q.type_service, q.total
+    FROM crm_leads`),
+    query(`SELECT b.jour1_date, b.jour2_date, b.statut, q.client_nom, q.type_service, q.total
     FROM bookings b JOIN quotes q ON q.id = b.quote_id
     WHERE b.statut != 'annule' AND b.jour1_date >= CURRENT_DATE - INTERVAL '7 days'
-    ORDER BY b.jour1_date ASC LIMIT 5
-  `);
-
-  // 6. Recent activity
-  const recentQuotes = await query(`
-    SELECT id, client_nom, total, statut, created_at FROM quotes ORDER BY created_at DESC LIMIT 3
-  `);
-  const recentLeads = await query(`
-    SELECT id, nom, telephone, source, temperature, created_at FROM crm_leads ORDER BY created_at DESC LIMIT 3
-  `);
-
-  // 7. Expenses by category
-  const expByCat = await query(`
-    SELECT categorie, COALESCE(SUM(montant_ttc), 0)::numeric AS total
-    FROM expenses GROUP BY categorie ORDER BY total DESC
-  `);
-
-  // 8. This month vs last month revenue
-  const monthlyRev = await query(`
-    SELECT
+    ORDER BY b.jour1_date ASC LIMIT 5`),
+    query(`SELECT id, client_nom, total, statut, created_at FROM quotes ORDER BY created_at DESC LIMIT 3`),
+    query(`SELECT id, nom, telephone, source, temperature, created_at FROM crm_leads ORDER BY created_at DESC LIMIT 3`),
+    query(`SELECT categorie, COALESCE(SUM(montant_ttc), 0)::numeric AS total FROM expenses GROUP BY categorie ORDER BY total DESC`),
+    query(`SELECT
       COALESCE(SUM(CASE WHEN depot_paye_at >= date_trunc('month', CURRENT_DATE) THEN depot_montant ELSE 0 END), 0)::numeric +
       COALESCE(SUM(CASE WHEN final_paye_at >= date_trunc('month', CURRENT_DATE) THEN final_montant ELSE 0 END), 0)::numeric AS ce_mois,
       COALESCE(SUM(CASE WHEN depot_paye_at >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND depot_paye_at < date_trunc('month', CURRENT_DATE) THEN depot_montant ELSE 0 END), 0)::numeric +
       COALESCE(SUM(CASE WHEN final_paye_at >= date_trunc('month', CURRENT_DATE - INTERVAL '1 month') AND final_paye_at < date_trunc('month', CURRENT_DATE) THEN final_montant ELSE 0 END), 0)::numeric AS mois_dernier
-    FROM invoices
-  `);
-
-  // 9. Submissions (website leads)
-  const submissions = await query(`
-    SELECT COUNT(*)::int AS total,
-           COUNT(CASE WHEN statut = 'nouveau' THEN 1 END)::int AS nouveaux
-    FROM submissions
-  `);
-
-  // 10. Lead sources breakdown
-  const leadSources = await query(`
-    SELECT source, COUNT(*)::int AS count
-    FROM crm_leads
-    GROUP BY source ORDER BY count DESC
-  `);
-
-  // 11. Chatbot conversations
-  const chatbot = await query(`SELECT COUNT(*)::int AS count FROM conversations`);
+    FROM invoices`),
+    query(`SELECT COUNT(*)::int AS total, COUNT(CASE WHEN statut = 'nouveau' THEN 1 END)::int AS nouveaux FROM submissions`),
+    query(`SELECT source, COUNT(*)::int AS count FROM crm_leads GROUP BY source ORDER BY count DESC`),
+    query(`SELECT COUNT(*)::int AS count FROM conversations`),
+  ]);
 
   // 12. SMS stats
   const smsStats = await query(`

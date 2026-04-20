@@ -29,19 +29,19 @@ export function PollingProvider({ children, onRefresh, intervalMs = 30_000 }: Pr
   const [isRefreshing, setIsRefreshing] = useState(false);
   const runningRef  = useRef(false);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(null);
+  const mountedRef = useRef(false);
 
   const doRefresh = useCallback(async () => {
     if (runningRef.current) return;
     runningRef.current = true;
-    setIsRefreshing(true);
+    // Only show refreshing spinner on subsequent loads, not initial
+    if (mountedRef.current) setIsRefreshing(true);
     try {
       await onRefresh();
       setLastRefresh(new Date());
-    } catch (err) {
-      // If session expired, redirect to login
-      if (err instanceof Error && err.message.includes('expir')) {
-        window.location.href = '/auth/signin';
-      }
+      mountedRef.current = true;
+    } catch {
+      // errors handled by individual pages
     } finally {
       runningRef.current = false;
       setIsRefreshing(false);
