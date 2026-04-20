@@ -356,12 +356,15 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           {quote.items && quote.items.length > 0 ? (
             <>
               <p className="text-slate-500 text-xs uppercase">Services</p>
-              {quote.items.map((item, idx) => (
-                <div key={idx} className="flex justify-between bg-slate-900/50 rounded-lg px-3 py-2">
-                  <span className="text-white font-medium">{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service}</span>
-                  <span className="text-slate-300">{Number(item.superficie)} pi² @ {formatMoney(Number(item.prix_pied_carre))}/pi²</span>
-                </div>
-              ))}
+              {quote.items.map((item, idx) => {
+                const isPrixFixe = Number(item.prix_pied_carre) === 0 && Number(item.sous_total) > 0;
+                return (
+                  <div key={idx} className="flex justify-between bg-slate-900/50 rounded-lg px-3 py-2">
+                    <span className="text-white font-medium">{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service}</span>
+                    <span className="text-slate-300">{isPrixFixe ? 'Prix fixe' : `${Number(item.superficie)} pi² @ ${formatMoney(Number(item.prix_pied_carre))}/pi²`}</span>
+                  </div>
+                );
+              })}
             </>
           ) : (
             <div className="grid grid-cols-2 gap-4">
@@ -370,8 +373,8 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
                 <p className="text-white font-medium">{service.label}</p>
               </div>
               <div>
-                <p className="text-slate-500">Superficie</p>
-                <p className="text-white">{quote.superficie} pi²</p>
+                <p className="text-slate-500">{Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 ? 'Type de prix' : 'Superficie'}</p>
+                <p className="text-white">{Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 ? 'Prix fixe' : `${quote.superficie} pi²`}</p>
               </div>
             </div>
           )}
@@ -422,16 +425,28 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         <div className="space-y-3 text-sm">
           {/* Show items breakdown if available */}
           {quote.items && quote.items.length > 0 ? (
-            quote.items.map((item, idx) => (
-              <div key={idx} className="flex justify-between text-slate-300">
-                <span>{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service} x {Number(item.superficie)} pi²</span>
-                <span>{formatMoney(Number(item.sous_total))}</span>
-              </div>
-            ))
+            quote.items.map((item, idx) => {
+              const isPrixFixe = Number(item.prix_pied_carre) === 0 && Number(item.sous_total) > 0;
+              return (
+                <div key={idx} className="flex justify-between text-slate-300">
+                  <span>{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service}{isPrixFixe ? ' — Prix fixe' : ` x ${Number(item.superficie)} pi²`}</span>
+                  <span>{formatMoney(Number(item.sous_total))}</span>
+                </div>
+              );
+            })
           ) : (
             <div className="flex justify-between text-slate-300">
-              <span>{service.label} x {quote.superficie} pi² @ {formatMoney(Number(quote.prix_pied_carre))}/pi²</span>
-              <span>{formatMoney(Math.round(Number(quote.prix_pied_carre) * Number(quote.superficie) * 100) / 100)}</span>
+              {Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 ? (
+                <>
+                  <span>{service.label} — Prix fixe</span>
+                  <span>{formatMoney(Number(quote.sous_total))}</span>
+                </>
+              ) : (
+                <>
+                  <span>{service.label} x {quote.superficie} pi² @ {formatMoney(Number(quote.prix_pied_carre))}/pi²</span>
+                  <span>{formatMoney(Math.round(Number(quote.prix_pied_carre) * Number(quote.superficie) * 100) / 100)}</span>
+                </>
+              )}
             </div>
           )}
 
