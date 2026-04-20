@@ -163,11 +163,11 @@ export async function POST(req: NextRequest) {
       : (msg ? msg.slice(0, 120) : 'Nouveau lead — détails dans CRM');
 
     // Telegram notification — bypass quiet hours for FB leads (urgent, real-time)
-    // Send to group + individual admin chats (group is primary, fallback to individual if missing)
+    // Send to group if available, otherwise DM admins (not both — avoids duplicates)
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
     const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
-    const chatIds = [groupId, ...adminIds].filter(Boolean);
+    const chatIds = groupId ? [groupId] : adminIds;
     if (botToken && chatIds.length > 0) {
       const SERVICE_LABELS: Record<string, string> = {
         flake: 'Flocon (Flake)', metallique: 'Métallique', couleur_unie: 'Couleur unie',
