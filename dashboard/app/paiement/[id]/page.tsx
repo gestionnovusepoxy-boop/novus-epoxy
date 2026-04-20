@@ -3,6 +3,20 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 
+interface QuoteItem {
+  type_service: string;
+  superficie: number;
+  prix_pied_carre: number;
+  sous_total: number;
+}
+
+interface QuoteExtra {
+  description: string;
+  quantite: number;
+  prix_unitaire: number;
+  sous_total: number;
+}
+
 interface QuoteData {
   id: number;
   client_nom: string;
@@ -10,6 +24,11 @@ interface QuoteData {
   superficie: number;
   total: number;
   depot_requis: number;
+  rabais_pct?: number;
+  rabais_montant?: number;
+  sous_total?: number;
+  tps?: number;
+  tvq?: number;
   statut: string;
   deposit_paid_at: string | null;
   balance_paid_at: string | null;
@@ -19,6 +38,8 @@ interface QuoteData {
   jour1_slot?: string;
   jour2_date?: string;
   jour2_slot?: string;
+  items?: QuoteItem[];
+  extras?: QuoteExtra[];
 }
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -109,9 +130,13 @@ export default function ClientPortalPage() {
   const depositPaid = !!data.deposit_paid_at || (success && statut === 'contrat_signe');
   const balancePaid = !!data.balance_paid_at || (success && ['depot_paye', 'planifie'].includes(statut));
   const fullyPaid = depositPaid && balancePaid;
+  const isMultiService = (data.items?.length ?? 0) > 0;
 
-  // Determine current step — if deposit already paid, skip straight to balance (step 4)
-  const currentStep = fullyPaid ? 5 : depositPaid ? 4 : !hasDates ? 1 : !contractSigned ? 2 : 3;
+  // Multi-service: no date picking — flow is: sign contract → pay deposit → dates confirmed by Novus
+  // Single service: choose dates → sign contract → pay deposit
+  const currentStep = fullyPaid ? 5 : depositPaid ? 4 : isMultiService
+    ? (!contractSigned ? 1 : 2)
+    : (!hasDates ? 1 : !contractSigned ? 2 : 3);
 
   const handleInterac = async () => {
     try {
@@ -146,12 +171,17 @@ export default function ClientPortalPage() {
 
         {/* Progress steps */}
         <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', marginBottom: '16px', border: '1px solid #334155' }}>
-          {[
+          {(isMultiService ? [
+            { num: 1, label: 'Signer le contrat', done: contractSigned },
+            { num: 2, label: `Depot 30% — ${formatMoney(depot)}`, done: depositPaid },
+            { num: 3, label: 'Dates confirmees par Novus Epoxy', done: hasDates },
+            { num: 4, label: `Solde 70% a la fin des travaux — ${formatMoney(balance)}`, done: balancePaid },
+          ] : [
             { num: 1, label: 'Choisir vos dates', done: hasDates },
             { num: 2, label: 'Signer le contrat', done: contractSigned },
             { num: 3, label: `Depot 30% — ${formatMoney(depot)}`, done: depositPaid },
             { num: 4, label: `Solde 70% — ${formatMoney(balance)}`, done: balancePaid },
-          ].map((step, i) => (
+          ]).map((step, i) => (
             <div key={step.num} style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: i < 3 ? '10px' : 0 }}>
               <div style={{
                 width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
@@ -203,15 +233,52 @@ export default function ClientPortalPage() {
         {/* Quote summary */}
         <div style={{ background: '#1e293b', borderRadius: '12px', padding: '16px', border: '1px solid #334155', marginBottom: '16px' }}>
           <h3 style={{ fontSize: '15px', fontWeight: 700, margin: '0 0 12px' }}>Votre soumission</h3>
-          {[
-            { label: 'Service', value: SERVICE_LABELS[data.type_service] || data.type_service },
-            { label: 'Superficie', value: `${data.superficie} pi²` },
-          ].map(row => (
-            <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
-              <span style={{ color: '#94a3b8', fontSize: '13px' }}>{row.label}</span>
-              <span style={{ fontSize: '13px', fontWeight: 600 }}>{row.value}</span>
+          {isMultiService ? (
+            <>
+              {data.items!.map((item, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '13px' }}>{SERVICE_LABELS[item.type_service] || item.type_service} — {Number(item.superficie)} pi²</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>{formatMoney(Number(item.sous_total))}</span>
+                </div>
+              ))}
+              {(data.extras ?? []).map((ex, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '13px' }}>{ex.description}{Number(ex.quantite) > 1 ? ` x${ex.quantite}` : ''}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>{formatMoney(Number(ex.sous_total))}</span>
+                </div>
+              ))}
+            </>
+          ) : (
+            <>
+              {[
+                { label: 'Service', value: SERVICE_LABELS[data.type_service] || data.type_service },
+                { label: 'Superficie', value: `${data.superficie} pi²` },
+              ].map(row => (
+                <div key={row.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '13px' }}>{row.label}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>{row.value}</span>
+                </div>
+              ))}
+            </>
+          )}
+          {Number(data.rabais_pct) > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
+              <span style={{ color: '#16a34a', fontSize: '13px', fontWeight: 600 }}>Rabais {data.rabais_pct}%</span>
+              <span style={{ fontSize: '13px', fontWeight: 600, color: '#16a34a' }}>-{formatMoney(Number(data.rabais_montant))}</span>
             </div>
-          ))}
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
+            <span style={{ color: '#94a3b8', fontSize: '13px' }}>Sous-total</span>
+            <span style={{ fontSize: '13px' }}>{formatMoney(Number(data.sous_total))}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
+            <span style={{ color: '#94a3b8', fontSize: '13px' }}>TPS (5%)</span>
+            <span style={{ fontSize: '13px' }}>{formatMoney(Number(data.tps))}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
+            <span style={{ color: '#94a3b8', fontSize: '13px' }}>TVQ (9.975%)</span>
+            <span style={{ fontSize: '13px' }}>{formatMoney(Number(data.tvq))}</span>
+          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', fontWeight: 700, fontSize: '17px' }}>
             <span>Total</span>
             <span>{formatMoney(total)}</span>
@@ -219,7 +286,7 @@ export default function ClientPortalPage() {
         </div>
 
         {/* === CURRENT ACTION BUTTON === */}
-        {currentStep === 1 && (
+        {currentStep === 1 && !isMultiService && (
           <a href={`/reservation/${data.id}?token=${encodeURIComponent(token)}`}
             style={{
               display: 'block', width: '100%', padding: '18px', textAlign: 'center',
@@ -228,6 +295,17 @@ export default function ClientPortalPage() {
               marginBottom: '16px', boxSizing: 'border-box',
             }}>
             Choisir mes dates de travaux
+          </a>
+        )}
+        {currentStep === 1 && isMultiService && (
+          <a href={`/contrat/${data.id}?token=${encodeURIComponent(token)}`}
+            style={{
+              display: 'block', width: '100%', padding: '18px', textAlign: 'center',
+              background: '#f59e0b', color: '#0f172a', borderRadius: '10px',
+              textDecoration: 'none', fontWeight: 700, fontSize: '17px',
+              marginBottom: '16px', boxSizing: 'border-box',
+            }}>
+            Signer le contrat
           </a>
         )}
 

@@ -12,7 +12,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const rows = await query(
     `SELECT id, client_nom, type_service, superficie, total, depot_requis, statut,
-            deposit_paid_at, balance_paid_at, booking_id, contrat_signe_at, secret_token
+            deposit_paid_at, balance_paid_at, booking_id, contrat_signe_at, secret_token,
+            rabais_pct, rabais_montant, sous_total, tps, tvq
      FROM quotes WHERE id = $1 AND secret_token = $2`,
     [parseInt(id), token]
   );
@@ -49,5 +50,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  return NextResponse.json(quote);
+  // Include items and extras for multi-service quotes
+  const items = await query('SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
+  const extras = await query('SELECT * FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
+
+  return NextResponse.json({ ...quote, items, extras });
 }

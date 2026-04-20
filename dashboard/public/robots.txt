@@ -1,0 +1,12 @@
+# *
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /api
+Disallow: /auth
+
+# Host
+Host: https://novus-epoxy.vercel.app
+
+# Sitemaps
+Sitemap: https://novus-epoxy.vercel.app/sitemap.xml
