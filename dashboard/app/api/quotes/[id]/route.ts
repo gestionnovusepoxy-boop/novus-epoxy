@@ -11,7 +11,11 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const rows = await query('SELECT * FROM quotes WHERE id = $1', [parseInt(id)]);
   if (!rows[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
-  return NextResponse.json(rows[0]);
+  // Fetch items and extras
+  const items = await query('SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
+  const extras = await query('SELECT * FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
+
+  return NextResponse.json({ ...rows[0], items, extras });
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -27,27 +31,32 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   let i = 1;
 
   // If type_service or superficie or rabais_pct changed, recalculate prices
+  // BUT skip recalc if this is a prix fixe quote (prix_pied_carre = 0)
   const needsRecalc = body.type_service !== undefined || body.superficie !== undefined || body.rabais_pct !== undefined;
   if (needsRecalc) {
-    // Get current quote to fill in missing values
     const current = await query('SELECT * FROM quotes WHERE id = $1', [parseInt(id)]);
     if (!current[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
-    const service = (body.type_service ?? current[0].type_service) as ServiceType;
-    const superficie = parseFloat(body.superficie ?? current[0].superficie);
-    const rabais = parseFloat(body.rabais_pct ?? current[0].rabais_pct ?? 0);
+    const isPrixFixe = Number(current[0].prix_pied_carre) === 0 && Number(current[0].sous_total) > 0;
 
-    if (service in SERVICES && superficie > 0) {
-      const calc = calculateQuote(service, superficie, rabais);
-      body.prix_pied_carre = calc.prix_pied_carre;
-      body.sous_total = calc.sous_total;
-      body.tps = calc.tps;
-      body.tvq = calc.tvq;
-      body.total = calc.total;
-      body.depot_requis = calc.depot_requis;
-      body.rabais_pct = calc.rabais_pct;
-      body.rabais_montant = calc.rabais_montant;
+    if (!isPrixFixe) {
+      const service = (body.type_service ?? current[0].type_service) as ServiceType;
+      const superficie = parseFloat(body.superficie ?? current[0].superficie);
+      const rabais = parseFloat(body.rabais_pct ?? current[0].rabais_pct ?? 0);
+
+      if (service in SERVICES && superficie > 0) {
+        const calc = calculateQuote(service, superficie, rabais);
+        body.prix_pied_carre = calc.prix_pied_carre;
+        body.sous_total = calc.sous_total;
+        body.tps = calc.tps;
+        body.tvq = calc.tvq;
+        body.total = calc.total;
+        body.depot_requis = calc.depot_requis;
+        body.rabais_pct = calc.rabais_pct;
+        body.rabais_montant = calc.rabais_montant;
+      }
     }
+    // Prix fixe quotes: only update the fields sent, no recalculation
   }
 
   const allFields = [...allowed, 'prix_pied_carre', 'sous_total', 'tps', 'tvq', 'total', 'depot_requis', 'rabais_montant'];
