@@ -67,10 +67,11 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  const rabaisExplicit = rabais_pct !== undefined && rabais_pct !== null;
   let rabaisPct = Math.min(100, Math.max(0, parseFloat(rabais_pct ?? 0) || 0));
 
-  // If no manual discount, check for active promotions
-  if (rabaisPct === 0) {
+  // Only auto-apply promos if rabais was NOT explicitly set by user
+  if (!rabaisExplicit) {
     try {
       const promoRows = await query(
         `SELECT rabais_pct, services FROM promotions
@@ -93,22 +94,18 @@ export async function POST(req: NextRequest) {
   const typedItems = items.map(i => ({ type_service: i.type_service as ServiceType, superficie: Number(i.superficie), prix_fixe: i.prix_fixe ? Number(i.prix_fixe) : undefined }));
   const typedExtras = extras.map(e => ({ description: e.description, quantite: Number(e.quantite), prix_unitaire: Number(e.prix_unitaire) }));
 
-  let calc;
-  if (items.length === 1 && extras.length === 0) {
-    calc = calculateQuote(typedItems[0].type_service, typedItems[0].superficie, rabaisPct);
-  } else {
-    const multi = calculateMultiQuote(typedItems, typedExtras, rabaisPct);
-    calc = {
-      prix_pied_carre: typedItems[0] ? SERVICES[typedItems[0].type_service].prix : 0,
-      rabais_pct: multi.rabais_pct,
-      rabais_montant: multi.rabais_montant,
-      sous_total: multi.sous_total,
-      tps: multi.tps,
-      tvq: multi.tvq,
-      total: multi.total,
-      depot_requis: multi.depot_requis,
-    };
-  }
+  // Always use multi-quote calculator (supports prix_fixe)
+  const multi = calculateMultiQuote(typedItems, typedExtras, rabaisPct);
+  const calc = {
+    prix_pied_carre: typedItems[0]?.prix_fixe ? 0 : (typedItems[0] ? SERVICES[typedItems[0].type_service].prix : 0),
+    rabais_pct: multi.rabais_pct,
+    rabais_montant: multi.rabais_montant,
+    sous_total: multi.sous_total,
+    tps: multi.tps,
+    tvq: multi.tvq,
+    total: multi.total,
+    depot_requis: multi.depot_requis,
+  };
 
   // Primary type_service = first item (for backwards compat display)
   const primaryService = typedItems[0].type_service;
@@ -129,15 +126,16 @@ export async function POST(req: NextRequest) {
 
   const quoteId = rows[0].id as number;
 
-  // Insert quote items
+  // Insert quote items (supports prix_fixe)
   for (let idx = 0; idx < typedItems.length; idx++) {
     const item = typedItems[idx];
-    const prix = SERVICES[item.type_service].prix;
-    const st = Math.round(prix * item.superficie * 100) / 100;
+    const hasPrixFixe = item.prix_fixe && item.prix_fixe > 0;
+    const prix = hasPrixFixe ? 0 : SERVICES[item.type_service].prix;
+    const st = hasPrixFixe ? item.prix_fixe! : Math.round(prix * item.superficie * 100) / 100;
     await query(
       `INSERT INTO quote_items (quote_id, type_service, superficie, prix_pied_carre, sous_total, sort_order)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [quoteId, item.type_service, item.superficie, prix, st, idx],
+      [quoteId, item.type_service, item.superficie || 0, prix, st, idx],
     );
   }
 
