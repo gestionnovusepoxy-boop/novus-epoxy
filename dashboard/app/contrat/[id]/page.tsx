@@ -341,8 +341,17 @@ export default function ContratPage() {
         </div>
 
         {error && (
-          <div style={{ background: '#7f1d1d', border: '1px solid #dc2626', borderRadius: '8px', padding: '12px', marginBottom: '16px', color: '#fca5a5', fontSize: '14px' }}>
-            {error}
+          <div style={{ background: '#7f1d1d', border: '1px solid #dc2626', borderRadius: '8px', padding: '16px', marginBottom: '16px', color: '#fca5a5', fontSize: '14px' }}>
+            {error === 'Token requis' || error === 'Devis introuvable' ? (
+              <div>
+                <p style={{ fontWeight: 700, marginBottom: 8 }}>Ce lien ne fonctionne pas</p>
+                <p style={{ color: '#94a3b8', fontSize: 13 }}>Le lien de signature doit etre ouvert depuis le courriel ou le SMS que vous avez recu de Novus Epoxy. Si vous n&apos;avez plus le lien, contactez-nous:</p>
+                <div style={{ marginTop: 12, display: 'flex', gap: 8, flexWrap: 'wrap' as const }}>
+                  <a href="tel:+15813075983" style={{ display: 'inline-block', background: '#16a34a', color: '#fff', padding: '10px 20px', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>Appeler 581-307-5983</a>
+                  <a href="sms:+15813075983" style={{ display: 'inline-block', background: '#334155', color: '#fff', padding: '10px 20px', borderRadius: 8, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>Envoyer un texto</a>
+                </div>
+              </div>
+            ) : error}
           </div>
         )}
 
