@@ -120,6 +120,41 @@ export async function POST(req: NextRequest) {
         [session.id, parseInt(quoteId)]
       );
 
+      // Create invoice + payment record
+      try {
+        const depot = Number(quote.depot_requis);
+        const solde = Number(quote.total) - depot;
+        // Find or create client
+        let clientId: number | null = null;
+        const existingClients = await query(`SELECT id FROM clients WHERE email = $1`, [clientEmail]);
+        if (existingClients.length > 0) {
+          clientId = existingClients[0].id as number;
+        } else {
+          const newClient = await query(
+            `INSERT INTO clients (nom, email, telephone, adresse) VALUES ($1, $2, $3, $4) RETURNING id`,
+            [clientName, clientEmail, quote.client_tel, quote.client_adresse]
+          );
+          clientId = newClient[0].id as number;
+        }
+        // Generate invoice number
+        const lastInv = await query(`SELECT numero FROM invoices ORDER BY id DESC LIMIT 1`);
+        const lastNum = lastInv.length > 0 ? parseInt((lastInv[0].numero as string).split('-').pop()!) : 0;
+        const numero = `NE-2026-${String(lastNum + 1).padStart(3, '0')}`;
+        // Create invoice
+        const inv = await query(
+          `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, sous_total, tps, tvq, total, depot_montant, final_montant, depot_paye, final_paye, depot_paye_at, depot_methode, statut, rabais_pct, rabais_montant)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, true, false, NOW(), 'carte', 'depot_recu', $13, $14) RETURNING id`,
+          [numero, parseInt(quoteId), clientId, quote.type_service, quote.superficie, quote.prix_pied_carre, quote.sous_total, quote.tps, quote.tvq, quote.total, depot, solde, Number(quote.rabais_pct || 0), Number(quote.rabais_montant || 0)]
+        );
+        // Record payment
+        await query(
+          `INSERT INTO payments (invoice_id, montant, type, methode) VALUES ($1, $2, 'depot', 'carte')`,
+          [inv[0].id, depot]
+        );
+      } catch (err) {
+        console.error('Failed to create invoice for Stripe deposit:', err);
+      }
+
       // Send confirmation email
       const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';
       const calendarHtml = datesAvailable ? calendarLinksHtml(quoteId, baseUrl) : '';
