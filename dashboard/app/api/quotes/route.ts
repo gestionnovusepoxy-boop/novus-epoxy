@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { calculateQuote, SERVICES, type ServiceType } from '@/lib/pricing';
+import { calculateQuote, calculateMultiQuote, SERVICES, type ServiceType } from '@/lib/pricing';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -14,8 +14,6 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search') ?? '';
   const offset = (page - 1) * limit;
 
-  // By default, hide quotes that became invoices (depot_paye, planifie, complete)
-  // Unless a specific statut is requested or ?all=true
   const showAll = searchParams.get('all') === 'true';
   let where = showAll ? 'WHERE 1=1' : `WHERE statut NOT IN ('depot_paye', 'planifie', 'complete')`;
   const params: unknown[] = [];
@@ -47,14 +45,26 @@ export async function POST(req: NextRequest) {
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
   const body = await req.json();
-  const { client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, notes, submission_id, rabais_pct } = body;
+  const { client_nom, client_email, client_tel, client_adresse, etat_plancher, notes, submission_id, rabais_pct } = body;
 
-  if (!client_nom || !client_email || !type_service || !superficie) {
+  // Support both old (single service) and new (multi items + extras) format
+  const items: { type_service: string; superficie: number; prix_fixe?: number }[] = body.items ?? [];
+  const extras: { description: string; quantite: number; prix_unitaire: number }[] = body.extras ?? [];
+
+  // Backwards compat: if no items array, use single type_service + superficie
+  if (items.length === 0 && body.type_service && body.superficie) {
+    items.push({ type_service: body.type_service, superficie: parseFloat(body.superficie) });
+  }
+
+  if (!client_nom || !client_email || items.length === 0) {
     return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 });
   }
 
-  if (!(type_service in SERVICES)) {
-    return NextResponse.json({ error: 'Type de service invalide' }, { status: 400 });
+  // Validate all service types
+  for (const item of items) {
+    if (!(item.type_service in SERVICES)) {
+      return NextResponse.json({ error: `Type de service invalide: ${item.type_service}` }, { status: 400 });
+    }
   }
 
   let rabaisPct = Math.min(100, Math.max(0, parseFloat(rabais_pct ?? 0) || 0));
@@ -70,7 +80,7 @@ export async function POST(req: NextRequest) {
       if (promoRows.length > 0) {
         const promo = promoRows[0];
         const services = promo.services as string[];
-        if (!services || services.length === 0 || services.includes(type_service)) {
+        if (!services || services.length === 0 || items.some(i => services.includes(i.type_service))) {
           rabaisPct = Number(promo.rabais_pct);
         }
       }
@@ -79,7 +89,30 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const calc = calculateQuote(type_service as ServiceType, parseFloat(superficie), rabaisPct);
+  // Use multi-quote calculator if items > 1 or extras exist, otherwise single for backwards compat
+  const typedItems = items.map(i => ({ type_service: i.type_service as ServiceType, superficie: Number(i.superficie), prix_fixe: i.prix_fixe ? Number(i.prix_fixe) : undefined }));
+  const typedExtras = extras.map(e => ({ description: e.description, quantite: Number(e.quantite), prix_unitaire: Number(e.prix_unitaire) }));
+
+  let calc;
+  if (items.length === 1 && extras.length === 0) {
+    calc = calculateQuote(typedItems[0].type_service, typedItems[0].superficie, rabaisPct);
+  } else {
+    const multi = calculateMultiQuote(typedItems, typedExtras, rabaisPct);
+    calc = {
+      prix_pied_carre: typedItems[0] ? SERVICES[typedItems[0].type_service].prix : 0,
+      rabais_pct: multi.rabais_pct,
+      rabais_montant: multi.rabais_montant,
+      sous_total: multi.sous_total,
+      tps: multi.tps,
+      tvq: multi.tvq,
+      total: multi.total,
+      depot_requis: multi.depot_requis,
+    };
+  }
+
+  // Primary type_service = first item (for backwards compat display)
+  const primaryService = typedItems[0].type_service;
+  const primarySuperficie = typedItems[0].superficie;
 
   const rows = await query(
     `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, etat_plancher, notes, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis, submission_id)
@@ -87,12 +120,37 @@ export async function POST(req: NextRequest) {
      RETURNING *`,
     [
       client_nom, client_email, client_tel ?? null, client_adresse ?? null,
-      type_service, parseFloat(superficie),
+      primaryService, primarySuperficie,
       etat_plancher ?? null, notes ?? null,
       calc.prix_pied_carre, calc.rabais_pct, calc.rabais_montant, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
       submission_id ?? null,
     ],
   );
+
+  const quoteId = rows[0].id as number;
+
+  // Insert quote items
+  for (let idx = 0; idx < typedItems.length; idx++) {
+    const item = typedItems[idx];
+    const prix = SERVICES[item.type_service].prix;
+    const st = Math.round(prix * item.superficie * 100) / 100;
+    await query(
+      `INSERT INTO quote_items (quote_id, type_service, superficie, prix_pied_carre, sous_total, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [quoteId, item.type_service, item.superficie, prix, st, idx],
+    );
+  }
+
+  // Insert quote extras
+  for (let idx = 0; idx < typedExtras.length; idx++) {
+    const ex = typedExtras[idx];
+    const st = Math.round(ex.quantite * ex.prix_unitaire * 100) / 100;
+    await query(
+      `INSERT INTO quote_extras (quote_id, description, quantite, prix_unitaire, sous_total, sort_order)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [quoteId, ex.description, ex.quantite, ex.prix_unitaire, st, idx],
+    );
+  }
 
   return NextResponse.json(rows[0], { status: 201 });
 }

@@ -2,8 +2,21 @@
 
 import { useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createQuote, type ServiceType } from '@/lib/api';
-import { SERVICES, calculateQuote, formatMoney } from '@/lib/pricing';
+import { type ServiceType } from '@/lib/api';
+import { SERVICES, calculateMultiQuote, formatMoney, EXTRAS_PREDEFINIS } from '@/lib/pricing';
+
+interface ServiceItem {
+  type_service: ServiceType;
+  superficie: string;
+  prix_fixe: boolean;
+  prix_fixe_montant: string;
+}
+
+interface ExtraItem {
+  description: string;
+  quantite: string;
+  prix_unitaire: string;
+}
 
 export default function NouveauDevisPage() {
   const router = useRouter();
@@ -19,45 +32,98 @@ export default function NouveauDevisPage() {
     client_email: searchParams.get('email') ?? '',
     client_tel: searchParams.get('tel') ?? '',
     client_adresse: searchParams.get('ville') ?? '',
-    type_service: validService,
-    superficie: searchParams.get('superficie') ?? '',
-    couleur_flake: '',
     etat_plancher: '',
     notes: searchParams.get('notes') ?? '',
     rabais_pct: 20,
   });
 
-  const sup = parseFloat(form.superficie) || 0;
-  const preview = sup > 0 ? calculateQuote(form.type_service, sup, form.rabais_pct) : null;
+  const [items, setItems] = useState<ServiceItem[]>([
+    { type_service: validService, superficie: searchParams.get('superficie') ?? '', prix_fixe: false, prix_fixe_montant: '' },
+  ]);
 
-  function update(field: string, value: string) {
+  const [extras, setExtras] = useState<ExtraItem[]>([]);
+
+  // Calculate preview
+  const validItems = items.filter(i => i.prix_fixe ? parseFloat(i.prix_fixe_montant) > 0 : parseFloat(i.superficie) > 0);
+  const validExtras = extras.filter(e => e.description && parseFloat(e.prix_unitaire) > 0);
+  const preview = validItems.length > 0 ? calculateMultiQuote(
+    validItems.map(i => ({
+      type_service: i.type_service,
+      superficie: parseFloat(i.superficie) || 0,
+      prix_fixe: i.prix_fixe ? parseFloat(i.prix_fixe_montant) : undefined,
+    })),
+    validExtras.map(e => ({ description: e.description, quantite: parseFloat(e.quantite) || 1, prix_unitaire: parseFloat(e.prix_unitaire) })),
+    form.rabais_pct,
+  ) : null;
+
+  function updateForm(field: string, value: string) {
     setForm(prev => ({ ...prev, [field]: value }));
+  }
+
+  function addItem() {
+    setItems(prev => [...prev, { type_service: 'flake', superficie: '', prix_fixe: false, prix_fixe_montant: '' }]);
+  }
+
+  function removeItem(idx: number) {
+    setItems(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateItem(idx: number, field: keyof ServiceItem, value: string) {
+    setItems(prev => prev.map((item, i) => i === idx ? { ...item, [field]: value } : item));
+  }
+
+  function addExtra(preset?: typeof EXTRAS_PREDEFINIS[number]) {
+    setExtras(prev => [...prev, {
+      description: preset?.label ?? '',
+      quantite: '1',
+      prix_unitaire: preset ? String(preset.prix_defaut) : '',
+    }]);
+  }
+
+  function removeExtra(idx: number) {
+    setExtras(prev => prev.filter((_, i) => i !== idx));
+  }
+
+  function updateExtra(idx: number, field: keyof ExtraItem, value: string) {
+    setExtras(prev => prev.map((ex, i) => i === idx ? { ...ex, [field]: value } : ex));
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (validItems.length === 0) { setError('Ajoutez au moins un service'); return; }
     setLoading(true);
     setError('');
 
     try {
-      const quote = await createQuote({
-        client_nom: form.client_nom,
-        client_email: form.client_email,
-        client_tel: form.client_tel || undefined,
-        client_adresse: form.client_adresse || undefined,
-        type_service: form.type_service,
-        superficie: sup,
-        couleur_flake: form.couleur_flake || undefined,
-        etat_plancher: form.etat_plancher || undefined,
-        notes: form.notes || undefined,
-        rabais_pct: form.rabais_pct || undefined,
+      const res = await fetch('/api/quotes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          client_nom: form.client_nom,
+          client_email: form.client_email,
+          client_tel: form.client_tel || undefined,
+          client_adresse: form.client_adresse || undefined,
+          etat_plancher: form.etat_plancher || undefined,
+          notes: form.notes || undefined,
+          rabais_pct: form.rabais_pct,
+          items: validItems.map(i => ({
+            type_service: i.type_service,
+            superficie: parseFloat(i.superficie) || 0,
+            prix_fixe: i.prix_fixe ? parseFloat(i.prix_fixe_montant) : undefined,
+          })),
+          extras: validExtras.map(e => ({ description: e.description, quantite: parseFloat(e.quantite) || 1, prix_unitaire: parseFloat(e.prix_unitaire) })),
+        }),
       });
+      if (!res.ok) throw new Error('API error');
+      const quote = await res.json();
       router.push(`/dashboard/devis/${quote.id}`);
     } catch {
       setError('Erreur lors de la creation du devis');
       setLoading(false);
     }
   }
+
+  const inputClass = 'w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500';
 
   return (
     <div className="p-6 max-w-3xl">
@@ -76,80 +142,165 @@ export default function NouveauDevisPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm text-slate-400 mb-1">Nom *</label>
-              <input
-                required value={form.client_nom} onChange={e => update('client_nom', e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
+              <input required value={form.client_nom} onChange={e => updateForm('client_nom', e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">Courriel *</label>
-              <input
-                type="email" required value={form.client_email} onChange={e => update('client_email', e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
+              <input type="email" required value={form.client_email} onChange={e => updateForm('client_email', e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">Telephone</label>
-              <input
-                type="tel" value={form.client_tel} onChange={e => update('client_tel', e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
+              <input type="tel" value={form.client_tel} onChange={e => updateForm('client_tel', e.target.value)} className={inputClass} />
             </div>
             <div>
               <label className="block text-sm text-slate-400 mb-1">Adresse</label>
-              <input
-                value={form.client_adresse} onChange={e => update('client_adresse', e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
+              <input value={form.client_adresse} onChange={e => updateForm('client_adresse', e.target.value)} className={inputClass} />
             </div>
           </div>
         </div>
 
-        {/* Projet */}
+        {/* Services */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
-          <h3 className="text-white font-semibold text-sm uppercase tracking-wider">Projet</h3>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Type de service *</label>
-              <select
-                value={form.type_service} onChange={e => update('type_service', e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
+          <div className="flex items-center justify-between">
+            <h3 className="text-white font-semibold text-sm uppercase tracking-wider">Services</h3>
+            <button type="button" onClick={addItem} className="text-amber-400 hover:text-amber-300 text-sm font-medium">+ Ajouter un service</button>
+          </div>
+
+          {items.map((item, idx) => (
+            <div key={idx} className="space-y-2">
+              <div className="flex items-end gap-3">
+                <div className="flex-1">
+                  <label className="block text-sm text-slate-400 mb-1">Type de service *</label>
+                  <select
+                    value={item.type_service} onChange={e => updateItem(idx, 'type_service', e.target.value)}
+                    className={inputClass}
+                  >
+                    {Object.entries(SERVICES).map(([key, { label, prix }]) => (
+                      <option key={key} value={key}>{label} — {formatMoney(prix)}/pi²</option>
+                    ))}
+                  </select>
+                </div>
+                {!item.prix_fixe && (
+                  <div className="w-36">
+                    <label className="block text-sm text-slate-400 mb-1">Superficie (pi²) *</label>
+                    <input
+                      type="number" min="1" step="0.01"
+                      value={item.superficie} onChange={e => updateItem(idx, 'superficie', e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                )}
+                {item.prix_fixe && (
+                  <div className="w-36">
+                    <label className="block text-sm text-slate-400 mb-1">Prix fixe ($) *</label>
+                    <input
+                      type="number" min="1" step="0.01"
+                      value={item.prix_fixe_montant} onChange={e => updateItem(idx, 'prix_fixe_montant', e.target.value)}
+                      placeholder="Ex: 2500"
+                      className={inputClass}
+                    />
+                  </div>
+                )}
+                <div className="w-20 text-right text-sm text-slate-400 pb-2.5">
+                  {item.prix_fixe
+                    ? (parseFloat(item.prix_fixe_montant) > 0 && formatMoney(parseFloat(item.prix_fixe_montant)))
+                    : (parseFloat(item.superficie) > 0 && formatMoney(SERVICES[item.type_service].prix * parseFloat(item.superficie)))
+                  }
+                </div>
+                {items.length > 1 && (
+                  <button type="button" onClick={() => removeItem(idx)} className="text-red-400 hover:text-red-300 pb-2.5 text-lg">✕</button>
+                )}
+              </div>
+              <label className="flex items-center gap-2 cursor-pointer select-none pl-1">
+                <input
+                  type="checkbox"
+                  checked={item.prix_fixe}
+                  onChange={e => {
+                    const checked = e.target.checked;
+                    setItems(prev => prev.map((it, i) => i === idx ? { ...it, prix_fixe: checked } : it));
+                  }}
+                  className="w-3.5 h-3.5 accent-amber-500"
+                />
+                <span className="text-xs text-slate-400">Prix fixe (patio, balcon, etc.)</span>
+              </label>
+            </div>
+          ))}
+        </div>
+
+        {/* Extras */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-white font-semibold text-sm uppercase tracking-wider">Extras</h3>
+            <button type="button" onClick={() => addExtra()} className="text-amber-400 hover:text-amber-300 text-sm font-medium">+ Extra personnalise</button>
+          </div>
+
+          {/* Quick add presets */}
+          <div className="flex flex-wrap gap-2">
+            {EXTRAS_PREDEFINIS.map(preset => (
+              <button
+                key={preset.key} type="button"
+                onClick={() => addExtra(preset)}
+                className="bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 transition"
               >
-                {Object.entries(SERVICES).map(([key, { label, prix }]) => (
-                  <option key={key} value={key}>{label} — {formatMoney(prix)}/pi²</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Superficie (pi²) *</label>
-              <input
-                type="number" min="1" step="0.01" required
-                value={form.superficie} onChange={e => update('superficie', e.target.value)}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500"
-              />
-            </div>
+                + {preset.label}
+              </button>
+            ))}
           </div>
-          <div>
-            <label className="block text-sm text-slate-400 mb-1">Couleur / Fini</label>
-            <input
-              value={form.couleur_flake} onChange={e => update('couleur_flake', e.target.value)}
-              placeholder="Ex: Night Fall, Or/Gold, Gris, Charcoal..."
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"
-            />
-          </div>
+
+          {extras.map((ex, idx) => (
+            <div key={idx} className="flex items-end gap-3">
+              <div className="flex-1">
+                <label className="block text-sm text-slate-400 mb-1">Description</label>
+                <input
+                  value={ex.description} onChange={e => updateExtra(idx, 'description', e.target.value)}
+                  placeholder="Ex: Echafaudage, reparation..."
+                  className={inputClass}
+                />
+              </div>
+              <div className="w-20">
+                <label className="block text-sm text-slate-400 mb-1">Qte</label>
+                <input
+                  type="number" min="1" step="1"
+                  value={ex.quantite} onChange={e => updateExtra(idx, 'quantite', e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div className="w-28">
+                <label className="block text-sm text-slate-400 mb-1">Prix ($)</label>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={ex.prix_unitaire} onChange={e => updateExtra(idx, 'prix_unitaire', e.target.value)}
+                  className={inputClass}
+                />
+              </div>
+              <div className="w-20 text-right text-sm text-slate-400 pb-2.5">
+                {parseFloat(ex.prix_unitaire) > 0 && formatMoney((parseFloat(ex.quantite) || 1) * parseFloat(ex.prix_unitaire))}
+              </div>
+              <button type="button" onClick={() => removeExtra(idx)} className="text-red-400 hover:text-red-300 pb-2.5 text-lg">✕</button>
+            </div>
+          ))}
+
+          {extras.length === 0 && (
+            <p className="text-slate-500 text-sm">Aucun extra. Cliquez les boutons ci-dessus pour en ajouter.</p>
+          )}
+        </div>
+
+        {/* Notes + options */}
+        <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
+          <h3 className="text-white font-semibold text-sm uppercase tracking-wider">Details</h3>
           <div>
             <label className="block text-sm text-slate-400 mb-1">Etat du plancher</label>
             <input
-              value={form.etat_plancher} onChange={e => update('etat_plancher', e.target.value)}
+              value={form.etat_plancher} onChange={e => updateForm('etat_plancher', e.target.value)}
               placeholder="Ex: Beton brut, peinture existante..."
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"
+              className={inputClass}
             />
           </div>
           <div>
             <label className="block text-sm text-slate-400 mb-1">Notes</label>
             <textarea
-              rows={3} value={form.notes} onChange={e => update('notes', e.target.value)}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500 resize-none"
+              rows={3} value={form.notes} onChange={e => updateForm('notes', e.target.value)}
+              className={`${inputClass} resize-none`}
             />
           </div>
           <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -168,22 +319,33 @@ export default function NouveauDevisPage() {
           <div className="bg-slate-800 border border-amber-500/30 rounded-xl p-6">
             <h3 className="text-amber-400 font-semibold text-sm uppercase tracking-wider mb-4">Apercu du prix</h3>
             <div className="space-y-2 text-sm">
-              <div className="flex justify-between text-slate-300">
-                <span>{SERVICES[form.type_service].label} x {sup} pi²</span>
-                <span>{formatMoney(Math.round(SERVICES[form.type_service].prix * sup * 100) / 100)}</span>
-              </div>
+              {/* Service items */}
+              {preview.items.map((item, idx) => (
+                <div key={idx} className="flex justify-between text-slate-300">
+                  <span>{SERVICES[item.type_service].label} x {item.superficie} pi²</span>
+                  <span>{formatMoney(item.sous_total)}</span>
+                </div>
+              ))}
+
+              {/* Extras */}
+              {preview.extras.map((ex, idx) => (
+                <div key={idx} className="flex justify-between text-slate-300">
+                  <span>{ex.description} {ex.quantite > 1 ? `x${ex.quantite}` : ''}</span>
+                  <span>{formatMoney(ex.sous_total)}</span>
+                </div>
+              ))}
+
               {preview.rabais_pct > 0 && (
                 <div className="flex justify-between text-green-400 font-medium">
-                  <span>Rabais Avril {preview.rabais_pct}%</span>
+                  <span>Rabais Avril {preview.rabais_pct}% (sur services)</span>
                   <span>-{formatMoney(preview.rabais_montant)}</span>
                 </div>
               )}
-              {preview.rabais_pct > 0 && (
-                <div className="flex justify-between text-slate-300">
-                  <span>Sous-total</span>
-                  <span>{formatMoney(preview.sous_total)}</span>
-                </div>
-              )}
+
+              <div className="flex justify-between text-slate-300 pt-1 border-t border-slate-700">
+                <span>Sous-total</span>
+                <span>{formatMoney(preview.sous_total)}</span>
+              </div>
               <div className="flex justify-between text-slate-400">
                 <span>TPS (5%)</span>
                 <span>{formatMoney(preview.tps)}</span>

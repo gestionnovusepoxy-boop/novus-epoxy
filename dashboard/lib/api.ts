@@ -11,6 +11,10 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
     headers: { 'Content-Type': 'application/json', ...options?.headers },
   });
 
+  if (res.status === 401 && typeof window !== 'undefined') {
+    window.location.href = '/auth/signin';
+    throw new Error('Session expirée');
+  }
   if (!res.ok) throw new Error(`API ${path} → ${res.status}`);
   return res.json() as Promise<T>;
 }
@@ -146,6 +150,27 @@ export async function updateSubmissionStatus(id: number, statut: Submission['sta
 export type QuoteStatut = 'brouillon' | 'en_attente' | 'approuve' | 'envoye' | 'contrat_signe' | 'depot_paye' | 'planifie' | 'complete' | 'refuse';
 export type ServiceType = 'flake' | 'metallique' | 'commercial';
 
+export interface QuoteItemRow {
+  id: number;
+  quote_id: number;
+  type_service: ServiceType;
+  superficie: number;
+  prix_pied_carre: number;
+  sous_total: number;
+  description: string | null;
+  sort_order: number;
+}
+
+export interface QuoteExtraRow {
+  id: number;
+  quote_id: number;
+  description: string;
+  quantite: number;
+  prix_unitaire: number;
+  sous_total: number;
+  sort_order: number;
+}
+
 export interface Quote {
   id:              number;
   client_nom:      string;
@@ -175,6 +200,8 @@ export interface Quote {
   paid_at:         string | null;
   created_at:      string;
   updated_at:      string;
+  items?:          QuoteItemRow[];
+  extras?:         QuoteExtraRow[];
 }
 
 export function fetchQuotes(params: {

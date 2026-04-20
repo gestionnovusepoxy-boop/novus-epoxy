@@ -85,6 +85,7 @@ export const SERVICE_DESCRIPTION: Record<string, { etapes: string[]; epaisseur_t
       'Meulage au diamant de la surface',
       'Réparation si nécessaire (crack filler ou béton)',
       'Application époxy commercial haute résistance (15-20 mils)',
+      'Broadcast de sable de silice antidérapant',
       'Topcoat polyuréthane antidérapant (4-6 mils)',
     ],
     epaisseur_totale: '20-30 mils (0.51-0.76 mm)',
@@ -111,6 +112,80 @@ export function calculateQuoteCustomPrice(sousTotal: number) {
   const depot = Math.round(total * DEPOT_RATE * 100) / 100;
 
   return { sous_total: sousTotal, tps, tvq, total, depot_requis: depot };
+}
+
+// Extras prédéfinis (le user peut aussi en créer des custom)
+export const EXTRAS_PREDEFINIS = [
+  { key: 'masquage', label: 'Masquage complet', prix_defaut: 250 },
+  { key: 'protection', label: 'Protection de chantier', prix_defaut: 200 },
+  { key: 'echafaudage', label: 'Échafaudage', prix_defaut: 350 },
+  { key: 'reparation_marches', label: 'Réparation de marches de béton', prix_defaut: 500 },
+] as const;
+
+export interface QuoteItem {
+  type_service: ServiceType;
+  superficie: number;
+  prix_pied_carre: number;
+  sous_total: number;
+  description?: string;
+}
+
+export interface QuoteExtra {
+  description: string;
+  quantite: number;
+  prix_unitaire: number;
+  sous_total: number;
+}
+
+export function calculateMultiQuote(
+  items: { type_service: ServiceType; superficie: number; prix_fixe?: number }[],
+  extras: { description: string; quantite: number; prix_unitaire: number }[],
+  rabais_pct = PROMO_DEFAULT_RABAIS,
+) {
+  // Calculate each service item (supports prix_fixe override)
+  const calcItems: QuoteItem[] = items.map(item => {
+    if (item.prix_fixe && item.prix_fixe > 0) {
+      // Prix fixe — ignore le calcul au pi²
+      return { type_service: item.type_service, superficie: item.superficie, prix_pied_carre: 0, sous_total: item.prix_fixe };
+    }
+    const prix = SERVICES[item.type_service].prix;
+    const st = Math.round(prix * item.superficie * 100) / 100;
+    return { type_service: item.type_service, superficie: item.superficie, prix_pied_carre: prix, sous_total: st };
+  });
+
+  // Calculate each extra
+  const calcExtras: QuoteExtra[] = extras.map(ex => ({
+    description: ex.description,
+    quantite: ex.quantite,
+    prix_unitaire: ex.prix_unitaire,
+    sous_total: Math.round(ex.quantite * ex.prix_unitaire * 100) / 100,
+  }));
+
+  const itemsTotal = calcItems.reduce((s, i) => s + i.sous_total, 0);
+  const extrasTotal = calcExtras.reduce((s, e) => s + e.sous_total, 0);
+  const sousTotalBrut = Math.round((itemsTotal + extrasTotal) * 100) / 100;
+
+  // Discount applies to services only, not extras
+  const rabaisMontant = Math.round(itemsTotal * (rabais_pct / 100) * 100) / 100;
+  const sousTotal = Math.round((sousTotalBrut - rabaisMontant) * 100) / 100;
+  const tps = Math.round(sousTotal * TPS_RATE * 100) / 100;
+  const tvq = Math.round(sousTotal * TVQ_RATE * 100) / 100;
+  const total = Math.round((sousTotal + tps + tvq) * 100) / 100;
+  const depot = Math.round(total * DEPOT_RATE * 100) / 100;
+
+  return {
+    items: calcItems,
+    extras: calcExtras,
+    items_total: itemsTotal,
+    extras_total: extrasTotal,
+    rabais_pct,
+    rabais_montant: rabaisMontant,
+    sous_total: sousTotal,
+    tps,
+    tvq,
+    total,
+    depot_requis: depot,
+  };
 }
 
 export function formatMoney(n: number): string {

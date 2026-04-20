@@ -321,8 +321,11 @@ function DashboardContent() {
   const [data, setData] = useState<OverviewData | null>(null);
 
   const loadData = useCallback(async () => {
-    const res = await fetch('/api/dashboard/overview');
-    if (res.ok) setData(await res.json());
+    try {
+      const res = await fetch('/api/dashboard/overview');
+      if (res.status === 401) { window.location.href = '/auth/signin'; return; }
+      if (res.ok) setData(await res.json());
+    } catch { /* network error, will retry on next poll */ }
   }, []);
 
   return (
