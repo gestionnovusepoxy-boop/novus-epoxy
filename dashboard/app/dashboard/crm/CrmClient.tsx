@@ -109,7 +109,7 @@ function LeadDetail({ lead, onUpdate, onClose }: { lead: Lead; onUpdate: () => v
 
   return (
     <tr className="bg-slate-800/80 border-b border-slate-700">
-      <td colSpan={10} className="px-4 sm:px-6 py-4">
+      <td colSpan={11} className="px-4 sm:px-6 py-4">
         <div className="flex justify-between items-center mb-3">
           <p className="text-white font-semibold text-sm">{lead.nom}</p>
           <button onClick={onClose} className="text-slate-400 hover:text-white text-xl px-2">&times;</button>
@@ -269,6 +269,9 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
       </td>
       <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">
         {lead.service ? (SERVICE_LABELS[lead.service] ?? lead.service) : <span className="text-slate-600">—</span>}
+      </td>
+      <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm max-w-[150px] truncate" title={lead.adresse ?? ''}>
+        {lead.adresse ?? <span className="text-slate-600">—</span>}
       </td>
       <td className="px-2 sm:px-4 py-3 text-slate-300 text-xs sm:text-sm">
         {lead.ville ?? <span className="text-slate-600">—</span>}
@@ -735,7 +738,7 @@ export default function CrmClient() {
         <table className="w-full min-w-[700px]">
           <thead>
             <tr className="border-b border-slate-700 bg-slate-900/50">
-              {['', 'Nom', 'Téléphone', 'Email', 'Service', 'Ville', 'Température', 'Statut', 'Date', ''].map((h, i) => (
+              {['', 'Nom', 'Téléphone', 'Email', 'Service', 'Adresse', 'Ville', 'Température', 'Statut', 'Date', ''].map((h, i) => (
                 <th key={h || `col-${i}`} className="text-left px-2 sm:px-4 py-3 text-slate-400 text-xs font-medium uppercase tracking-wider whitespace-nowrap">
                   {i === 0 ? <input type="checkbox" onChange={toggleSelectAll} className="accent-amber-500" /> : h}
                 </th>
@@ -744,10 +747,10 @@ export default function CrmClient() {
           </thead>
           <tbody>
             {loading && (
-              <tr><td colSpan={10} className="text-center py-8 text-slate-500 text-sm">Chargement…</td></tr>
+              <tr><td colSpan={11} className="text-center py-8 text-slate-500 text-sm">Chargement…</td></tr>
             )}
             {!loading && leads.length === 0 && (
-              <tr><td colSpan={10} className="text-center py-8 text-slate-500 text-sm">Aucun lead</td></tr>
+              <tr><td colSpan={11} className="text-center py-8 text-slate-500 text-sm">Aucun lead</td></tr>
             )}
             {!loading && leads.map(l => <LeadRow key={l.id} lead={l} onUpdate={load} onProspect={sendProspect} prospecting={prospectingId === l.id} isSelected={selected.has(l.id)} onToggle={toggleSelect} onExpand={(id) => setExpandedId(expandedId === id ? null : id)} isExpanded={expandedId === l.id} />)}
           </tbody>
