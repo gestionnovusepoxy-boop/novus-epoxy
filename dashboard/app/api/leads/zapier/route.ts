@@ -96,8 +96,8 @@ export async function POST(req: NextRequest) {
   // --- Atomic dedupe via INSERT ... ON CONFLICT (race-condition safe) ---
   let newLeadId: number | undefined;
   const crmResult = await query(
-    `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, source, statut, temperature, notes, type)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, adresse, source, statut, temperature, notes, type)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
      ON CONFLICT (email) WHERE email IS NOT NULL AND email != '' DO NOTHING
      RETURNING id`,
     [
@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
       service,
       superficie,
       ville,
+      adresse,
       'facebook-zapier',
       'nouveau',
       'chaud',

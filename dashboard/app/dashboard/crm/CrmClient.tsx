@@ -20,6 +20,7 @@ interface Lead {
   service: string | null;
   superficie: string | null;
   ville: string | null;
+  adresse: string | null;
   notes: string | null;
   source: string;
   statut: Statut;
@@ -84,6 +85,7 @@ function LeadDetail({ lead, onUpdate, onClose }: { lead: Lead; onUpdate: () => v
     service: lead.service ?? '',
     superficie: lead.superficie ?? '',
     ville: lead.ville ?? '',
+    adresse: lead.adresse ?? '',
     notes: lead.notes ?? '',
     type: lead.type ?? 'residentiel',
   });
@@ -142,6 +144,10 @@ function LeadDetail({ lead, onUpdate, onClose }: { lead: Lead; onUpdate: () => v
             <label className="text-slate-500 text-xs mb-1 block">Ville</label>
             <input value={form.ville} onChange={e => setForm(f => ({ ...f, ville: e.target.value }))} placeholder="Quebec, Levis..." className={inputCls} />
           </div>
+          <div className="col-span-2 sm:col-span-3">
+            <label className="text-slate-500 text-xs mb-1 block">Adresse</label>
+            <input value={form.adresse} onChange={e => setForm(f => ({ ...f, adresse: e.target.value }))} placeholder="123 rue Example, Quebec G1A 1A1" className={inputCls} />
+          </div>
           <div>
             <label className="text-slate-500 text-xs mb-1 block">Type</label>
             <select value={form.type} onChange={e => setForm(f => ({ ...f, type: e.target.value as LeadType }))} className={inputCls}>
@@ -159,7 +165,7 @@ function LeadDetail({ lead, onUpdate, onClose }: { lead: Lead; onUpdate: () => v
             {saving ? 'Sauvegarde...' : saved ? '✓ Sauvegarde!' : 'Sauvegarder'}
           </button>
           <a
-            href={`/dashboard/devis/nouveau?lead_id=${lead.id}&nom=${encodeURIComponent(lead.nom)}&email=${encodeURIComponent(lead.email ?? '')}&tel=${encodeURIComponent(lead.telephone ?? '')}&ville=${encodeURIComponent(form.ville)}&service=${encodeURIComponent(form.service)}&superficie=${encodeURIComponent(form.superficie)}&notes=${encodeURIComponent(form.notes)}`}
+            href={`/dashboard/devis/nouveau?lead_id=${lead.id}&nom=${encodeURIComponent(lead.nom)}&email=${encodeURIComponent(lead.email ?? '')}&tel=${encodeURIComponent(lead.telephone ?? '')}&ville=${encodeURIComponent(form.adresse || form.ville)}&service=${encodeURIComponent(form.service)}&superficie=${encodeURIComponent(form.superficie)}&notes=${encodeURIComponent(form.notes)}`}
             className="bg-orange-500 hover:bg-orange-400 text-white font-semibold rounded-lg px-5 py-2.5 text-sm transition inline-flex items-center gap-1.5"
           >
             Creer devis

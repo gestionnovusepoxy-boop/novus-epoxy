@@ -175,7 +175,7 @@ export async function PATCH(req: NextRequest) {
   }
 
   // Editable fields from detail panel
-  const textFields = ['telephone', 'email', 'service', 'superficie', 'ville', 'notes', 'type'] as const;
+  const textFields = ['telephone', 'email', 'service', 'superficie', 'ville', 'adresse', 'notes', 'type'] as const;
   for (const field of textFields) {
     if (body[field] !== undefined) {
       sets.push(`${field} = $${i++}`);
