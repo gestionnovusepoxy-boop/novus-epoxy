@@ -168,9 +168,39 @@ async function handleLeadgen(change: Record<string, unknown>) {
 
     const nom       = fields.full_name ?? fields.first_name ?? 'Lead Facebook';
     const email     = fields.email ?? '';
-    const telephone = fields.phone_number ?? null;
+    const telephone = (fields.phone_number ?? fields.phone ?? '').replace(/\D/g, '').slice(-10) || null;
 
-    if (!email) return;
+    // Extract ALL form fields (service, superficie, espace, adresse)
+    const serviceRaw = fields['quel_type_de_plancher_époxy_vous_intéresse?'] ?? fields.service ?? '';
+    const service = matchMap(serviceRaw, FB_SERVICE_MAP) ?? (serviceRaw ? serviceRaw.slice(0, 120) : null);
+    const espaceRaw = fields["quel_type_d'espace?"] ?? fields.espace ?? '';
+    const espace = matchMap(espaceRaw, FB_ESPACE_MAP) ?? (espaceRaw ? espaceRaw.slice(0, 120) : null);
+    const superficieRaw = fields['superficie_approximative_(pi²)?'] ?? fields.superficie ?? '';
+    let superficie: string | null = superficieRaw ? superficieRaw.replace(/\s*(sf|pi2?|pi²|pieds?\s*carr[eé]s?|sqft|p2|pc)\s*$/i, '').trim() : null;
+    if (superficie && /^\d+\s*x\s*\d+$/i.test(superficie)) {
+      const parts = superficie.split(/x/i).map(s => parseFloat(s.trim()));
+      superficie = String(Math.round(parts[0] * parts[1]));
+    }
+    const adresse = (fields['quel_est_votre_adresse_complete_des_travaux?'] ?? fields.street_address ?? fields.address ?? '').toString().trim().slice(0, 255) || null;
+    // Try to extract ville from address (last word before postal code, or after last comma)
+    let ville: string | null = null;
+    if (adresse) {
+      const parts = adresse.split(',').map((s: string) => s.trim());
+      if (parts.length > 1) ville = parts[parts.length - 1].replace(/[A-Z]\d[A-Z]\s?\d[A-Z]\d/i, '').trim() || null;
+    }
+
+    if (!email && !telephone) return;
+
+    // Build rich notes
+    const noteParts = [
+      `Lead Facebook Ad #${leadgenId}`,
+      leadData.ad_name ? `Ad: ${leadData.ad_name}` : null,
+      leadData.form_name ? `Form: ${leadData.form_name}` : null,
+      espace ? `Espace: ${espace}` : null,
+      service ? `Service: ${service}` : null,
+      superficie ? `Superficie: ${superficie} pi²` : null,
+      adresse ? `Adresse: ${adresse}` : null,
+    ].filter(Boolean).join(' — ');
 
     // 1. Keep submission insert (backwards compat + quote generation)
     await query(
@@ -178,28 +208,31 @@ async function handleLeadgen(change: Record<string, unknown>) {
        VALUES ($1, $2, $3, $4, $5, 'nouveau')`,
       [
         nom.slice(0, 120),
-        email.slice(0, 255),
-        telephone?.slice(0, 30) ?? null,
+        email.slice(0, 255) || 'no-email@facebook.lead',
+        telephone,
         'Facebook Lead Ad',
-        `Lead Facebook #${leadgenId} — ${leadData.ad_name ?? 'N/A'}`,
+        noteParts,
       ],
     );
 
-    // 2. Insert into crm_leads so Aria picks it up
-    const notes = `Lead Facebook Ad #${leadgenId} — Ad: ${leadData.ad_name ?? 'N/A'} — Form: ${leadData.form_name ?? 'N/A'}`;
+    // 2. Insert into crm_leads with ALL fields (service, superficie, adresse, ville, espace)
     const crmResult = await query(
-      `INSERT INTO crm_leads (nom, email, telephone, source, statut, temperature, notes, type)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       ON CONFLICT (email) DO NOTHING
+      `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, adresse, source, statut, temperature, notes, type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (email) WHERE email IS NOT NULL AND email != '' DO NOTHING
        RETURNING id`,
       [
         nom.slice(0, 120),
-        email.slice(0, 255),
-        telephone?.slice(0, 30) ?? null,
+        email.slice(0, 255) || null,
+        telephone,
+        service,
+        superficie,
+        ville,
+        adresse,
         'facebook-leadad',
         'nouveau',
         'chaud',
-        notes,
+        noteParts,
         'residential',
       ],
     );
@@ -207,8 +240,8 @@ async function handleLeadgen(change: Record<string, unknown>) {
     // Only notify + trigger Aria if this is a NEW lead (not a duplicate)
     const newLeadId = crmResult?.[0]?.id;
     if (newLeadId) {
-      // 3. Telegram notification
-      await notifyTelegramFacebookLead(nom, email, telephone);
+      // 3. Telegram notification with full details
+      await notifyTelegramFacebookLead(nom, email, telephone, { service: service ?? undefined, espace: espace ?? undefined, superficie: superficie ? Number(superficie) : undefined, adresse: adresse ?? undefined });
 
       // 4. SMS notification to Luca + Jason
       const smsMsg = `🔥 Nouveau lead Facebook! ${nom} - ${email} - ${telephone ?? 'N/A'} — Aria va le contacter auto.`;
