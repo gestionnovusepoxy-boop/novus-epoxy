@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { isQuietHours } from '@/lib/telegram-utils';
+import { sendEmail } from '@/lib/send-email';
 
 export const maxDuration = 60;
 
@@ -155,6 +156,12 @@ export async function GET(req: NextRequest) {
     []
   ).catch(() => [{ count: 0 }]);
 
+  // Rex SMS stats — outbound SMS sent today
+  const rexSmsToday = await query(
+    `SELECT COUNT(*)::int AS count FROM sms_logs WHERE direction = 'outbound' AND created_at >= CURRENT_DATE`,
+    []
+  ).catch(() => [{ count: 0 }]);
+
   // Recent emails summary (last 12h for morning, last 12h for evening)
   const recentEmailLogs = await query(
     `SELECT destinataire, sujet, statut, direction, created_at FROM email_logs
@@ -184,6 +191,7 @@ export async function GET(req: NextRequest) {
   const crmConvCount = (crmConversations[0] as { count: number }).count;
   const crmQuotesCount = (crmQuotesToday[0] as { count: number }).count;
   const crmFroidsCount = (crmFroidsToday[0] as { count: number }).count;
+  const rexSmsCount = (rexSmsToday[0] as { count: number }).count;
 
   const lines = [
     isEvening ? `🌙 <b>Aria — Résumé du soir</b>` : `☀️ <b>Aria — Résumé du matin</b>`,
@@ -214,6 +222,7 @@ export async function GET(req: NextRequest) {
   lines.push(`📊 <b>CRM Leads</b>`);
   lines.push(`🔥 Chauds: ${crmChaudsCount} | 🟡 En conversation: ${crmConvCount} | 🔵 Froids aujourd'hui: ${crmFroidsCount}`);
   lines.push(`Devis crees (CRM): ${crmQuotesCount}`);
+  lines.push(`📱 Rex SMS aujourd'hui: ${rexSmsCount}`);
   if (ghlImported > 0) {
     lines.push(`📥 ${ghlImported} nouveaux leads importes de Champfields/Facebook`);
   }

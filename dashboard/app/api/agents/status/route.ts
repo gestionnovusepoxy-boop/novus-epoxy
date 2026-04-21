@@ -160,12 +160,12 @@ async function checkRex(): Promise<StatusResult> {
     const sid = process.env.TWILIO_ACCOUNT_SID;
     const token = process.env.TWILIO_AUTH_TOKEN;
     if (!sid || !token) return { status: 'erreur', detail: 'Credentials Twilio manquants' };
-    // Quick check: verify account by calling Twilio API
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}.json`, {
       headers: { Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64') },
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return { status: 'erreur', detail: 'Twilio API non joignable' };
+    if (res.status === 401) return { status: 'erreur', detail: 'Token Twilio invalide — regenerer sur console.twilio.com' };
+    if (!res.ok) return { status: 'erreur', detail: `Twilio erreur HTTP ${res.status}` };
     return { status: 'running', detail: 'Twilio connecte' };
   } catch {
     return { status: 'erreur', detail: 'Timeout verification Twilio' };
