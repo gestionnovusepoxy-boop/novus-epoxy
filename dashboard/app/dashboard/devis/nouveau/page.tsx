@@ -158,10 +158,10 @@ export default function NouveauDevisPage() {
               <label className="block text-sm text-slate-400 mb-1">Adresse</label>
               <input value={form.client_adresse} onChange={e => updateForm('client_adresse', e.target.value)} className={inputClass} />
             </div>
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">CC (copie email)</label>
-              <input type="email" value={ccEmail} onChange={e => setCcEmail(e.target.value)} placeholder="ex: jason@gmail.com" className={inputClass} />
-            </div>
+          </div>
+          <div>
+            <label className="block text-sm text-slate-400 mb-1">CC — copie email (optionnel)</label>
+            <input type="email" value={ccEmail} onChange={e => setCcEmail(e.target.value)} placeholder="ex: jason@gmail.com" className={inputClass} />
           </div>
         </div>
 
