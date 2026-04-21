@@ -117,12 +117,21 @@ export async function POST(req: NextRequest) {
   if (mailinblac > 0) { results['spam_bypass'] = mailinblac; total += mailinblac; }
 
   // 10. AUTO-REPLIES & USELESS ACKNOWLEDGMENTS
-  const autoreplies = await batchTrash(gmail, 'in:inbox (subject:"Réponse automatique" OR subject:"Reponse automatique" OR subject:"Automatic reply" OR subject:"Out of office" OR subject:"Absent du bureau" OR subject:"bien reçu" OR subject:"bien recu" OR subject:"accusé de réception" OR subject:"accuse de reception" OR subject:"RE: Novus Epoxy" OR subject:"Re: Novus Epoxy" OR subject:"***SPAM***")', 1000);
+  const autoreplies = await batchTrash(gmail, 'in:inbox (subject:"Réponse automatique" OR subject:"Reponse automatique" OR subject:"Automatic reply" OR subject:"Out of office" OR subject:"Absent du bureau" OR subject:"bien reçu" OR subject:"bien recu" OR subject:"accusé de réception" OR subject:"accuse de reception")', 500);
   if (autoreplies > 0) { results['auto_replies'] = autoreplies; total += autoreplies; }
 
-  // 11. DMARC/SPF REPORTS + SURVEY BOTS + FOREIGN SPAM
-  const dmarc = await batchTrash(gmail, 'in:inbox (from:dmarcreport OR subject:"DMARC" OR subject:"Report Domain:" OR from:registre@servicesquebec.gouv.qc.ca OR from:lkpp.go.id OR from:sleepapnea.org OR subject:"feedback" OR subject:"survey" OR subject:"satisfaction")', 500);
+  // 11. DMARC/SPF + SURVEY BOTS + FOREIGN SPAM
+  const dmarc = await batchTrash(gmail, 'in:inbox (from:dmarcreport OR subject:"DMARC" OR subject:"Report Domain:" OR from:registre@servicesquebec.gouv.qc.ca OR from:lkpp.go.id OR from:sleepapnea.org)', 500);
   if (dmarc > 0) { results['junk_misc'] = dmarc; total += dmarc; }
+
+  // 12B. PROSPECTING CAMPAIGN REPLIES — all replies to "Planchers époxy haut de gamme" template
+  // Keep only personal emails (@gmail.com, @hotmail, @outlook) — those are real prospects
+  const prospReplies = await batchTrash(gmail, 'in:inbox subject:"Planchers" -from:@gmail.com -from:@hotmail.com -from:@outlook.com -from:@videotron -from:@cgocable -from:@sympatico', 1000);
+  if (prospReplies > 0) { results['prospect_replies'] = prospReplies; total += prospReplies; }
+
+  // SPAM-flagged replies
+  const spamReplies = await batchTrash(gmail, 'in:inbox subject:"***SPAM***"', 500);
+  if (spamReplies > 0) { results['spam_replies'] = spamReplies; total += spamReplies; }
 
   // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
   const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
