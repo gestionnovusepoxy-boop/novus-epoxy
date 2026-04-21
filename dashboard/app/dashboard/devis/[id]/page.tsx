@@ -329,6 +329,10 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
               <label className="text-slate-500 text-xs mb-1 block">Notes</label>
               <textarea value={editForm.notes} onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))} rows={2} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
             </div>
+            <div className="col-span-2">
+              <label className="text-slate-500 text-xs mb-1 block">CC — copie email (optionnel)</label>
+              <input type="email" value={ccEmail} onChange={e => setCcEmail(e.target.value)} placeholder="ex: jason@gmail.com" className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
           </div>
           <div className="flex gap-2">
             <button onClick={handleSaveEdit} disabled={saving} className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-5 py-2 text-sm transition disabled:opacity-40">
