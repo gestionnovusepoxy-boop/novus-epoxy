@@ -859,9 +859,9 @@ export async function GET(req: NextRequest) {
     }
 
     if (isAutoReply) {
-      console.log(`[Email Scan] Skipping auto-reply from ${fromEmail}: ${subject}`);
+      console.log(`[Email Scan] Trashing auto-reply/newsletter from ${fromEmail}: ${subject}`);
       try {
-        await gmail.users.messages.modify({ userId: 'me', id: msg.id, requestBody: { removeLabelIds: ['UNREAD'] } });
+        await gmail.users.messages.trash({ userId: 'me', id: msg.id });
       } catch { /* ignore */ }
       continue;
     }
@@ -1155,8 +1155,16 @@ export async function GET(req: NextRequest) {
       alertsSent++;
     }
 
-    // === NOTIFY ADMIN FOR ALL REMAINING EMAILS ===
-    // Spam already handled above (trashed + continue). Notify for other types that don't have their own alerts.
+    // === "AUTRE" TYPE: Not useful — archive it (remove from inbox, keep in All Mail) ===
+    if (analysis.type === 'autre' && !analysis.needs_attention) {
+      try {
+        await gmail.users.messages.modify({ userId: 'me', id: msg.id, requestBody: { removeLabelIds: ['INBOX', 'UNREAD'] } });
+      } catch { /* ignore */ }
+      continue; // Don't notify — it's junk that's not spam
+    }
+
+    // === NOTIFY ADMIN FOR REMAINING IMPORTANT EMAILS ===
+    // Spam trashed, autre archived, auto-replies trashed. Only useful stuff gets here.
     {
       const emoji = analysis.needs_attention ? '🔴' : analysis.type === 'important' ? '🟠' : '📬';
       const label = analysis.needs_attention ? 'ACTION REQUISE' : `Email ${analysis.type}`;
