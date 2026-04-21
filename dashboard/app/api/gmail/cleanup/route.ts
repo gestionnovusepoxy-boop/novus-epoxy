@@ -134,12 +134,12 @@ export async function POST(req: NextRequest) {
   if (spamReplies > 0) { results['spam_replies'] = spamReplies; total += spamReplies; }
 
   // 12C. TICKET SYSTEM AUTO-REPLIES (Zendesk, Freshdesk, etc.)
-  const tickets = await batchTrash(gmail, 'in:inbox (subject:"Request received" OR subject:"Votre Billet" OR subject:"Your ticket" OR subject:"Ticket" from:zendesk OR from:freshdesk OR from:helpscout OR from:intercom)', 500);
+  const tickets = await batchTrash(gmail, 'in:inbox (subject:"Request received" OR subject:"Votre Billet" OR subject:"We received your request" OR subject:"We\'ve received your request" OR subject:"How would you rate" OR subject:"Service Expérience Client" OR subject:"Thank you for contacting" OR subject:"received your message" OR from:zendesk OR from:freshdesk OR from:helpscout)', 1000);
   if (tickets > 0) { results['ticket_autoreplies'] = tickets; total += tickets; }
 
-  // 12D. PROSPECTING REPLIES with "question rapide" template — not personal emails
-  const foreign = await batchTrash(gmail, 'in:inbox subject:"question rapide" -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo -from:@videotron -from:@cgocable', 500);
-  if (foreign > 0) { results['prosp_auto_replies'] = foreign; total += foreign; }
+  // 12D. PROSPECTING REPLIES — business auto-replies not from personal email
+  const prospAuto = await batchTrash(gmail, 'in:inbox (subject:"question rapide" OR subject:"Santos," OR subject:"Industrial,") -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo -from:@videotron -from:@cgocable', 500);
+  if (prospAuto > 0) { results['prosp_auto_replies'] = prospAuto; total += prospAuto; }
 
   // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
   const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
