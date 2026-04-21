@@ -162,6 +162,7 @@ ${isMultiService ? `<p style="margin:0 0 4px;color:#475569;font-size:13px;">1. S
       subject,
       html,
       cc,
+      bcc: 'gestionnovusepoxy@gmail.com',
     });
   } catch (err) {
     console.error('Gmail send error:', err);

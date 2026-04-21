@@ -166,6 +166,10 @@ export async function POST(req: NextRequest) {
   const oldProspReplies = await batchArchive(gmail, `in:inbox older_than:3d subject:"époxy" -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo -from:@videotron -from:@cgocable -from:@sympatico ${safe}`, 300);
   if (oldProspReplies > 0) { results['old_prosp_archived'] = oldProspReplies; total += oldProspReplies; }
 
+  // 12K. DEVIS BCC COPIES > 1 DAY — copies envoyées à nous-mêmes pour vérification, supprimées après 1 jour
+  const devisCopies = await batchTrash(gmail, 'in:inbox from:gestionnovusepoxy@gmail.com older_than:1d (subject:"Soumission Novus Epoxy" OR subject:"Solde à payer")', 200);
+  if (devisCopies > 0) { results['devis_copies_trashed'] = devisCopies; total += devisCopies; }
+
   // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
   const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
   if (systemCopies > 0) { results['system_copies_archived'] = systemCopies; total += systemCopies; }

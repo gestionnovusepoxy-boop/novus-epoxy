@@ -12,6 +12,7 @@ export async function sendEmail({
   html,
   replyTo,
   cc,
+  bcc,
   via,
 }: {
   to: string;
@@ -19,6 +20,7 @@ export async function sendEmail({
   html: string;
   replyTo?: string;
   cc?: string;
+  bcc?: string;
   via?: 'gmail' | 'resend';
 }): Promise<{ id: string }> {
   // Resend seulement si explicitement demandé (prospection Aria)
@@ -28,12 +30,12 @@ export async function sendEmail({
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.log(`[sendEmail] Resend failed (${msg.slice(0, 100)}), fallback Gmail`);
-      return sendViaGmail({ to, subject, html, replyTo, cc });
+      return sendViaGmail({ to, subject, html, replyTo, cc, bcc });
     }
   }
   // Default: Gmail (gestionnovusepoxy@gmail.com)
   try {
-    return await sendViaGmail({ to, subject, html, replyTo, cc });
+    return await sendViaGmail({ to, subject, html, replyTo, cc, bcc });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
@@ -42,9 +44,9 @@ export async function sendEmail({
 }
 
 async function sendViaGmail({
-  to, subject, html, replyTo, cc,
+  to, subject, html, replyTo, cc, bcc,
 }: {
-  to: string; subject: string; html: string; replyTo?: string; cc?: string;
+  to: string; subject: string; html: string; replyTo?: string; cc?: string; bcc?: string;
 }): Promise<{ id: string }> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -63,6 +65,7 @@ async function sendViaGmail({
     `From: ${fromHeader}`,
     `To: ${to}`,
     cc ? `Cc: ${cc}` : null,
+    bcc ? `Bcc: ${bcc}` : null,
     `Subject: ${subject}`,
     replyTo ? `Reply-To: ${replyTo}` : null,
     'MIME-Version: 1.0',
