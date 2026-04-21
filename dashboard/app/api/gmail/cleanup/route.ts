@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
   const social = await batchTrash(gmail, 'category:social', 500);
   if (social > 0) { results['social'] = social; total += social; }
 
-  const updates = await batchTrash(gmail, `category:updates ${safe}`, 500);
+  const updates = await batchTrash(gmail, `category:updates ${safe}`, 1000);
   if (updates > 0) { results['updates'] = updates; total += updates; }
 
   // 5. GOOGLE SYSTEM EMAILS
@@ -116,13 +116,13 @@ export async function POST(req: NextRequest) {
   const mailinblac = await batchTrash(gmail, 'subject:"Protect de Mailinblac" OR subject:"Se desabonner" OR subject:"Desabonnement"', 100);
   if (mailinblac > 0) { results['spam_bypass'] = mailinblac; total += mailinblac; }
 
-  // 10. AUTO-REPLIES & USELESS CLIENT ACKNOWLEDGMENTS
-  const autoreplies = await batchTrash(gmail, 'in:inbox (subject:"Réponse automatique" OR subject:"Reponse automatique" OR subject:"Automatic reply" OR subject:"Out of office" OR subject:"Absent du bureau" OR subject:"j\'ai bien recu" OR subject:"bien recu votre" OR subject:"bien reçu" OR subject:"accusé de réception" OR subject:"accuse de reception")', 500);
+  // 10. AUTO-REPLIES & USELESS ACKNOWLEDGMENTS
+  const autoreplies = await batchTrash(gmail, 'in:inbox (subject:"Réponse automatique" OR subject:"Reponse automatique" OR subject:"Automatic reply" OR subject:"Out of office" OR subject:"Absent du bureau" OR subject:"bien reçu" OR subject:"bien recu" OR subject:"accusé de réception" OR subject:"accuse de reception" OR subject:"RE: Novus Epoxy" OR subject:"Re: Novus Epoxy" OR subject:"***SPAM***")', 1000);
   if (autoreplies > 0) { results['auto_replies'] = autoreplies; total += autoreplies; }
 
-  // 11. DMARC/SPF REPORTS
-  const dmarc = await batchTrash(gmail, 'in:inbox (from:dmarcreport OR subject:"DMARC" OR subject:"dmarc" OR subject:"Report Domain:")', 200);
-  if (dmarc > 0) { results['dmarc_reports'] = dmarc; total += dmarc; }
+  // 11. DMARC/SPF REPORTS + SURVEY BOTS + FOREIGN SPAM
+  const dmarc = await batchTrash(gmail, 'in:inbox (from:dmarcreport OR subject:"DMARC" OR subject:"Report Domain:" OR from:registre@servicesquebec.gouv.qc.ca OR from:lkpp.go.id OR from:sleepapnea.org OR subject:"feedback" OR subject:"survey" OR subject:"satisfaction")', 500);
+  if (dmarc > 0) { results['junk_misc'] = dmarc; total += dmarc; }
 
   // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
   const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
