@@ -316,15 +316,75 @@ function ExpensesList({ data }: { data: OverviewData['expenses_by_cat'] }) {
   );
 }
 
+/* ─── Conversion Funnel ─── */
+interface FunnelData { leads: number; contactes: number; devis: number; signes: number; completes: number; taux_contact: number; taux_devis: number; taux_signature: number; taux_completion: number }
+
+function ConversionFunnel({ data }: { data: FunnelData }) {
+  const steps = [
+    { label: 'Leads', value: data.leads, color: '#64748b', bg: 'bg-slate-500' },
+    { label: 'Contactés', value: data.contactes, color: '#3b82f6', bg: 'bg-blue-500', taux: data.taux_contact },
+    { label: 'Devis envoyés', value: data.devis, color: '#f59e0b', bg: 'bg-amber-500', taux: data.taux_devis },
+    { label: 'Signés', value: data.signes, color: '#8b5cf6', bg: 'bg-violet-500', taux: data.taux_signature },
+    { label: 'Complétés', value: data.completes, color: '#22c55e', bg: 'bg-green-500', taux: data.taux_completion },
+  ];
+  const max = data.leads || 1;
+  return (
+    <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3">
+      <div className="flex items-center justify-between">
+        <h3 className="text-white font-semibold text-sm">Funnel de conversion</h3>
+        <span className="text-slate-400 text-xs">{data.leads} leads → {data.completes} complétés</span>
+      </div>
+      <div className="space-y-2">
+        {steps.map((s, i) => {
+          const pct = Math.round((s.value / max) * 100);
+          return (
+            <div key={i} className="space-y-1">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-slate-300 w-28">{s.label}</span>
+                <div className="flex-1 mx-3 bg-slate-700 rounded-full h-5 overflow-hidden">
+                  <div className={`h-5 rounded-full ${s.bg} flex items-center justify-end pr-2 transition-all`} style={{ width: `${Math.max(pct, 4)}%` }}>
+                    <span className="text-white text-[10px] font-bold">{s.value}</span>
+                  </div>
+                </div>
+                {'taux' in s && s.taux !== undefined ? (
+                  <span className="text-slate-400 w-14 text-right">{s.taux}%</span>
+                ) : <span className="w-14" />}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-700 text-center">
+        {[
+          { label: 'Contact', val: data.taux_contact },
+          { label: 'Devis', val: data.taux_devis },
+          { label: 'Signature', val: data.taux_signature },
+          { label: 'Fin trav.', val: data.taux_completion },
+        ].map((t, i) => (
+          <div key={i} className="bg-slate-900/50 rounded-lg py-1.5">
+            <p className={`text-base font-bold ${t.val >= 50 ? 'text-green-400' : t.val >= 25 ? 'text-amber-400' : 'text-red-400'}`}>{t.val}%</p>
+            <p className="text-[10px] text-slate-500">{t.label}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /* ─── Main Page ─── */
 function DashboardContent() {
   const [data, setData] = useState<OverviewData | null>(null);
+  const [funnel, setFunnel] = useState<FunnelData | null>(null);
 
   const loadData = useCallback(async () => {
     try {
-      const res = await fetch('/api/dashboard/overview');
-      if (res.status === 401) { window.location.href = '/auth/signin'; return; }
-      if (res.ok) setData(await res.json());
+      const [overviewRes, funnelRes] = await Promise.all([
+        fetch('/api/dashboard/overview'),
+        fetch('/api/stats/funnel'),
+      ]);
+      if (overviewRes.status === 401) { window.location.href = '/auth/signin'; return; }
+      if (overviewRes.ok) setData(await overviewRes.json());
+      if (funnelRes.ok) setFunnel(await funnelRes.json() as FunnelData);
     } catch { /* network error, will retry on next poll */ }
   }, []);
 
@@ -380,8 +440,11 @@ function DashboardContent() {
               />
             </div>
 
-            {/* Row 2: Pipeline bar */}
-            <PipelineBar data={data.financier} />
+            {/* Row 2: Pipeline bar + Funnel */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              <PipelineBar data={data.financier} />
+              {funnel && <ConversionFunnel data={funnel} />}
+            </div>
 
             {/* Row 3: Leads + Operations */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
