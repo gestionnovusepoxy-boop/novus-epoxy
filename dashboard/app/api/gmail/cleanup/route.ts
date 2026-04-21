@@ -157,10 +157,10 @@ export async function POST(req: NextRequest) {
   const old7d = await batchArchive(gmail, `in:inbox older_than:7d ${safe} -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo`, 500);
   if (old7d > 0) { results['old_7d_archived'] = old7d; total += old7d; }
 
-  // 12I. OLD PERSONAL EMAIL THREADS > 10 DAYS — Gmail/Hotmail conversations older than 10 days
-  // Aria should have handled them by now; archive so inbox stays clean
-  const old10dPersonal = await batchArchive(gmail, `in:inbox older_than:10d (from:@gmail.com OR from:@hotmail.com OR from:@outlook.com OR from:@yahoo) ${safe}`, 500);
-  if (old10dPersonal > 0) { results['old_10d_personal'] = old10dPersonal; total += old10dPersonal; }
+  // 12I. OLD PERSONAL EMAIL THREADS > 90 DAYS — Gmail/Hotmail conversations older than 3 months
+  // Keep up to 90 days — clients sometimes come back after 1 month
+  const old90dPersonal = await batchArchive(gmail, `in:inbox older_than:90d (from:@gmail.com OR from:@hotmail.com OR from:@outlook.com OR from:@yahoo) ${safe}`, 500);
+  if (old90dPersonal > 0) { results['old_90d_personal'] = old90dPersonal; total += old90dPersonal; }
 
   // 12J. PROSPECTING REPLIES from non-ISP corporate emails > 3 DAYS (Aria already handled)
   const oldProspReplies = await batchArchive(gmail, `in:inbox older_than:3d subject:"époxy" -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo -from:@videotron -from:@cgocable -from:@sympatico ${safe}`, 300);
