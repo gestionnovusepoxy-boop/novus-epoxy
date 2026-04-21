@@ -133,6 +133,14 @@ export async function POST(req: NextRequest) {
   const spamReplies = await batchTrash(gmail, 'in:inbox subject:"***SPAM***"', 500);
   if (spamReplies > 0) { results['spam_replies'] = spamReplies; total += spamReplies; }
 
+  // 12C. TICKET SYSTEM AUTO-REPLIES (Zendesk, Freshdesk, etc.)
+  const tickets = await batchTrash(gmail, 'in:inbox (subject:"[Request received]" OR subject:"Request received" OR subject:"Votre Billet" OR subject:"Your ticket" OR subject:"Ticket #" OR from:zendesk.com OR from:freshdesk.com OR from:helpscout OR from:intercom)', 500);
+  if (tickets > 0) { results['ticket_autoreplies'] = tickets; total += tickets; }
+
+  // 12D. FOREIGN PROSPECTING REPLIES (not Quebec/Canada)
+  const foreign = await batchTrash(gmail, 'in:inbox (from:.co.za OR from:.co.uk OR from:.com.au OR from:uktrade OR from:anvie) subject:"question rapide"', 500);
+  if (foreign > 0) { results['foreign_replies'] = foreign; total += foreign; }
+
   // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
   const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
   if (systemCopies > 0) { results['system_copies_archived'] = systemCopies; total += systemCopies; }
