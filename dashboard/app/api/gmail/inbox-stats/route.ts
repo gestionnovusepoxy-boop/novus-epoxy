@@ -27,12 +27,13 @@ export async function GET(req: NextRequest) {
     ['promotions', 'category:promotions'],
     ['social', 'category:social'],
     ['updates', 'category:updates'],
-    ['unsubscribe_inbox', 'in:inbox unsubscribe'],
-    ['noreply_inbox', 'in:inbox from:noreply'],
-    ['noreply2_inbox', 'in:inbox from:no-reply'],
-    ['older_90d', 'in:inbox older_than:90d'],
+    ['from_sq', 'in:inbox from:registre@servicesquebec.gouv.qc.ca'],
+    ['subject_RE_Novus', 'in:inbox subject:"RE: Novus Epoxy"'],
+    ['subject_Re_Novus', 'in:inbox subject:novus'],
+    ['spam_flag', 'in:inbox subject:SPAM'],
+    ['from_shop', 'in:inbox from:info@novusepoxy.shop'],
     ['older_30d', 'in:inbox older_than:30d'],
-    ['from_us', 'from:gestionnovusepoxy@gmail.com in:inbox'],
+    ['all_in_primary', 'in:inbox category:primary'],
   ];
 
   const counts: Record<string, number> = {};
