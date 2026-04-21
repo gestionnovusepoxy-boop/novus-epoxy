@@ -125,7 +125,7 @@ async function notifyTelegramFacebookLead(nom: string, email: string, telephone:
   if (extra?.quoteId && extra?.total) {
     lines.push('', `📋 <b>Devis #${extra.quoteId} créé automatiquement!</b>`, `💰 Total: ${formatMoney(extra.total)}`);
   } else {
-    lines.push('', `<i>Aria va le contacter automatiquement.</i>`);
+    lines.push('', `<i>⚡ Contacte-le ASAP — premier rendu gagne!</i>`);
   }
 
   const buttons: Record<string, unknown> = extra?.quoteId
@@ -244,26 +244,13 @@ async function handleLeadgen(change: Record<string, unknown>) {
       await notifyTelegramFacebookLead(nom, email, telephone, { service: service ?? undefined, espace: espace ?? undefined, superficie: superficie ? Number(superficie) : undefined, adresse: adresse ?? undefined });
 
       // 4. SMS notification to Luca + Jason
-      const smsMsg = `🔥 Nouveau lead Facebook! ${nom} - ${email} - ${telephone ?? 'N/A'} — Aria va le contacter auto.`;
+      const smsMsg = `🔥 LEAD FB - Contacte ASAP! ${nom} - ${telephone ?? 'N/A'} - ${email}`;
       const adminPhone = process.env.ADMIN_PHONE;
       const jasonPhone = process.env.JASON_PHONE;
       if (adminPhone) sendSMS(adminPhone, smsMsg).catch(() => {});
       if (jasonPhone) sendSMS(jasonPhone, smsMsg).catch(() => {});
 
-      // 5. Trigger Aria immediately (don't wait for the 10-min cron)
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL
-        ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-      const apiKey = process.env.ADMIN_API_KEY;
-      if (apiKey) {
-        fetch(`${baseUrl}/api/leads/jason/prospect`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-api-key': apiKey,
-          },
-          body: JSON.stringify({ leadId: newLeadId }),
-        }).catch(err => console.error('Failed to trigger Aria for Facebook lead:', err));
-      }
+      // NOTE: Aria auto-contact DISABLED — Luca/Jason contactent les leads eux-mêmes
     }
   } catch (err) {
     console.error('Error processing Meta lead:', err);
