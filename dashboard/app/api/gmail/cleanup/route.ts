@@ -149,6 +149,11 @@ export async function POST(req: NextRequest) {
   const welcomes = await batchTrash(gmail, 'in:inbox (subject:"Welcome to" OR subject:"Bienvenue sur" OR subject:"verify your email" OR subject:"Confirm your" OR subject:"Discord welcome" OR subject:"Get started")', 300);
   if (welcomes > 0) { results['welcome_onboarding'] = welcomes; total += welcomes; }
 
+  // 12G. OLD INBOX EMAILS > 7 DAYS — already handled by previous scans, safe to archive
+  // Keep: bank/payment, leads (gmail/hotmail personal addresses - still have recent threads)
+  const old7d = await batchArchive(gmail, `in:inbox older_than:7d ${safe} -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo`, 500);
+  if (old7d > 0) { results['old_7d_archived'] = old7d; total += old7d; }
+
   // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
   const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
   if (systemCopies > 0) { results['system_copies_archived'] = systemCopies; total += systemCopies; }
