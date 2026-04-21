@@ -176,6 +176,51 @@ export async function GET(req: NextRequest) {
      ORDER BY date_depense ASC LIMIT 5`,
   ).catch(() => []);
 
+  // Google review requests — jobs completed in last 24h with no review request sent
+  let reviewRequestsSent = 0;
+  try {
+    const completedJobs = await query(
+      `SELECT q.id, q.client_nom, q.client_email, q.client_telephone
+       FROM quotes q
+       WHERE q.statut = 'complete'
+         AND q.updated_at > NOW() - INTERVAL '24 hours'
+         AND (q.review_requested_at IS NULL)
+       LIMIT 10`,
+      []
+    );
+
+    const GOOGLE_REVIEW_URL = 'https://g.page/r/CeAd5U7pHvj_EBM/review';
+
+    for (const job of completedJobs) {
+      const clientNom = job.client_nom as string;
+      const clientEmail = job.client_email as string | null;
+      if (!clientEmail) continue;
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;"><div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:20px;"><p>Bonjour ${clientNom},</p><p>Merci d'avoir choisi Novus Epoxy! Votre avis sur Google nous aide beaucoup:</p><p style="margin:24px 0;text-align:center;"><a href="${GOOGLE_REVIEW_URL}" style="background:#f59e0b;color:#0f172a;padding:14px 28px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;display:inline-block;">Laisser un avis &#11088;</a></p><p>${GOOGLE_REVIEW_URL}</p><p>Merci encore pour votre confiance!</p><p>Luca Lanthier, Novus Epoxy<br/>514-832-8475</p></div></body></html>`;
+
+      try {
+        await sendEmail({
+          to: clientEmail,
+          subject: 'Merci pour votre confiance — Donnez-nous votre avis ⭐',
+          html,
+        });
+        reviewRequestsSent++;
+      } catch (emailErr) {
+        console.error('[morning-summary] Review email failed:', emailErr);
+        continue;
+      }
+
+      try {
+        await query(
+          `UPDATE quotes SET review_requested_at = NOW() WHERE id = $1`,
+          [job.id]
+        );
+      } catch { /* review_requested_at column may not exist yet */ }
+    }
+  } catch (reviewErr) {
+    console.error('[morning-summary] Review requests error:', reviewErr);
+  }
+
   // Build message
   const isEvening = req.nextUrl.searchParams.get('evening') === 'true';
   const subCount = (newSubs[0] as { count: number }).count;
@@ -256,6 +301,11 @@ export async function GET(req: NextRequest) {
     for (const p of pendingPayments) {
       lines.push(`• ${p.fournisseur} — ${formatMoney(Number(p.montant_ttc))} (${p.description ?? ''})`);
     }
+  }
+
+  if (reviewRequestsSent > 0) {
+    lines.push('');
+    lines.push(`⭐ ${reviewRequestsSent} demande${reviewRequestsSent !== 1 ? 's' : ''} d'avis Google envoyee${reviewRequestsSent !== 1 ? 's' : ''}`);
   }
 
   if (cleanupTotal > 0) {
