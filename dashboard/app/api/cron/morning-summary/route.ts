@@ -220,17 +220,23 @@ export async function GET(req: NextRequest) {
   if (pendingProspectSent > 0) {
     lines.push(`🚀 ${pendingProspectSent} offres envoyees ce matin (en attente depuis hier)`);
   }
-  // Email activity
-  if (recentEmailLogs.length > 0) {
-    const inbound = recentEmailLogs.filter((e: Record<string, unknown>) => e.direction === 'inbound').length;
-    const outbound = recentEmailLogs.filter((e: Record<string, unknown>) => e.direction === 'outbound').length;
+  // Aria email activity — show what Aria handled automatically
+  const ariaSent = recentEmailLogs.filter((e: Record<string, unknown>) => e.statut === 'sent').length;
+  const ariaFailed = recentEmailLogs.filter((e: Record<string, unknown>) => e.statut === 'error').length;
+  const ariaSentEmails = recentEmailLogs.filter((e: Record<string, unknown>) => e.statut === 'sent').slice(0, 4);
+  if (ariaSent > 0 || recentEmailLogs.length > 0) {
     lines.push('');
-    lines.push(`📧 <b>Emails (12 dernieres heures):</b>`);
-    lines.push(`• ${inbound} recus, ${outbound} envoyes`);
-    // Show last 3 important emails
-    const important = recentEmailLogs.filter((e: Record<string, unknown>) => e.direction === 'inbound').slice(0, 3);
-    for (const e of important) {
-      lines.push(`  → ${(e.sujet as string)?.slice(0, 50) ?? '(sans sujet)'} — de ${(e.destinataire as string)?.slice(0, 30)}`);
+    lines.push(`📧 <b>Emails — Aria (12 dernieres heures):</b>`);
+    if (ariaSent > 0) {
+      lines.push(`✅ ${ariaSent} reponse${ariaSent !== 1 ? 's' : ''} envoyee${ariaSent !== 1 ? 's' : ''} automatiquement`);
+      for (const e of ariaSentEmails) {
+        const dest = (e.destinataire as string)?.split('@')[0]?.slice(0, 25) ?? '';
+        const subj = (e.sujet as string)?.replace(/^Re:\s*/i, '').slice(0, 45) ?? '';
+        lines.push(`  • ${dest}: ${subj}`);
+      }
+    }
+    if (ariaFailed > 0) {
+      lines.push(`⚠️ ${ariaFailed} reponse${ariaFailed !== 1 ? 's' : ''} echouee${ariaFailed !== 1 ? 's' : ''} — verifie manuellement`);
     }
   }
 
