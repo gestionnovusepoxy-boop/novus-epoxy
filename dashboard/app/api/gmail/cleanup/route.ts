@@ -141,6 +141,14 @@ export async function POST(req: NextRequest) {
   const prospAuto = await batchTrash(gmail, 'in:inbox (subject:"question rapide" OR subject:"Santos," OR subject:"Industrial,") -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo -from:@videotron -from:@cgocable', 500);
   if (prospAuto > 0) { results['prosp_auto_replies'] = prospAuto; total += prospAuto; }
 
+  // 12E. FOREIGN/IRRELEVANT COMPANIES that replied to our prospecting
+  const irrelevant = await batchTrash(gmail, 'in:inbox (from:ticketmaster OR from:discord.com OR from:@.au OR from:@.co.za OR from:@.co.uk OR from:@.de OR from:@.fr -from:desjardins)', 500);
+  if (irrelevant > 0) { results['foreign_irrelevant'] = irrelevant; total += irrelevant; }
+
+  // 12F. WELCOME / ONBOARDING emails (not useful)
+  const welcomes = await batchTrash(gmail, 'in:inbox (subject:"Welcome to" OR subject:"Bienvenue sur" OR subject:"verify your email" OR subject:"Confirm your" OR subject:"Discord welcome" OR subject:"Get started")', 300);
+  if (welcomes > 0) { results['welcome_onboarding'] = welcomes; total += welcomes; }
+
   // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
   const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
   if (systemCopies > 0) { results['system_copies_archived'] = systemCopies; total += systemCopies; }
