@@ -23,6 +23,7 @@ export default function NouveauDevisPage() {
   const searchParams = useSearchParams();
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState('');
+  const [ccEmail, setCcEmail] = useState('');
 
   const serviceParam = searchParams.get('service') ?? '';
   const validService = serviceParam in SERVICES ? serviceParam as ServiceType : 'flake';
@@ -116,7 +117,8 @@ export default function NouveauDevisPage() {
       });
       if (!res.ok) throw new Error('API error');
       const quote = await res.json();
-      router.push(`/dashboard/devis/${quote.id}`);
+      const ccParam = ccEmail ? `?cc=${encodeURIComponent(ccEmail)}` : '';
+      router.push(`/dashboard/devis/${quote.id}${ccParam}`);
     } catch {
       setError('Erreur lors de la creation du devis');
       setLoading(false);
@@ -155,6 +157,10 @@ export default function NouveauDevisPage() {
             <div>
               <label className="block text-sm text-slate-400 mb-1">Adresse</label>
               <input value={form.client_adresse} onChange={e => updateForm('client_adresse', e.target.value)} className={inputClass} />
+            </div>
+            <div>
+              <label className="block text-sm text-slate-400 mb-1">CC (copie email)</label>
+              <input type="email" value={ccEmail} onChange={e => setCcEmail(e.target.value)} placeholder="ex: jason@gmail.com" className={inputClass} />
             </div>
           </div>
         </div>

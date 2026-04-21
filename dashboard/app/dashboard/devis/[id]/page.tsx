@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, use } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { fetchQuote, updateQuote, sendQuote, sendQuoteSMS, type Quote, type QuoteStatut } from '@/lib/api';
 import { formatDate } from '@/lib/utils';
@@ -34,11 +34,12 @@ const LABEL: Record<QuoteStatut, string> = {
 export default function DevisDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [quote, setQuote]     = useState<Quote | null>(null);
   const [loading, setLoading] = useState(true);
   const [action, setAction]   = useState('');
   const [error, setError]     = useState('');
-  const [ccEmail, setCcEmail] = useState('');
+  const [ccEmail, setCcEmail] = useState(searchParams.get('cc') ?? '');
 
   useEffect(() => {
     fetchQuote(parseInt(id)).then(q => { setQuote(q); setLoading(false); }).catch(() => setLoading(false));
