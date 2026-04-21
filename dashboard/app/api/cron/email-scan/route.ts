@@ -605,22 +605,29 @@ export async function GET(req: NextRequest) {
       });
     } catch { /* ignore */ }
 
-    // Skip our own outbound emails (prospect offers, system emails)
+    // Skip ALL our own outbound emails (prospect offers, system emails, copies)
     const isJasonShop = fromEmail.toLowerCase().includes('jason@novusepoxy') || fromHeader.toLowerCase().includes('jason@novusepoxy');
     const isAdmin = fromEmail.toLowerCase().includes('gestionnovusepoxy');
-    console.log(`[Email Scan] Processing: from=${fromEmail} isJasonShop=${isJasonShop} isAdmin=${isAdmin} subject=${subject.slice(0, 50)}`);
 
-    // === LEAD IMPORT VIA EMAIL ===
-    // When Jason or admin sends a list of leads by email, auto-import into CRM + prospect
-    // Check BEFORE skipping — CSV attachments from Jason should be processed
-    const hasLeadSubject = subject.toUpperCase().includes('ARIA') || subject.toUpperCase().includes('LEAD') || subject.toUpperCase().includes('CSV') || subject.toUpperCase().includes('IMPORT');
-    const isLeadEmail = isAdmin || (isJasonShop && hasLeadSubject) || hasLeadSubject;
+    // Archive our own outbound email copies immediately — they clutter the inbox
+    if (isAdmin) {
+      try { await gmail.users.messages.modify({ userId: 'me', id: msg.id, requestBody: { removeLabelIds: ['INBOX', 'UNREAD'] } }); } catch { /* ignore */ }
+      continue;
+    }
+    if (isJasonShop) {
+      try { await gmail.users.messages.modify({ userId: 'me', id: msg.id, requestBody: { removeLabelIds: ['INBOX', 'UNREAD'] } }); } catch { /* ignore */ }
+      continue;
+    }
+    // Skip other internal novusepoxy emails
+    if (fromEmail.includes('novusepoxy')) {
+      try { await gmail.users.messages.modify({ userId: 'me', id: msg.id, requestBody: { removeLabelIds: ['INBOX', 'UNREAD'] } }); } catch { /* ignore */ }
+      continue;
+    }
 
-    // Skip jason@novusepoxy.shop BCC copies — BUT only if it's NOT a lead import email
-    if (isJasonShop && !isLeadEmail) continue;
-
-    // Allow admin emails through for lead imports, skip other internal emails
-    if (!isAdmin && !isJasonShop && fromEmail.includes('novusepoxy')) continue;
+    // === LEAD IMPORT VIA CSV ATTACHMENT ===
+    // Only triggered when subject explicitly says CSV/IMPORT and has an attachment
+    const hasLeadSubject = subject.toUpperCase().includes('CSV') || subject.toUpperCase().includes('IMPORT');
+    const isLeadEmail = false; // Disabled — lead imports now done via Zapier/Facebook webhook
     if (isLeadEmail) {
       // Get body text
       let jasonBody = '';

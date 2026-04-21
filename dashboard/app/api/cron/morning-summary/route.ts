@@ -26,6 +26,23 @@ export async function GET(req: NextRequest) {
 
   if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
+  // Run Gmail cleanup first (morning only)
+  const isEvening2 = req.nextUrl.searchParams.get('evening') === 'true';
+  let cleanupTotal = 0;
+  if (!isEvening2) {
+    try {
+      const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+      const cleanRes = await fetch(`${base}/api/gmail/cleanup`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.ADMIN_API_KEY ?? ''}` },
+      });
+      if (cleanRes.ok) {
+        const cleanData = await cleanRes.json() as Record<string, unknown>;
+        cleanupTotal = Number(cleanData.total ?? 0);
+      }
+    } catch { /* non-fatal */ }
+  }
+
   // New submissions last 24h
   const newSubs = await query(
     `SELECT COUNT(*)::int AS count FROM submissions WHERE created_at > NOW() - INTERVAL '24 hours'`,
@@ -224,6 +241,11 @@ export async function GET(req: NextRequest) {
     for (const p of pendingPayments) {
       lines.push(`• ${p.fournisseur} — ${formatMoney(Number(p.montant_ttc))} (${p.description ?? ''})`);
     }
+  }
+
+  if (cleanupTotal > 0) {
+    lines.push('');
+    lines.push(`🧹 <b>Ménage Gmail:</b> ${cleanupTotal} emails poubelle supprimés`);
   }
 
   lines.push('');
