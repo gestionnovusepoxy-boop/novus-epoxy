@@ -14,6 +14,11 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   }
 
   const { id } = await params;
+  let cc: string | undefined;
+  try {
+    const body = await _req.json();
+    if (body?.cc && typeof body.cc === 'string' && body.cc.includes('@')) cc = body.cc.trim();
+  } catch { /* no body is fine */ }
   const rows = await query('SELECT * FROM quotes WHERE id = $1', [parseInt(id)]);
   const quote = rows[0];
   if (!quote) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
@@ -156,6 +161,7 @@ ${isMultiService ? `<p style="margin:0 0 4px;color:#475569;font-size:13px;">1. S
       to: quote.client_email as string,
       subject,
       html,
+      cc,
     });
   } catch (err) {
     console.error('Gmail send error:', err);

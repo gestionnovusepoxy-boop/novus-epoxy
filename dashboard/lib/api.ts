@@ -235,8 +235,12 @@ export async function deleteQuote(id: number): Promise<{ success: boolean }> {
   return apiFetch(`/api/quotes/${id}`, { method: 'DELETE' });
 }
 
-export async function sendQuote(id: number): Promise<{ success: boolean; email_id: string }> {
-  return apiFetch(`/api/quotes/${id}/send`, { method: 'POST' });
+export async function sendQuote(id: number, cc?: string): Promise<{ success: boolean; email_id: string }> {
+  return apiFetch(`/api/quotes/${id}/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: cc ? JSON.stringify({ cc }) : undefined,
+  });
 }
 
 export async function sendQuoteSMS(id: number): Promise<{ success: boolean; method: string }> {

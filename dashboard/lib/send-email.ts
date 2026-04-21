@@ -11,38 +11,40 @@ export async function sendEmail({
   subject,
   html,
   replyTo,
+  cc,
   via,
 }: {
   to: string;
   subject: string;
   html: string;
   replyTo?: string;
+  cc?: string;
   via?: 'gmail' | 'resend';
 }): Promise<{ id: string }> {
   // Resend seulement si explicitement demandé (prospection Aria)
   if (via === 'resend') {
     try {
-      return await sendViaResend({ to, subject, html, replyTo });
+      return await sendViaResend({ to, subject, html, replyTo, cc });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.log(`[sendEmail] Resend failed (${msg.slice(0, 100)}), fallback Gmail`);
-      return sendViaGmail({ to, subject, html, replyTo });
+      return sendViaGmail({ to, subject, html, replyTo, cc });
     }
   }
   // Default: Gmail (gestionnovusepoxy@gmail.com)
   try {
-    return await sendViaGmail({ to, subject, html, replyTo });
+    return await sendViaGmail({ to, subject, html, replyTo, cc });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
-    return sendViaResend({ to, subject, html, replyTo });
+    return sendViaResend({ to, subject, html, replyTo, cc });
   }
 }
 
 async function sendViaGmail({
-  to, subject, html, replyTo,
+  to, subject, html, replyTo, cc,
 }: {
-  to: string; subject: string; html: string; replyTo?: string;
+  to: string; subject: string; html: string; replyTo?: string; cc?: string;
 }): Promise<{ id: string }> {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
@@ -60,6 +62,7 @@ async function sendViaGmail({
   const headerLines = [
     `From: ${fromHeader}`,
     `To: ${to}`,
+    cc ? `Cc: ${cc}` : null,
     `Subject: ${subject}`,
     replyTo ? `Reply-To: ${replyTo}` : null,
     'MIME-Version: 1.0',
@@ -78,9 +81,9 @@ async function sendViaGmail({
 }
 
 async function sendViaResend({
-  to, subject, html, replyTo,
+  to, subject, html, replyTo, cc,
 }: {
-  to: string; subject: string; html: string; replyTo?: string;
+  to: string; subject: string; html: string; replyTo?: string; cc?: string;
 }): Promise<{ id: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error('RESEND_API_KEY missing');
@@ -94,6 +97,7 @@ async function sendViaResend({
     body: JSON.stringify({
       from: 'Novus Epoxy <info@novusepoxy.shop>',
       to,
+      cc: cc ? [cc] : undefined,
       subject,
       html,
       reply_to: replyTo ?? 'gestionnovusepoxy@gmail.com',

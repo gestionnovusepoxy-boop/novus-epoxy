@@ -38,6 +38,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
   const [loading, setLoading] = useState(true);
   const [action, setAction]   = useState('');
   const [error, setError]     = useState('');
+  const [ccEmail, setCcEmail] = useState('');
 
   useEffect(() => {
     fetchQuote(parseInt(id)).then(q => { setQuote(q); setLoading(false); }).catch(() => setLoading(false));
@@ -94,7 +95,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
     setAction('send');
     setError('');
     try {
-      await sendQuote(quote.id);
+      await sendQuote(quote.id, ccEmail || undefined);
       const updated = await fetchQuote(quote.id);
       setQuote(updated);
     } catch (e) {
@@ -172,7 +173,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
     setError('');
     setSendSuccess('');
     try {
-      await sendQuote(quote.id);
+      await sendQuote(quote.id, ccEmail || undefined);
       const updated = await fetchQuote(quote.id);
       setQuote(updated);
       setSendSuccess('Devis envoyé au client avec succès!');
@@ -253,6 +254,18 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           <p className="text-green-400 text-sm">{sendSuccess}</p>
         </div>
       )}
+
+      {/* CC email input */}
+      <div className="flex items-center gap-2">
+        <label className="text-slate-500 text-xs whitespace-nowrap">CC :</label>
+        <input
+          type="email"
+          value={ccEmail}
+          onChange={e => setCcEmail(e.target.value)}
+          placeholder="jason@exemple.com (optionnel)"
+          className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-white w-64 focus:outline-none focus:border-amber-500 placeholder:text-slate-600"
+        />
+      </div>
 
       {/* Action buttons */}
       <div className="flex gap-2 flex-wrap">
