@@ -149,13 +149,22 @@ export async function POST(req: NextRequest) {
   const welcomes = await batchTrash(gmail, 'in:inbox (subject:"Welcome to" OR subject:"Bienvenue sur" OR subject:"verify your email" OR subject:"Confirm your" OR subject:"Discord welcome" OR subject:"Get started")', 300);
   if (welcomes > 0) { results['welcome_onboarding'] = welcomes; total += welcomes; }
 
-  // 12G. OLD INBOX EMAILS > 7 DAYS — already handled by previous scans, safe to archive
+  // 12G. MAILINBLACK AUTO-REPLIES — cold email system auto-replies (never real clients)
+  const mailinblackReplies = await batchTrash(gmail, 'in:inbox from:mailinblack.com OR from:invitations.mailinblack.com', 500);
+  if (mailinblackReplies > 0) { results['mailinblack'] = mailinblackReplies; total += mailinblackReplies; }
+
+  // 12H. OLD INBOX EMAILS > 7 DAYS — already handled by previous scans, safe to archive
   const old7d = await batchArchive(gmail, `in:inbox older_than:7d ${safe} -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo`, 500);
   if (old7d > 0) { results['old_7d_archived'] = old7d; total += old7d; }
 
-  // 12H. OLD PERSONAL EMAIL THREADS > 14 DAYS — Gmail/Hotmail conversations older than 2 weeks
-  const old14dPersonal = await batchArchive(gmail, `in:inbox older_than:14d (from:@gmail.com OR from:@hotmail.com OR from:@outlook.com OR from:@yahoo) ${safe}`, 500);
-  if (old14dPersonal > 0) { results['old_14d_personal'] = old14dPersonal; total += old14dPersonal; }
+  // 12I. OLD PERSONAL EMAIL THREADS > 10 DAYS — Gmail/Hotmail conversations older than 10 days
+  // Aria should have handled them by now; archive so inbox stays clean
+  const old10dPersonal = await batchArchive(gmail, `in:inbox older_than:10d (from:@gmail.com OR from:@hotmail.com OR from:@outlook.com OR from:@yahoo) ${safe}`, 500);
+  if (old10dPersonal > 0) { results['old_10d_personal'] = old10dPersonal; total += old10dPersonal; }
+
+  // 12J. PROSPECTING REPLIES from non-ISP corporate emails > 3 DAYS (Aria already handled)
+  const oldProspReplies = await batchArchive(gmail, `in:inbox older_than:3d subject:"époxy" -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo -from:@videotron -from:@cgocable -from:@sympatico ${safe}`, 300);
+  if (oldProspReplies > 0) { results['old_prosp_archived'] = oldProspReplies; total += oldProspReplies; }
 
   // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
   const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
