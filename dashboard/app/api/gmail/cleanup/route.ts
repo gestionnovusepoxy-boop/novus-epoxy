@@ -116,8 +116,16 @@ export async function POST(req: NextRequest) {
   const mailinblac = await batchTrash(gmail, 'subject:"Protect de Mailinblac" OR subject:"Se desabonner" OR subject:"Desabonnement"', 100);
   if (mailinblac > 0) { results['spam_bypass'] = mailinblac; total += mailinblac; }
 
-  // 10. ARCHIVE: our own outbound system email copies
-  const systemCopies = await batchArchive(gmail, 'from:gestionnovusepoxy@gmail.com in:inbox', 500);
+  // 10. AUTO-REPLIES & USELESS CLIENT ACKNOWLEDGMENTS
+  const autoreplies = await batchTrash(gmail, 'in:inbox (subject:"Réponse automatique" OR subject:"Reponse automatique" OR subject:"Automatic reply" OR subject:"Out of office" OR subject:"Absent du bureau" OR subject:"j\'ai bien recu" OR subject:"bien recu votre" OR subject:"bien reçu" OR subject:"accusé de réception" OR subject:"accuse de reception")', 500);
+  if (autoreplies > 0) { results['auto_replies'] = autoreplies; total += autoreplies; }
+
+  // 11. DMARC/SPF REPORTS
+  const dmarc = await batchTrash(gmail, 'in:inbox (from:dmarcreport OR subject:"DMARC" OR subject:"dmarc" OR subject:"Report Domain:")', 200);
+  if (dmarc > 0) { results['dmarc_reports'] = dmarc; total += dmarc; }
+
+  // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
+  const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
   if (systemCopies > 0) { results['system_copies_archived'] = systemCopies; total += systemCopies; }
 
   // Notify admins
