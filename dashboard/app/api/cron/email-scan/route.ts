@@ -50,7 +50,7 @@ async function analyzeWithClaude(
   content: string,
   attachmentData?: { mimeType: string; base64: string },
 ): Promise<{
-  type: 'facture' | 'client' | 'spam' | 'important' | 'autre';
+  type: 'facture' | 'client' | 'spam' | 'important' | 'rdv' | 'paiement' | 'autre';
   fournisseur?: string;
   montant_ttc?: number;
   montant_ht?: number;
@@ -59,6 +59,7 @@ async function analyzeWithClaude(
   description?: string;
   categorie?: string;
   date_depense?: string;
+  date_limite?: string;
   summary: string;
   needs_attention: boolean;
   reply_suggestion?: string;
@@ -81,7 +82,7 @@ ${content}
 
 Reponds en JSON strict:
 {
-  "type": "facture" | "client" | "spam" | "important" | "autre",
+  "type": "facture" | "client" | "spam" | "important" | "rdv" | "paiement" | "autre",
   "fournisseur": "nom du fournisseur si facture",
   "montant_ttc": nombre si facture (total TTC),
   "montant_ht": nombre si facture (avant taxes),
@@ -100,12 +101,15 @@ Reponds en JSON strict:
 - Exemples de factures VALIDES (depenses): Les Idees Epoxy, Groupe Novus, Home Depot, quincailleries, fournisseurs de materiaux, sous-traitants, Torginol, assurances, etc.
 - Exemples a NE PAS classer comme facture: confirmation d'envoi de soumission, copie de facture envoyee au client, notifications Stripe de paiement recu
 - type "client" = un client potentiel ou existant qui ecrit (demande de soumission, questions sur les services, reponse a une offre de service)
+- type "rdv" = quelqu'un qui demande un rendez-vous, veut visiter, veut nous rencontrer, demande a parler a quelqu'un, veut un appel, "quand etes-vous disponible", "peut-on se voir", "je voudrais vous rencontrer"
+- type "paiement" = facture a payer, rappel de paiement, compte en souffrance, date limite, paiement du, relance de paiement, Hydro-Quebec, Bell, assurance, loyer, abonnement, renouvellement
 - type "important" = message important (gouvernement, banque, urgent, etc.)
-- type "spam" = pub, newsletter, spam
+- type "spam" = pub, newsletter, spam, marketing, promotion
 - type "autre" = autre chose
 - Pour les taxes Quebec: TPS = 5%, TVQ = 9.975%
 - Si c'est une image de facture/PDF, extrais les montants de l'image
 - Categorie seulement si type = facture
+- "date_limite": "YYYY-MM-DD" si type = paiement et qu'il y a une date limite/echeance mentionnee
 
 IMPORTANT pour les clients:
 - Novus Epoxy offre: planchers epoxy metallique, flake/flocon, couleur unie, commercial, quartz, revetement balcons/escaliers, reparation beton
@@ -1101,13 +1105,63 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === NOTIFY ADMIN FOR ALL NON-SPAM EMAILS ===
-    // Aria resumes TOUS les emails importants sur Telegram
-    if (analysis.type !== 'spam') {
+    // === SPAM: Move to trash automatically ===
+    if (analysis.type === 'spam') {
+      try {
+        await gmail.users.messages.trash({ userId: 'me', id: msg.id });
+      } catch { /* ignore */ }
+      continue;
+    }
+
+    // === RDV: Someone wants to meet/call/visit — URGENT alert to Luca ===
+    if (analysis.type === 'rdv') {
+      for (const chatId of ADMIN_CHAT_IDS()) {
+        await sendTelegram(chatId, [
+          `📅📅📅 <b>DEMANDE DE RDV / APPEL</b>`,
+          ``,
+          `👤 De: ${fromHeader}`,
+          `📝 ${subject}`,
+          ``,
+          `📋 ${analysis.summary}`,
+          ``,
+          `💬 "${bodyText.slice(0, 300)}"`,
+          ``,
+          analysis.reply_suggestion ? `💡 Suggestion: ${analysis.reply_suggestion}` : '',
+          ``,
+          `⚡ <b>Reponds ou appelle MAINTENANT!</b>`,
+        ].filter(Boolean).join('\n'));
+      }
+      alertsSent++;
+    }
+
+    // === PAIEMENT: Bill/payment due — alert with deadline ===
+    if (analysis.type === 'paiement') {
+      const deadline = analysis.date_limite ? `\n📅 <b>Date limite: ${analysis.date_limite}</b>` : '';
+      const montant = analysis.montant_ttc ? `\n💰 Montant: ${analysis.montant_ttc.toFixed(2)}$` : '';
+      for (const chatId of ADMIN_CHAT_IDS()) {
+        await sendTelegram(chatId, [
+          `💳 <b>FACTURE À PAYER</b>`,
+          ``,
+          `🏪 ${analysis.fournisseur ?? fromHeader}`,
+          `📝 ${subject}`,
+          montant,
+          deadline,
+          ``,
+          `📋 ${analysis.summary}`,
+          ``,
+          `⚠️ <i>Pense a payer avant la date limite!</i>`,
+        ].filter(Boolean).join('\n'));
+      }
+      alertsSent++;
+    }
+
+    // === NOTIFY ADMIN FOR ALL REMAINING EMAILS ===
+    // Spam already handled above (trashed + continue). Notify for other types that don't have their own alerts.
+    {
       const emoji = analysis.needs_attention ? '🔴' : analysis.type === 'important' ? '🟠' : '📬';
-      const label = analysis.needs_attention ? 'ACTION REQUISE' : analysis.type === 'facture' ? '' : analysis.type === 'client' ? '' : `Email ${analysis.type}`;
-      // Skip notification for facture and client — they already have their own notifications above
-      if (analysis.type !== 'facture' && analysis.type !== 'client') {
+      const label = analysis.needs_attention ? 'ACTION REQUISE' : `Email ${analysis.type}`;
+      // Skip notification for types that already have their own notifications above
+      if (analysis.type !== 'facture' && analysis.type !== 'client' && analysis.type !== 'rdv' && analysis.type !== 'paiement') {
         for (const chatId of ADMIN_CHAT_IDS()) {
           await sendTelegram(chatId,
             `${emoji} <b>${label || 'Nouveau email'}</b>\n\n` +

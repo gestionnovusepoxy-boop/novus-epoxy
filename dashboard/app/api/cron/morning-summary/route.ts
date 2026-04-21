@@ -138,7 +138,22 @@ export async function GET(req: NextRequest) {
     []
   ).catch(() => [{ count: 0 }]);
 
+  // Recent emails summary (last 12h for morning, last 12h for evening)
+  const recentEmailLogs = await query(
+    `SELECT destinataire, sujet, statut, direction, created_at FROM email_logs
+     WHERE created_at > NOW() - INTERVAL '12 hours'
+     ORDER BY created_at DESC LIMIT 15`,
+  ).catch(() => []);
+
+  // Pending payments (expenses marked as paiement reminders from email scan)
+  const pendingPayments = await query(
+    `SELECT fournisseur, montant_ttc, description, date_depense FROM expenses
+     WHERE source = 'email-scan' AND paid_at IS NULL AND montant_ttc > 0
+     ORDER BY date_depense ASC LIMIT 5`,
+  ).catch(() => []);
+
   // Build message
+  const isEvening = req.nextUrl.searchParams.get('evening') === 'true';
   const subCount = (newSubs[0] as { count: number }).count;
   const pendingCount = (pendingQuotes[0] as { count: number }).count;
   const signCount = (awaitingSign[0] as { count: number }).count;
@@ -154,7 +169,7 @@ export async function GET(req: NextRequest) {
   const crmFroidsCount = (crmFroidsToday[0] as { count: number }).count;
 
   const lines = [
-    `☀️ <b>Aria — Résumé du matin</b>`,
+    isEvening ? `🌙 <b>Aria — Résumé du soir</b>` : `☀️ <b>Aria — Résumé du matin</b>`,
     ``,
     `📊 <b>Dernières 24h:</b>`,
     `• ${subCount} nouvelle${subCount !== 1 ? 's' : ''} soumission${subCount !== 1 ? 's' : ''}`,
@@ -188,6 +203,29 @@ export async function GET(req: NextRequest) {
   if (pendingProspectSent > 0) {
     lines.push(`🚀 ${pendingProspectSent} offres envoyees ce matin (en attente depuis hier)`);
   }
+  // Email activity
+  if (recentEmailLogs.length > 0) {
+    const inbound = recentEmailLogs.filter((e: Record<string, unknown>) => e.direction === 'inbound').length;
+    const outbound = recentEmailLogs.filter((e: Record<string, unknown>) => e.direction === 'outbound').length;
+    lines.push('');
+    lines.push(`📧 <b>Emails (12 dernieres heures):</b>`);
+    lines.push(`• ${inbound} recus, ${outbound} envoyes`);
+    // Show last 3 important emails
+    const important = recentEmailLogs.filter((e: Record<string, unknown>) => e.direction === 'inbound').slice(0, 3);
+    for (const e of important) {
+      lines.push(`  → ${(e.sujet as string)?.slice(0, 50) ?? '(sans sujet)'} — de ${(e.destinataire as string)?.slice(0, 30)}`);
+    }
+  }
+
+  // Pending payments
+  if (pendingPayments.length > 0) {
+    lines.push('');
+    lines.push(`💳 <b>Factures a payer:</b>`);
+    for (const p of pendingPayments) {
+      lines.push(`• ${p.fournisseur} — ${formatMoney(Number(p.montant_ttc))} (${p.description ?? ''})`);
+    }
+  }
+
   lines.push('');
   lines.push(`💰 <b>Revenus ce mois:</b> ${formatMoney(monthDep + monthBal)}`);
   lines.push('');
