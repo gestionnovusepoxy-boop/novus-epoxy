@@ -56,59 +56,69 @@ export async function POST(req: NextRequest) {
   const results: Record<string, number> = {};
   let total = 0;
 
-  // 1. BOUNCES — delivery failures
-  const bounces = await batchTrash(gmail, 'subject:("Address not found" OR "Message not delivered" OR "Undeliverable" OR "Mail delivery failed" OR "Delivery Status Notification")');
+  // SAFE EXCLUSIONS — never trash these
+  const safe = '-from:stripe.com -from:interac -from:desjardins -from:td.com -from:rbc.com -from:bmo.com -from:paypal -from:revenuquebec -from:cra-arc.gc.ca';
+
+  // 1. BOUNCES & DELIVERY FAILURES
+  const bounces = await batchTrash(gmail, 'subject:("Address not found" OR "Message not delivered" OR "Undeliverable" OR "Mail delivery failed" OR "Delivery Status Notification" OR "échec de la remise" OR "Returned mail")', 500);
   if (bounces > 0) { results['bounces'] = bounces; total += bounces; }
 
-  const mailer = await batchTrash(gmail, 'from:mailer-daemon');
+  const mailer = await batchTrash(gmail, 'from:mailer-daemon OR from:postmaster', 500);
   if (mailer > 0) { results['mailer_daemon'] = mailer; total += mailer; }
 
-  // 2. DEV/SYSTEM NOTIFICATIONS (not useful for business)
-  const sentry = await batchTrash(gmail, 'from:sentry.io');
+  // 2. DEV/SYSTEM NOTIFICATIONS
+  const sentry = await batchTrash(gmail, 'from:sentry.io', 500);
   if (sentry > 0) { results['sentry'] = sentry; total += sentry; }
 
-  const github = await batchTrash(gmail, 'from:notifications@github.com OR from:noreply@github.com');
+  const github = await batchTrash(gmail, 'from:notifications@github.com OR from:noreply@github.com', 500);
   if (github > 0) { results['github'] = github; total += github; }
 
-  // 3. SOCIAL MEDIA NOTIFICATIONS
-  const fb = await batchTrash(gmail, 'from:facebookmail.com OR from:notification@facebookmail.com');
+  const vercel = await batchTrash(gmail, 'from:no-reply@vercel.com OR from:notifications@vercel.com', 500);
+  if (vercel > 0) { results['vercel'] = vercel; total += vercel; }
+
+  const anthropic = await batchTrash(gmail, 'from:anthropic.com', 200);
+  if (anthropic > 0) { results['anthropic'] = anthropic; total += anthropic; }
+
+  // 3. SOCIAL MEDIA
+  const fb = await batchTrash(gmail, 'from:facebookmail.com OR from:notification@facebookmail.com OR from:instagram.com', 500);
   if (fb > 0) { results['facebook_instagram'] = fb; total += fb; }
 
-  // 4. PROMOTIONS TAB — all of it
-  const promos = await batchTrash(gmail, 'category:promotions', 500);
+  // 4. GMAIL CATEGORIES — all tabs except Primary banks
+  const promos = await batchTrash(gmail, `category:promotions ${safe}`, 1000);
   if (promos > 0) { results['promotions'] = promos; total += promos; }
 
-  // 5. SOCIAL TAB — all of it
   const social = await batchTrash(gmail, 'category:social', 500);
   if (social > 0) { results['social'] = social; total += social; }
 
-  // 6. UPDATES TAB (except Stripe/Interac/banks)
-  const updates = await batchTrash(gmail, 'category:updates -from:stripe -from:interac -from:desjardins -from:td.com -from:rbc.com -from:bmo.com');
+  const updates = await batchTrash(gmail, `category:updates ${safe}`, 500);
   if (updates > 0) { results['updates'] = updates; total += updates; }
 
-  // 7. GOOGLE WORKSPACE promos
-  const gws = await batchTrash(gmail, 'from:google-workspace-noreply@google.com');
+  // 5. GOOGLE SYSTEM EMAILS
+  const gws = await batchTrash(gmail, 'from:google-workspace-noreply@google.com', 200);
   if (gws > 0) { results['google_workspace'] = gws; total += gws; }
 
-  // 8. GOOGLE SECURITY ALERTS (noise)
-  const gsec = await batchTrash(gmail, 'from:no-reply@accounts.google.com');
+  const gsec = await batchTrash(gmail, 'from:no-reply@accounts.google.com', 200);
   if (gsec > 0) { results['google_security'] = gsec; total += gsec; }
 
-  // 9. SPAM FILTER bypasses
-  const mailinblac = await batchTrash(gmail, 'subject:"Protect de Mailinblac"');
-  if (mailinblac > 0) { results['mailinblac'] = mailinblac; total += mailinblac; }
+  // 6. NEWSLETTERS & MARKETING (emails with unsubscribe links in Primary)
+  const unsub = await batchTrash(gmail, `in:inbox unsubscribe ${safe}`, 500);
+  if (unsub > 0) { results['newsletters_unsub'] = unsub; total += unsub; }
 
-  // 10. ANTHROPIC/CLAUDE newsletters
-  const anthropic = await batchTrash(gmail, 'from:team@anthropic.com OR from:anthropic.com');
-  if (anthropic > 0) { results['anthropic'] = anthropic; total += anthropic; }
+  // 7. NOREPLY IN INBOX (not banks/payments)
+  const noreply = await batchTrash(gmail, `in:inbox (from:noreply OR from:no-reply OR from:donotreply) ${safe}`, 500);
+  if (noreply > 0) { results['noreply'] = noreply; total += noreply; }
 
-  // 11. ARCHIVE: copies of our own system emails
-  const systemCopies = await batchArchive(gmail, 'from:gestionnovusepoxy@gmail.com subject:("Depot recu" OR "Contrat signe" OR "Dates confirmees" OR "Nouvelle reservation" OR "Prochaine etape" OR "signer le contrat" OR "Soumission Novus Epoxy")');
+  // 8. OLD INBOX EMAILS > 90 DAYS (keep last 90 days for safety)
+  const old90 = await batchTrash(gmail, `in:inbox older_than:90d ${safe} -from:gestionnovusepoxy`, 500);
+  if (old90 > 0) { results['old_90d'] = old90; total += old90; }
+
+  // 9. SPAM BYPASS
+  const mailinblac = await batchTrash(gmail, 'subject:"Protect de Mailinblac" OR subject:"Se desabonner" OR subject:"Desabonnement"', 100);
+  if (mailinblac > 0) { results['spam_bypass'] = mailinblac; total += mailinblac; }
+
+  // 10. ARCHIVE: our own outbound system email copies
+  const systemCopies = await batchArchive(gmail, 'from:gestionnovusepoxy@gmail.com in:inbox', 500);
   if (systemCopies > 0) { results['system_copies_archived'] = systemCopies; total += systemCopies; }
-
-  // 12. VERCEL deploy notifications
-  const vercel = await batchTrash(gmail, 'from:no-reply@vercel.com OR from:notifications@vercel.com');
-  if (vercel > 0) { results['vercel'] = vercel; total += vercel; }
 
   // Notify admins
   if (total > 0) {
