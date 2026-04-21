@@ -375,7 +375,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
                 return (
                   <div key={idx} className="flex justify-between bg-slate-900/50 rounded-lg px-3 py-2">
                     <span className="text-white font-medium">{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service}</span>
-                    <span className="text-slate-300">{isPrixFixe ? 'Prix fixe' : `${Number(item.superficie)} pi² @ ${formatMoney(Number(item.prix_pied_carre))}/pi²`}</span>
+                    <span className="text-slate-300">{isPrixFixe ? `Prix fixe — ${Number(item.superficie)} pi²` : `${Number(item.superficie)} pi² @ ${formatMoney(Number(item.prix_pied_carre))}/pi²`}</span>
                   </div>
                 );
               })}
@@ -387,8 +387,8 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
                 <p className="text-white font-medium">{service.label}</p>
               </div>
               <div>
-                <p className="text-slate-500">{Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 ? 'Type de prix' : 'Superficie'}</p>
-                <p className="text-white">{Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 ? 'Prix fixe' : `${quote.superficie} pi²`}</p>
+                <p className="text-slate-500">Superficie</p>
+                <p className="text-white">{Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 ? `Prix fixe — ${quote.superficie} pi²` : `${quote.superficie} pi²`}</p>
               </div>
             </div>
           )}
@@ -443,7 +443,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
               const isPrixFixe = Number(item.prix_pied_carre) === 0 && Number(item.sous_total) > 0;
               return (
                 <div key={idx} className="flex justify-between text-slate-300">
-                  <span>{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service}{isPrixFixe ? ' — Prix fixe' : ` x ${Number(item.superficie)} pi²`}</span>
+                  <span>{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service}{isPrixFixe ? ` — Prix fixe — ${Number(item.superficie)} pi²` : ` x ${Number(item.superficie)} pi²`}</span>
                   <span>{formatMoney(Number(item.sous_total))}</span>
                 </div>
               );
@@ -452,7 +452,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             <div className="flex justify-between text-slate-300">
               {Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 ? (
                 <>
-                  <span>{service.label} — Prix fixe</span>
+                  <span>{service.label} — Prix fixe — {quote.superficie} pi²</span>
                   <span>{formatMoney(Number(quote.sous_total))}</span>
                 </>
               ) : (

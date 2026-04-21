@@ -89,6 +89,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   );
 
   if (!rows[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
+
+  // If superficie changed, also sync quote_items for single-item quotes
+  if (body.superficie !== undefined) {
+    const items = await query('SELECT id FROM quote_items WHERE quote_id = $1', [parseInt(id)]).catch(() => []);
+    if (items.length === 1) {
+      await query('UPDATE quote_items SET superficie = $1 WHERE id = $2', [parseFloat(body.superficie), items[0].id]).catch(() => {});
+    }
+  }
+
   return NextResponse.json(rows[0]);
 }
 
