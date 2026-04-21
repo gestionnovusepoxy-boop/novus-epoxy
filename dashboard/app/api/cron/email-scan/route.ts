@@ -349,20 +349,13 @@ Reponds en JSON strict (sans markdown):
       emailSent = true;
     } catch { /* email send failed */ }
 
-    // Notify admins on Telegram
-    for (const chatId of ADMIN_CHAT_IDS()) {
-      await sendTelegram(chatId, [
-        `🤖 <b>Closer — ${emailSent ? 'reponse envoyee' : 'reponse ECHOUEE'}</b>`,
-        ``,
-        `👤 ${leadNom} (${fromEmail})`,
-        `🏷 ${parsed.type ?? 'inconnu'} — ${parsed.intent ?? ''}`,
-        parsed.service_detecte && parsed.service_detecte !== 'null' ? `🔧 ${parsed.service_detecte}` : '',
-        parsed.superficie_detectee && parsed.superficie_detectee !== 'null' ? `📐 ${parsed.superficie_detectee} pi²` : '',
-        ``,
-        `💬 <i>${reponseText.slice(0, 400)}</i>`,
-        ``,
-        `https://novus-epoxy.vercel.app/dashboard/crm`,
-      ].filter(Boolean).join('\n'));
+    // Notify admins on Telegram only if reply FAILED (so Luca can intervene)
+    if (!emailSent) {
+      for (const chatId of ADMIN_CHAT_IDS()) {
+        await sendTelegram(chatId,
+          `⚠️ <b>Aria — reponse ECHOUEE</b>\n\n👤 ${leadNom} (${fromEmail})\n📝 ${subject}\n\n<i>Repondre manuellement!</i>`
+        );
+      }
     }
   }
 
@@ -940,6 +933,9 @@ export async function GET(req: NextRequest) {
         await tryCreateQuoteFromReply(lead.id, bodyText);
       } catch { /* auto-quote failed — non-blocking */ }
 
+      // Archive email after handling — keep inbox clean
+      try { await gmail.users.messages.modify({ userId: 'me', id: msg.id, requestBody: { removeLabelIds: ['INBOX'] } }); } catch { /* ignore */ }
+
       continue;
     }
 
@@ -1098,16 +1094,8 @@ export async function GET(req: NextRequest) {
           repliesSent++;
         } catch { /* ignore reply errors */ }
 
-        for (const chatId of ADMIN_CHAT_IDS()) {
-          await sendTelegram(chatId,
-            `🤖 <b>Email client — reponse envoyee</b>\n\n` +
-            `De: ${fromHeader}\n` +
-            `Sujet: ${subject}\n\n` +
-            `📋 ${analysis.summary}\n` +
-            `\n💬 <i>${(analysis.reply_suggestion ?? '').slice(0, 400)}</i>` +
-            `\n\nhttps://novus-epoxy.vercel.app/dashboard/crm`,
-          );
-        }
+        // Archive email after replying — keep inbox clean
+        try { await gmail.users.messages.modify({ userId: 'me', id: msg.id, requestBody: { removeLabelIds: ['INBOX'] } }); } catch { /* ignore */ }
         alertsSent++;
       }
     }
