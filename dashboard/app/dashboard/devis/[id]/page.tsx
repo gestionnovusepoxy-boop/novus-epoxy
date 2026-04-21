@@ -131,7 +131,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
 
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
-  const [editForm, setEditForm] = useState({ client_nom: '', client_email: '', client_tel: '', client_adresse: '', type_service: '', superficie: '', notes: '', description_travaux: '', couleur_flake: '', rabais_pct: '' });
+  const [editForm, setEditForm] = useState({ client_nom: '', client_email: '', client_tel: '', client_adresse: '', type_service: '', superficie: '', notes: '', description_travaux: '', couleur_flake: '', rabais_pct: '', prix_fixe_montant: '' });
   const [saving, setSaving] = useState(false);
 
   function startEdit() {
@@ -147,6 +147,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       description_travaux: quote.description_travaux ?? '',
       couleur_flake: quote.couleur_flake ?? '',
       rabais_pct: String(quote.rabais_pct ?? 0),
+      prix_fixe_montant: Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 ? String(quote.sous_total) : '',
     });
     setEditing(true);
   }
@@ -156,10 +157,12 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
     setSaving(true);
     setError('');
     try {
+      const isPrixFixe = Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0;
       const updated = await updateQuote(quote.id, {
         ...editForm,
         superficie: parseFloat(editForm.superficie) || quote.superficie,
         rabais_pct: parseFloat(editForm.rabais_pct) || 0,
+        ...(isPrixFixe && editForm.prix_fixe_montant ? { sous_total: parseFloat(editForm.prix_fixe_montant) } : {}),
       } as Record<string, unknown>);
       setQuote(updated);
       setEditing(false);
@@ -317,6 +320,12 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
               <label className="text-slate-500 text-xs mb-1 block">Superficie (pi²)</label>
               <input value={editForm.superficie} onChange={e => setEditForm(f => ({ ...f, superficie: e.target.value }))} type="number" className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
             </div>
+            {Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 && (
+              <div>
+                <label className="text-slate-500 text-xs mb-1 block">Prix fixe ($) — avant taxes</label>
+                <input value={editForm.prix_fixe_montant} onChange={e => setEditForm(f => ({ ...f, prix_fixe_montant: e.target.value }))} type="number" className="bg-slate-700 border border-amber-500/50 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+              </div>
+            )}
             <div>
               <label className="text-slate-500 text-xs mb-1 block">Rabais %</label>
               <input value={editForm.rabais_pct} onChange={e => setEditForm(f => ({ ...f, rabais_pct: e.target.value }))} type="number" className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />

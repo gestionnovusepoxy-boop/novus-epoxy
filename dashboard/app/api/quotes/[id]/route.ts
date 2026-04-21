@@ -24,7 +24,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const { id } = await params;
   const body = await req.json();
-  const allowed = ['statut', 'client_nom', 'client_email', 'client_tel', 'client_adresse', 'type_service', 'superficie', 'etat_plancher', 'notes', 'description_travaux', 'couleur_flake', 'contrat_signature_nom', 'rabais_pct'];
+  const allowed = ['statut', 'client_nom', 'client_email', 'client_tel', 'client_adresse', 'type_service', 'superficie', 'etat_plancher', 'notes', 'description_travaux', 'couleur_flake', 'contrat_signature_nom', 'rabais_pct', 'sous_total'];
 
   const sets: string[] = [];
   const values: unknown[] = [];
@@ -56,7 +56,22 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
         body.rabais_montant = calc.rabais_montant;
       }
     }
-    // Prix fixe quotes: only update the fields sent, no recalculation
+    // Prix fixe: if sous_total is explicitly passed, recalculate taxes
+    if (isPrixFixe && body.sous_total !== undefined) {
+      const sousTotal = parseFloat(body.sous_total);
+      const rabais = parseFloat(body.rabais_pct ?? current[0].rabais_pct ?? 0);
+      const rabaisMontant = sousTotal * (rabais / 100);
+      const sousApresRabais = sousTotal - rabaisMontant;
+      const tps = Math.round(sousApresRabais * 0.05 * 100) / 100;
+      const tvq = Math.round(sousApresRabais * 0.09975 * 100) / 100;
+      const total = Math.round((sousApresRabais + tps + tvq) * 100) / 100;
+      body.sous_total = sousApresRabais;
+      body.tps = tps;
+      body.tvq = tvq;
+      body.total = total;
+      body.depot_requis = Math.round(total * 0.30 * 100) / 100;
+      body.rabais_montant = rabaisMontant;
+    }
   }
 
   const allFields = [...allowed, 'prix_pied_carre', 'sous_total', 'tps', 'tvq', 'total', 'depot_requis', 'rabais_montant'];
@@ -90,11 +105,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (!rows[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
-  // If superficie changed, also sync quote_items for single-item quotes
-  if (body.superficie !== undefined) {
+  // Sync quote_items for single-item quotes when superficie or sous_total changes
+  if (body.superficie !== undefined || body.sous_total !== undefined) {
     const items = await query('SELECT id FROM quote_items WHERE quote_id = $1', [parseInt(id)]).catch(() => []);
     if (items.length === 1) {
-      await query('UPDATE quote_items SET superficie = $1 WHERE id = $2', [parseFloat(body.superficie), items[0].id]).catch(() => {});
+      const itemUpdates: string[] = [];
+      const itemVals: unknown[] = [];
+      if (body.superficie !== undefined) { itemUpdates.push(`superficie = $${itemUpdates.length + 1}`); itemVals.push(parseFloat(body.superficie)); }
+      if (body.sous_total !== undefined) { itemUpdates.push(`sous_total = $${itemUpdates.length + 1}`); itemVals.push(body.sous_total); }
+      if (itemUpdates.length > 0) {
+        itemVals.push(items[0].id);
+        await query(`UPDATE quote_items SET ${itemUpdates.join(', ')} WHERE id = $${itemVals.length}`, itemVals).catch(() => {});
+      }
     }
   }
 
