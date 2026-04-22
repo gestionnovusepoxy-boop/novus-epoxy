@@ -70,10 +70,10 @@ export async function POST(req: NextRequest) {
   const sentry = await batchTrash(gmail, 'from:sentry.io', 500);
   if (sentry > 0) { results['sentry'] = sentry; total += sentry; }
 
-  const github = await batchTrash(gmail, 'from:notifications@github.com OR from:noreply@github.com', 500);
+  const github = await batchTrash(gmail, '(from:notifications@github.com OR from:noreply@github.com) older_than:7d', 500);
   if (github > 0) { results['github'] = github; total += github; }
 
-  const vercel = await batchTrash(gmail, 'from:no-reply@vercel.com OR from:notifications@vercel.com', 500);
+  const vercel = await batchTrash(gmail, '(from:no-reply@vercel.com OR from:notifications@vercel.com) older_than:7d', 500);
   if (vercel > 0) { results['vercel'] = vercel; total += vercel; }
 
   const anthropic = await batchTrash(gmail, 'from:anthropic.com', 200);
