@@ -73,6 +73,9 @@ export async function POST(req: NextRequest) {
   const github = await batchTrash(gmail, '(from:notifications@github.com OR from:noreply@github.com) older_than:7d', 500);
   if (github > 0) { results['github'] = github; total += github; }
 
+  const supabase = await batchTrash(gmail, '(from:noreply@supabase.io OR from:no-reply@supabase.io OR from:support@supabase.io) older_than:7d', 200);
+  if (supabase > 0) { results['supabase'] = supabase; total += supabase; }
+
   const vercel = await batchTrash(gmail, '(from:no-reply@vercel.com OR from:notifications@vercel.com) older_than:7d', 500);
   if (vercel > 0) { results['vercel'] = vercel; total += vercel; }
 
