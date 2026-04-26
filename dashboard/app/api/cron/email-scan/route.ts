@@ -1198,27 +1198,45 @@ export async function GET(req: NextRequest) {
   const summary = `Email scan: ${messageIds.length} traites, ${invoicesCreated} factures, ${repliesSent} reponses, ${alertsSent} alertes`;
   return NextResponse.json({ processed: messageIds.length, invoicesCreated, repliesSent, alertsSent, summary });
 
+    // Success — reset consecutive failure counter
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ('email_scan_fail_count', '0') ON CONFLICT (key) DO UPDATE SET value = '0'`,
+    ).catch(() => {});
+
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Email Scan] Fatal error:', msg);
 
-    // Only send Telegram alert if we haven't sent one in the last 30 minutes (prevent spam)
-    const lastAlertRows = await query(`SELECT value FROM kv_store WHERE key = 'last_email_scan_error'`).catch(() => []);
-    const lastAlert = lastAlertRows?.[0]?.value as string | undefined;
-    const shouldAlert = !lastAlert || (Date.now() - new Date(lastAlert).getTime() > 6 * 60 * 60 * 1000); // 6h cooldown
+    // Track consecutive failures
+    const failCountRows = await query(`SELECT value FROM kv_store WHERE key = 'email_scan_fail_count'`).catch(() => []);
+    const failCount = parseInt(failCountRows?.[0]?.value ?? '0') + 1;
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ('email_scan_fail_count', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+      [String(failCount)],
+    ).catch(() => {});
+
+    // Alert on 1st fail, then every 3 fails (not every 15 min — not every 6h either)
+    const shouldAlert = failCount === 1 || failCount % 3 === 0;
 
     if (shouldAlert) {
-      await query(
-        `INSERT INTO kv_store (key, value) VALUES ('last_email_scan_error', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
-        [new Date().toISOString()],
-      ).catch(() => {});
+      const isGmailError = msg.toLowerCase().includes('auth') || msg.toLowerCase().includes('token') || msg.toLowerCase().includes('oauth') || msg.toLowerCase().includes('401');
+      const isTimeout = msg.toLowerCase().includes('timeout') || msg.toLowerCase().includes('time');
+
+      // Auto-repair: try to renew Gmail watch on auth errors
+      if (isGmailError) {
+        await renewGmailWatchIfNeeded().catch(() => {});
+      }
+
+      const urgency = failCount >= 6 ? '🔴 URGENT' : failCount >= 3 ? '🟠' : '🟡';
       await alertAdmins(
-        `🚨 <b>Email Scan — ERREUR CRITIQUE</b>\n\n` +
-        `${msg}\n\n` +
-        `Le scan des emails est en panne. Verifiez les logs Vercel.\n` +
-        `https://vercel.com/gestionnovusepoxy-boops-projects/novus-epoxy/logs`,
+        `${urgency} <b>Email Scan — ECHEC #${failCount}</b>\n\n` +
+        `<b>Erreur:</b> ${msg.slice(0, 300)}\n\n` +
+        (isGmailError ? `⚙️ <i>Auto-repair: renouvellement Gmail watch tenté</i>\n\n` : '') +
+        (isTimeout ? `⏱ <i>Cause probable: timeout 60s — trop d'emails en attente</i>\n\n` : '') +
+        `Cron relance auto dans 15 min.\n` +
+        `Logs: https://vercel.com/gestionnovusepoxy-boops-projects/novus-epoxy/logs`,
       ).catch(() => {});
     }
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: msg, fail_count: failCount }, { status: 500 });
   }
 }
