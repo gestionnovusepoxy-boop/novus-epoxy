@@ -1200,7 +1200,8 @@ export async function GET(req: NextRequest) {
 
     // Success — reset consecutive failure counter
     await query(
-      `INSERT INTO kv_store (key, value) VALUES ('email_scan_fail_count', '0') ON CONFLICT (key) DO UPDATE SET value = '0'`,
+      `INSERT INTO kv_store (key, value) VALUES ('email_scan_fail_count', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+      ['0'],
     ).catch(() => {});
 
   } catch (err) {
@@ -1209,7 +1210,7 @@ export async function GET(req: NextRequest) {
 
     // Track consecutive failures
     const failCountRows = await query(`SELECT value FROM kv_store WHERE key = 'email_scan_fail_count'`).catch(() => []);
-    const failCount = parseInt(failCountRows?.[0]?.value ?? '0') + 1;
+    const failCount = parseInt(String(failCountRows?.[0]?.value ?? '0')) + 1;
     await query(
       `INSERT INTO kv_store (key, value) VALUES ('email_scan_fail_count', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
       [String(failCount)],
