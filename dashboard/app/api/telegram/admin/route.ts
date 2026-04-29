@@ -230,18 +230,18 @@ const TOOLS = [
   },
   {
     name: 'enregistrer_heures',
-    description: 'Enregistre les heures travaillees pour un ou plusieurs employes sur un projet. Utilise quand Luca/Jason dit "3h chaque sur projet #17" ou "j\'ai fait 5h chez Bernadette".',
+    description: 'Enregistre les heures travaillees pour un ou plusieurs employes sur un projet. Utilise quand Luca/Jason dit "3h chaque sur projet #17", "j\'ai fait 5h chez Bernadette", "jour 1 jason 10h luca 10h", "jour 2 luca et jason 10h". IMPORTANT: nom_employe doit etre uniquement le PRENOM de la personne (Luca, Jason, Stephane) — jamais "Jour 1", "Jour 2", "Projet", etc. Si le message dit "jour 1 jason 10h luca 10h", cree 2 entrees: {nom_employe:"Jason",heures:10} et {nom_employe:"Luca",heures:10}. Si plusieurs jours mentionnes, appelle l\'outil une fois par jour avec la date correspondante.',
     input_schema: {
       type: 'object',
       properties: {
         quote_id: { type: 'number', description: 'ID du projet (devis)' },
         entrees: {
           type: 'array',
-          description: 'Liste des entrees de temps',
+          description: 'Liste des entrees de temps — chaque entree = 1 employe. nom_employe = prenom seulement (Luca, Jason, Stephane). JAMAIS "Jour 1", "Jour 2", "Projet", "Employe" comme nom.',
           items: {
             type: 'object',
             properties: {
-              nom_employe: { type: 'string', description: 'Nom de l\'employe (ex: Luca, Jason, Stephane)' },
+              nom_employe: { type: 'string', description: 'Prenom de l\'employe SEULEMENT: "Luca", "Jason", "Stephane". Jamais "Jour 1", "Projet", etc.' },
               heures: { type: 'number', description: 'Nombre d\'heures travaillees' },
               type: { type: 'string', description: 'Type: travail, deplacement, preparation, nettoyage', default: 'travail' },
               notes: { type: 'string', description: 'Notes optionnelles', default: '' },
@@ -249,7 +249,7 @@ const TOOLS = [
             required: ['nom_employe', 'heures'],
           },
         },
-        date: { type: 'string', description: 'Date au format YYYY-MM-DD (defaut: aujourd\'hui)', default: '' },
+        date: { type: 'string', description: 'Date au format YYYY-MM-DD. Si "jour 1" = premiere journee du projet, "jour 2" = deuxieme journee. Utilise la date reelle si connue.' },
       },
       required: ['quote_id', 'entrees'],
     },
@@ -1334,17 +1334,23 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       return NextResponse.json({ ok: true });
     }
 
-    // assign_expense_123_inv_456 or assign_expense_123_none — assign expense to invoice/project
+    // assign_expense_123_inv_456 or assign_expense_123_none or assign_expense_123_proj_456
     if (cbData.startsWith('assign_expense_')) {
       const parts = cbData.replace('assign_expense_', '').split('_');
       const expenseId = parseInt(parts[0]);
       const isNone = parts[1] === 'none';
       const invoiceId = !isNone && parts[1] === 'inv' ? parseInt(parts[2]) : null;
+      const projId = !isNone && parts[1] === 'proj' ? parseInt(parts[2]) : null;
 
       try {
         if (isNone) {
           await query(`UPDATE expenses SET pending_project = FALSE WHERE id = $1`, [expenseId]);
           await sendTelegram(cbChatId, `✅ Depense #${expenseId} — marquee comme generale (aucun projet).`);
+        } else if (projId) {
+          await query(`UPDATE expenses SET quote_id = $1, pending_project = FALSE WHERE id = $2`, [projId, expenseId]);
+          const projRows = await query(`SELECT client_nom FROM quotes WHERE id = $1`, [projId]);
+          const clientNom = (projRows[0]?.client_nom as string) ?? `#${projId}`;
+          await sendTelegram(cbChatId, `✅ Depense #${expenseId} → liee au projet #${projId} (${clientNom})`);
         } else if (invoiceId) {
           await query(`UPDATE expenses SET invoice_id = $1, pending_project = FALSE WHERE id = $2`, [invoiceId, expenseId]);
           const invRows = await query(`SELECT numero FROM invoices WHERE id = $1`, [invoiceId]);
@@ -2461,7 +2467,7 @@ Reponds en JSON strict:
       };
 
       const expId = rows[0].id;
-      await sendTelegram(chatId, [
+      const confirmLines = [
         `Depense #${expId} enregistree!`,
         ``,
         `${parsed.fournisseur}`,
@@ -2476,7 +2482,35 @@ Reponds en JSON strict:
         `Categorie: ${CAT_LABEL[categorie] || categorie}`,
         `Methode: ${methode}`,
         parsed.reference ? `Ref: ${parsed.reference}` : '',
-      ].filter(Boolean).join('\n'));
+      ].filter(Boolean).join('\n');
+
+      // If not linked to a project, ask which project via inline buttons
+      if (!expQuoteId) {
+        const recentProjects = await query(
+          `SELECT id, client_nom, type_service FROM quotes WHERE statut IN ('planifie','en_cours','complete','depot_paye') ORDER BY created_at DESC LIMIT 5`
+        );
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        if (botToken && recentProjects.length > 0) {
+          const buttons = recentProjects.map((p: Record<string, unknown>) => ([{
+            text: `#${p.id} ${String(p.client_nom).slice(0, 20)}`,
+            callback_data: `assign_expense_${expId}_proj_${p.id}`,
+          }]));
+          buttons.push([{ text: 'Aucun projet', callback_data: `assign_expense_${expId}_none` }]);
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: confirmLines + '\n\n⚠️ Pas de projet detecte — a quel projet lier cette depense?',
+              reply_markup: { inline_keyboard: buttons },
+            }),
+          });
+        } else {
+          await sendTelegram(chatId, confirmLines);
+        }
+      } else {
+        await sendTelegram(chatId, confirmLines + `\n\nProjet: #${expQuoteId}`);
+      }
 
     } catch (err) {
       console.error('Telegram receipt scan error:', err);
