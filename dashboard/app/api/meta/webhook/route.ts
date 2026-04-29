@@ -29,7 +29,14 @@ function verifyMetaSignature(payload: string, signature: string | null): boolean
   if (!signature) return false;
 
   const expected = 'sha256=' + createHmac('sha256', appSecret).update(payload).digest('hex');
-  return timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
+  try {
+    const expBuf = Buffer.from(expected);
+    const sigBuf = Buffer.from(signature);
+    if (expBuf.length !== sigBuf.length) return false;
+    return timingSafeEqual(expBuf, sigBuf);
+  } catch {
+    return false;
+  }
 }
 
 // POST — Receive events from Meta (leadgen + messaging)

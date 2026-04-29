@@ -45,6 +45,10 @@
       "schedule": "0 13 * * *"
     },
     {
+      "path": "/api/cron/fb-leads-sync",
+      "schedule": "*/30 * * * *"
+    },
+    {
       "path": "/api/cron/health-check",
       "schedule": "0 */6 * * *"
     },
