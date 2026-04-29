@@ -166,8 +166,13 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       } as Record<string, unknown>);
       setQuote(updated);
       setEditing(false);
-    } catch { setError('Erreur lors de la sauvegarde'); }
-    setSaving(false);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(`Erreur sauvegarde: ${msg}`);
+      console.error('handleSaveEdit error:', e);
+    } finally {
+      setSaving(false);
+    }
   }
 
   const [sendSuccess, setSendSuccess] = useState('');
