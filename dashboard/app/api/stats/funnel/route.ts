@@ -15,26 +15,11 @@ export async function GET(req: NextRequest) {
   }
 
   const [leadsRow, contactesRow, devisRow, signesRow, completesRow] = await Promise.all([
-    db(
-      `SELECT COUNT(*)::int AS count FROM crm_leads WHERE statut NOT IN ('ferme','perdu')`,
-      []
-    ),
-    db(
-      `SELECT COUNT(*)::int AS count FROM crm_leads WHERE statut IN ('contacte','interesse')`,
-      []
-    ),
-    db(
-      `SELECT COUNT(*)::int AS count FROM quotes WHERE statut != 'brouillon'`,
-      []
-    ),
-    db(
-      `SELECT COUNT(*)::int AS count FROM quotes WHERE statut IN ('contrat_signe','depot_paye','planifie','complete')`,
-      []
-    ),
-    db(
-      `SELECT COUNT(*)::int AS count FROM quotes WHERE statut = 'complete'`,
-      []
-    ),
+    db(`SELECT COUNT(*)::int AS count FROM crm_leads`, []),
+    db(`SELECT COUNT(*)::int AS count FROM crm_leads WHERE statut NOT IN ('nouveau','ferme','perdu')`, []),
+    db(`SELECT COUNT(*)::int AS count FROM quotes WHERE statut IN ('envoye','approuve','contrat_signe','depot_paye','planifie','complete')`, []),
+    db(`SELECT COUNT(*)::int AS count FROM quotes WHERE statut IN ('contrat_signe','depot_paye','planifie','complete')`, []),
+    db(`SELECT COUNT(*)::int AS count FROM quotes WHERE statut = 'complete'`, []),
   ]);
 
   const leads = (leadsRow[0] as { count: number }).count;
@@ -43,6 +28,7 @@ export async function GET(req: NextRequest) {
   const signes = (signesRow[0] as { count: number }).count;
   const completes = (completesRow[0] as { count: number }).count;
 
+  // Tous les taux calculés par rapport au total leads — jamais > 100%
   function pct(num: number, den: number): number {
     if (den === 0) return 0;
     return Math.round((num / den) * 1000) / 10;
@@ -55,8 +41,8 @@ export async function GET(req: NextRequest) {
     signes,
     completes,
     taux_contact: pct(contactes, leads),
-    taux_devis: pct(devis, contactes),
-    taux_signature: pct(signes, devis),
-    taux_completion: pct(completes, signes),
+    taux_devis: pct(devis, leads),
+    taux_signature: pct(signes, leads),
+    taux_completion: pct(completes, leads),
   });
 }
