@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { calculateQuote, type ServiceType, SERVICES } from '@/lib/pricing';
+import { sendSMS } from '@/lib/sms';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -122,6 +123,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   const items = await query('SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
   const extras = await query('SELECT * FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
+
+  // Auto photo request SMS when devis is marked as sent
+  if (body.statut === 'envoye' && rows[0]?.client_tel) {
+    const prenom = ((rows[0].client_nom as string) ?? '').split(' ')[0];
+    const greeting = prenom ? `Bonjour ${prenom}!` : 'Bonjour!';
+    const photoMsg = `${greeting} Pour compléter votre dossier Novus Époxy #${id}, répondez à ce texto avec quelques photos de votre plancher (angle grand format + zones abîmées si applicable). Merci! 📸`;
+    sendSMS(rows[0].client_tel as string, photoMsg).catch(() => {});
+  }
+
   return NextResponse.json({ ...rows[0], items, extras });
 }
 

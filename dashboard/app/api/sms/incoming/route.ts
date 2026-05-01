@@ -90,10 +90,10 @@ export async function POST(req: NextRequest) {
   }
 
   const from = params['From'] ?? null;
-  const body = params['Body'] ?? null;
+  const body = params['Body'] ?? '';
+  const numMedia = parseInt(params['NumMedia'] ?? '0');
 
-  if (!from || !body) {
-    // Return valid TwiML even on error so Twilio doesn't retry
+  if (!from) {
     return new NextResponse(
       '<?xml version="1.0" encoding="UTF-8"?><Response></Response>',
       { headers: { 'Content-Type': 'text/xml' } }
@@ -142,6 +142,65 @@ export async function POST(req: NextRequest) {
 
   // Extract prenom for personalized reply
   const prenom = clientName !== 'Inconnu' ? clientName.split(' ')[0] : '';
+
+  // --- 0. Handle MMS photos (client sent photos of their floor) ---
+  if (numMedia > 0) {
+    const mediaUrls: string[] = [];
+    for (let i = 0; i < numMedia; i++) {
+      const url = params[`MediaUrl${i}`];
+      if (url) mediaUrls.push(url);
+    }
+
+    if (mediaUrls.length > 0) {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
+      const accountSid = process.env.TWILIO_ACCOUNT_SID;
+      const authToken = process.env.TWILIO_AUTH_TOKEN;
+
+      // Save photo URLs to quote in DB
+      if (quoteId) {
+        await query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'`, []).catch(() => {});
+        const photoEntries = mediaUrls.map(url => ({ url, received_at: new Date().toISOString(), from }));
+        await query(
+          `UPDATE quotes SET photos = COALESCE(photos, '[]'::jsonb) || $1::jsonb WHERE id = $2`,
+          [JSON.stringify(photoEntries), quoteId]
+        ).catch(() => {});
+      }
+
+      // Send each photo to Telegram group
+      if (botToken && groupChatId && accountSid && authToken) {
+        const caption = `📸 Photos de plancher — ${clientName} (${from})${quoteId ? ` — Devis #${quoteId}` : ''}`;
+        const basicAuth = Buffer.from(`${accountSid}:${authToken}`).toString('base64');
+
+        for (const url of mediaUrls) {
+          try {
+            // Download from Twilio (requires Basic auth)
+            const imgRes = await fetch(url, { headers: { Authorization: `Basic ${basicAuth}` } });
+            if (!imgRes.ok) continue;
+            const imgBuffer = await imgRes.arrayBuffer();
+            const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+
+            // Upload directly to Telegram as binary
+            const tgForm = new FormData();
+            tgForm.append('chat_id', groupChatId);
+            tgForm.append('photo', new Blob([imgBuffer], { type: contentType }), 'photo.jpg');
+            tgForm.append('caption', caption);
+            await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
+              method: 'POST',
+              body: tgForm,
+            }).catch(() => {});
+          } catch { /* skip failed photo */ }
+        }
+      }
+
+      // Auto-reply to client
+      const merciMsg = `Merci${prenom ? ` ${prenom}` : ''}! On a bien reçu vos photos. Notre équipe va les consulter pour finaliser votre soumission. — Novus Époxy`;
+      return new NextResponse(
+        `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${merciMsg}</Message></Response>`,
+        { headers: { 'Content-Type': 'text/xml' } }
+      );
+    }
+  }
 
   // --- 1. Update lead status to HOT when SMS received ---
   if (leadId) {
