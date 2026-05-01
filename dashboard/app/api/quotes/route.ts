@@ -151,6 +151,19 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Copier les photos du lead CRM dans le devis si disponibles
+  if (client_tel) {
+    const last10 = client_tel.replace(/\D/g, '').slice(-10);
+    const leadWithPhotos = await query(
+      `SELECT photos FROM crm_leads WHERE REPLACE(REPLACE(REPLACE(telephone, '-', ''), ' ', ''), '+', '') LIKE '%' || $1 AND photos IS NOT NULL AND jsonb_array_length(photos) > 0 ORDER BY created_at DESC LIMIT 1`,
+      [last10]
+    ).catch(() => []);
+    if (leadWithPhotos[0]?.photos) {
+      await query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'`, []).catch(() => {});
+      await query(`UPDATE quotes SET photos = $1 WHERE id = $2`, [JSON.stringify(leadWithPhotos[0].photos), quoteId]).catch(() => {});
+    }
+  }
+
   // Auto photo request SMS pour les devis balcon — dès la création
   const isBalcon = ['balcon', 'patio', 'terrasse'].some(kw =>
     [notes, client_adresse, etat_plancher, primaryService].some(f => (f ?? '').toLowerCase().includes(kw))

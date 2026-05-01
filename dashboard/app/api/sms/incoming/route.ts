@@ -157,19 +157,24 @@ export async function POST(req: NextRequest) {
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
       const authToken = process.env.TWILIO_AUTH_TOKEN;
 
-      // Save photo URLs to quote in DB (add column if first time)
+      // Ensure photo columns exist
       await query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'`, []).catch(() => {});
+      await query(`ALTER TABLE crm_leads ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'`, []).catch(() => {});
       const photoEntries = mediaUrls.map(url => ({ url, received_at: new Date().toISOString(), from }));
+
+      // Toujours sauvegarder sur le lead — c'est la source de vérité
+      if (leadId) {
+        await query(
+          `UPDATE crm_leads SET photos = COALESCE(photos, '[]'::jsonb) || $1::jsonb WHERE id = $2`,
+          [JSON.stringify(photoEntries), leadId]
+        ).catch(() => {});
+      }
+      // Si un devis existe déjà, copier aussi là
       if (quoteId) {
         await query(
           `UPDATE quotes SET photos = COALESCE(photos, '[]'::jsonb) || $1::jsonb WHERE id = $2`,
           [JSON.stringify(photoEntries), quoteId]
         ).catch(() => {});
-      }
-      // If no quote yet, save to lead notes so they're not lost
-      if (!quoteId && leadId) {
-        const photoNote = `\n[PHOTOS MMS ${new Date().toLocaleDateString('fr-CA')}] ${mediaUrls.join(' | ')}`;
-        await query(`UPDATE crm_leads SET notes = COALESCE(notes, '') || $1 WHERE id = $2`, [photoNote, leadId]).catch(() => {});
       }
 
       // Send each photo to Telegram group
