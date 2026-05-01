@@ -352,6 +352,32 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* ignore */ }
 
+  // 3e-bis. Meta Page leadgen subscription — auto-repair if expired
+  try {
+    const metaToken = process.env.META_PAGE_TOKEN;
+    if (metaToken) {
+      const meRes = await fetch(`https://graph.facebook.com/v25.0/me?access_token=${metaToken}`);
+      const me = await meRes.json();
+      if (me.id) {
+        const subRes = await fetch(`https://graph.facebook.com/v25.0/${me.id}/subscribed_apps?access_token=${metaToken}`);
+        const subData = await subRes.json();
+        const hasLeadgen = (subData.data ?? []).some((s: Record<string, unknown>) =>
+          Array.isArray(s.subscribed_fields) && s.subscribed_fields.includes('leadgen')
+        );
+        if (!hasLeadgen) {
+          await fetch(`https://graph.facebook.com/v25.0/${me.id}/subscribed_apps`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscribed_fields: ['leadgen'], access_token: metaToken }),
+          });
+          checks.push({ name: 'Meta Leadgen', ok: true, detail: 'Abonnement leadgen renouvele automatiquement', autoFixed: true, severity: 'critical' });
+        } else {
+          checks.push({ name: 'Meta Leadgen', ok: true, detail: 'Abonnement leadgen actif' });
+        }
+      }
+    }
+  } catch { /* ignore */ }
+
   // 3f. CRM leads with raw service names — auto-normalize
   try {
     const rawServices = await query(
