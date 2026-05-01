@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { isQuietHours } from '@/lib/telegram-utils';
 
 export const maxDuration = 60;
 
@@ -34,7 +33,7 @@ function extractVille(adresse: string): string | null {
 }
 
 async function notifyTelegram(nom: string, email: string, telephone: string | null, extra: { service?: string; espace?: string; superficie?: string; adresse?: string }) {
-  if (isQuietHours()) return;
+  // Leads FB = toujours notifier, pas de quiet hours
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
   if (!botToken || !chatIds.length) return;

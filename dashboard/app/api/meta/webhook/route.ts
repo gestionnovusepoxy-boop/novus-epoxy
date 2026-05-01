@@ -5,7 +5,6 @@ import { getOrCreateConversation, processMessage } from '@/lib/agent';
 import { sendSMS } from '@/lib/sms';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
-import { isQuietHours } from '@/lib/telegram-utils';
 
 // GET — Meta webhook verification (subscribe handshake)
 export async function GET(req: NextRequest) {
@@ -112,7 +111,7 @@ function matchMap<T>(value: string, map: Record<string, T>): T | null {
 
 // Send Telegram notification to all admin chat IDs
 async function notifyTelegramFacebookLead(nom: string, email: string, telephone: string | null, extra?: { service?: string; espace?: string; superficie?: number; adresse?: string; quoteId?: number; total?: number }) {
-  if (isQuietHours()) return;
+  // Leads FB = toujours notifier, pas de quiet hours (premier qui rappelle gagne)
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
   if (!botToken || chatIds.length === 0) return;
