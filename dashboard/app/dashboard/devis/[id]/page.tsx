@@ -452,6 +452,25 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       </div>
 
+      {/* Photos client (MMS reçus) */}
+      {quote.photos && quote.photos.length > 0 && (
+        <div className="bg-slate-800 border border-amber-500/30 rounded-xl p-6">
+          <h3 className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-4">📸 Photos du client ({quote.photos.length})</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {quote.photos.map((photo, idx) => (
+              <a key={idx} href={photo.url} target="_blank" rel="noopener noreferrer" className="block">
+                <img
+                  src={photo.url}
+                  alt={`Photo ${idx + 1}`}
+                  className="w-full h-40 object-cover rounded-lg border border-slate-600 hover:border-amber-500 transition"
+                />
+                <p className="text-slate-500 text-xs mt-1">{new Date(photo.received_at).toLocaleString('fr-CA')}</p>
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Prix */}
       <div className="bg-slate-800 border border-amber-500/30 rounded-xl p-6">
         <h3 className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-4">Prix</h3>

@@ -202,6 +202,7 @@ export interface Quote {
   updated_at:      string;
   items?:          QuoteItemRow[];
   extras?:         QuoteExtraRow[];
+  photos?:         Array<{ url: string; received_at: string; from: string }>;
 }
 
 export function fetchQuotes(params: {

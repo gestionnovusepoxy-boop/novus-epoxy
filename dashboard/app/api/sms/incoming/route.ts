@@ -157,14 +157,19 @@ export async function POST(req: NextRequest) {
       const accountSid = process.env.TWILIO_ACCOUNT_SID;
       const authToken = process.env.TWILIO_AUTH_TOKEN;
 
-      // Save photo URLs to quote in DB
+      // Save photo URLs to quote in DB (add column if first time)
+      await query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'`, []).catch(() => {});
+      const photoEntries = mediaUrls.map(url => ({ url, received_at: new Date().toISOString(), from }));
       if (quoteId) {
-        await query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS photos JSONB DEFAULT '[]'`, []).catch(() => {});
-        const photoEntries = mediaUrls.map(url => ({ url, received_at: new Date().toISOString(), from }));
         await query(
           `UPDATE quotes SET photos = COALESCE(photos, '[]'::jsonb) || $1::jsonb WHERE id = $2`,
           [JSON.stringify(photoEntries), quoteId]
         ).catch(() => {});
+      }
+      // If no quote yet, save to lead notes so they're not lost
+      if (!quoteId && leadId) {
+        const photoNote = `\n[PHOTOS MMS ${new Date().toLocaleDateString('fr-CA')}] ${mediaUrls.join(' | ')}`;
+        await query(`UPDATE crm_leads SET notes = COALESCE(notes, '') || $1 WHERE id = $2`, [photoNote, leadId]).catch(() => {});
       }
 
       // Send each photo to Telegram group
