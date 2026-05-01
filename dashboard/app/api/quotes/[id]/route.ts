@@ -80,7 +80,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  const allFields = [...allowed, 'prix_pied_carre', 'sous_total', 'tps', 'tvq', 'total', 'depot_requis', 'rabais_montant'];
+  const allFields = [...allowed, 'prix_pied_carre', 'tps', 'tvq', 'total', 'depot_requis', 'rabais_montant'];
 
   for (const key of allFields) {
     if (key in body) {
