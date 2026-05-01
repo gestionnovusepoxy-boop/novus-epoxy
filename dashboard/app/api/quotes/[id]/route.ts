@@ -124,12 +124,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const items = await query('SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
   const extras = await query('SELECT * FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
 
-  // Auto photo request SMS when devis is marked as sent
+  // Auto photo request SMS — seulement pour les balcons (besoin d'évaluation visuelle)
   if (body.statut === 'envoye' && rows[0]?.client_tel) {
-    const prenom = ((rows[0].client_nom as string) ?? '').split(' ')[0];
-    const greeting = prenom ? `Bonjour ${prenom}!` : 'Bonjour!';
-    const photoMsg = `${greeting} Pour compléter votre dossier Novus Époxy #${id}, répondez à ce texto avec quelques photos de votre plancher (angle grand format + zones abîmées si applicable). Merci! 📸`;
-    sendSMS(rows[0].client_tel as string, photoMsg).catch(() => {});
+    const fieldsToCheck = ['notes', 'client_adresse', 'description_travaux', 'type_service'];
+    const isBalcon = fieldsToCheck.some(f => ((rows[0][f] as string) ?? '').toLowerCase().includes('balcon'));
+    if (isBalcon) {
+      const prenom = ((rows[0].client_nom as string) ?? '').split(' ')[0];
+      const greeting = prenom ? `Bonjour ${prenom}!` : 'Bonjour!';
+      const photoMsg = `${greeting} Pour finaliser votre soumission de balcon Novus Époxy #${id}, pourriez-vous nous envoyer quelques photos de votre balcon (vue d'ensemble + zones abîmées)? Répondez à ce texto avec vos photos. Merci! 📸`;
+      sendSMS(rows[0].client_tel as string, photoMsg).catch(() => {});
+    }
   }
 
   return NextResponse.json({ ...rows[0], items, extras });
