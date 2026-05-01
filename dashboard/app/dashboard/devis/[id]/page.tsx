@@ -166,6 +166,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       } as Record<string, unknown>);
       setQuote(updated);
       setEditing(false);
+      setSendSuccess('Modifications sauvegardées!');
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(`Erreur sauvegarde: ${msg}`);
