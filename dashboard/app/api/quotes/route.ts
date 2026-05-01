@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { calculateQuote, calculateMultiQuote, SERVICES, type ServiceType } from '@/lib/pricing';
+import { sendSMS } from '@/lib/sms';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -148,6 +149,17 @@ export async function POST(req: NextRequest) {
        VALUES ($1, $2, $3, $4, $5, $6)`,
       [quoteId, ex.description, ex.quantite, ex.prix_unitaire, st, idx],
     );
+  }
+
+  // Auto photo request SMS pour les devis balcon — dès la création
+  const isBalcon = ['balcon', 'patio', 'terrasse'].some(kw =>
+    [notes, client_adresse, etat_plancher, primaryService].some(f => (f ?? '').toLowerCase().includes(kw))
+  );
+  if (isBalcon && client_tel) {
+    const prenom = (client_nom ?? '').split(' ')[0];
+    const greeting = prenom ? `Bonjour ${prenom}!` : 'Bonjour!';
+    const photoMsg = `${greeting} On a bien reçu votre demande de soumission Novus Époxy pour votre balcon (#${quoteId}). Pour vous préparer un prix précis, pourriez-vous nous envoyer quelques photos de votre balcon? Répondez à ce texto avec vos photos (vue d'ensemble + zones à réparer). Merci! 📸`;
+    sendSMS(client_tel, photoMsg).catch(() => {});
   }
 
   return NextResponse.json(rows[0], { status: 201 });

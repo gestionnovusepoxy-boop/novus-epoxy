@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { calculateQuote, type ServiceType, SERVICES } from '@/lib/pricing';
-import { sendSMS } from '@/lib/sms';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -124,17 +123,6 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const items = await query('SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
   const extras = await query('SELECT * FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
 
-  // Auto photo request SMS — seulement pour les balcons (besoin d'évaluation visuelle)
-  if (body.statut === 'envoye' && rows[0]?.client_tel) {
-    const fieldsToCheck = ['notes', 'client_adresse', 'description_travaux', 'type_service'];
-    const isBalcon = fieldsToCheck.some(f => ((rows[0][f] as string) ?? '').toLowerCase().includes('balcon'));
-    if (isBalcon) {
-      const prenom = ((rows[0].client_nom as string) ?? '').split(' ')[0];
-      const greeting = prenom ? `Bonjour ${prenom}!` : 'Bonjour!';
-      const photoMsg = `${greeting} Pour finaliser votre soumission de balcon Novus Époxy #${id}, pourriez-vous nous envoyer quelques photos de votre balcon (vue d'ensemble + zones abîmées)? Répondez à ce texto avec vos photos. Merci! 📸`;
-      sendSMS(rows[0].client_tel as string, photoMsg).catch(() => {});
-    }
-  }
 
   return NextResponse.json({ ...rows[0], items, extras });
 }
