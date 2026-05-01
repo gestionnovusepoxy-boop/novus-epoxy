@@ -14,9 +14,13 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Exclure les leads outbound (source='jason' = prospects CSV importés par Denis)
+  // Le funnel ne compte que les leads inbound (Facebook, site, formulaire, Zapier)
+  const OUTBOUND_FILTER = `source NOT IN ('jason', 'denis', 'csv') OR source IS NULL`;
+
   const [leadsRow, contactesRow, devisRow, signesRow, completesRow] = await Promise.all([
-    db(`SELECT COUNT(*)::int AS count FROM crm_leads`, []),
-    db(`SELECT COUNT(*)::int AS count FROM crm_leads WHERE statut NOT IN ('nouveau','ferme','perdu')`, []),
+    db(`SELECT COUNT(*)::int AS count FROM crm_leads WHERE ${OUTBOUND_FILTER}`, []),
+    db(`SELECT COUNT(*)::int AS count FROM crm_leads WHERE statut NOT IN ('nouveau','ferme','perdu') AND (${OUTBOUND_FILTER})`, []),
     db(`SELECT COUNT(*)::int AS count FROM quotes WHERE statut IN ('envoye','approuve','contrat_signe','depot_paye','planifie','complete')`, []),
     db(`SELECT COUNT(*)::int AS count FROM quotes WHERE statut IN ('contrat_signe','depot_paye','planifie','complete')`, []),
     db(`SELECT COUNT(*)::int AS count FROM quotes WHERE statut = 'complete'`, []),
