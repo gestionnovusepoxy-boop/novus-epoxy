@@ -22,6 +22,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
+  // Auto-migration: add columns if they don't exist yet
+  await Promise.all([
+    query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS description_travaux TEXT`).catch(() => {}),
+    query(`ALTER TABLE quotes ADD COLUMN IF NOT EXISTS couleur_flake TEXT`).catch(() => {}),
+  ]);
+
   const { id } = await params;
   const body = await req.json();
   const allowed = ['statut', 'client_nom', 'client_email', 'client_tel', 'client_adresse', 'type_service', 'superficie', 'etat_plancher', 'notes', 'description_travaux', 'couleur_flake', 'contrat_signature_nom', 'rabais_pct', 'sous_total'];
