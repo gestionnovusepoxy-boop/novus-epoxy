@@ -432,6 +432,17 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Special alert for balcon/patio/terrasse — SMS auto au client pour photos dès la soumission
+  const isBalconSubmission = ['balcon', 'patio', 'terrasse'].some(kw =>
+    [body.service, body.type_projet, body.notes, body.adresse].some(f => (f ?? '').toLowerCase().includes(kw))
+  );
+  if (isBalconSubmission && body.telephone) {
+    const prenom = (body.nom ?? '').split(' ')[0];
+    const greeting = prenom ? `Bonjour ${prenom}!` : 'Bonjour!';
+    const photoMsg = `${greeting} On a bien reçu votre demande de soumission Novus Époxy pour votre balcon. Pour vous préparer un prix précis, pourriez-vous nous envoyer quelques photos? Répondez à ce texto avec vos photos (vue d'ensemble + zones à réparer). Merci! 📸`;
+    await sendSMSNotif(body.telephone, photoMsg);
+  }
+
   return NextResponse.json({ ok: true }, { status: 201 });
 }
 
