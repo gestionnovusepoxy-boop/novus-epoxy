@@ -103,7 +103,7 @@ function buildNurture3Html(prenom: string, photos: { url: string; caption: strin
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr>${photoGrid}</tr></table>` : ''}
 
   <div style="background:#ecfdf5;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #6ee7b7;">
-    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">Spécial avril — 20% de rabais!</p>
+    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">Spécial mai — 15% de rabais!</p>
     <p style="color:#047857;font-size:13px;margin:0;">Le rabais s'applique automatiquement à votre soumission.</p>
   </div>
 
@@ -138,8 +138,8 @@ function buildNurture5Html(prenom: string): string {
   </p>
 
   <div style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:20px;margin:0 0 20px;text-align:center;">
-    <p style="color:#dc2626;font-weight:700;font-size:18px;margin:0 0 8px;">Le rabais de 20% se termine bientôt</p>
-    <p style="color:#475569;font-size:14px;margin:0;">Profitez-en avant la fin du mois d'avril!</p>
+    <p style="color:#dc2626;font-weight:700;font-size:18px;margin:0 0 8px;">Le rabais de 15% se termine bientôt</p>
+    <p style="color:#475569;font-size:14px;margin:0;">Profitez-en avant la fin du mois de mai!</p>
   </div>
 
   <div style="background:#f0fdf4;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #86efac;">
@@ -275,7 +275,7 @@ export async function GET(req: NextRequest) {
       if (daysSince < 7) continue;
 
       const prenom = getPrenom(lead.nom);
-      const smsText = `Bonjour ${prenom}! C'est Luca de Novus Epoxy. Notre rabais de 20% en avril se termine bientôt. Si vous avez des questions sur votre projet, je suis disponible au 581-307-5983. Bonne journée!`;
+      const smsText = `Bonjour ${prenom}! C'est Luca de Novus Epoxy. Notre rabais de 15% en mai se termine bientôt. Si vous avez des questions sur votre projet, je suis disponible au 581-307-5983. Bonne journée!`;
 
       try {
         const sent = await sendSMS(lead.telephone!, smsText);
@@ -325,7 +325,7 @@ export async function GET(req: NextRequest) {
 
       const prenom = getPrenom(lead.nom);
       const html = buildNurture5Html(prenom);
-      const subject = `${prenom}, dernière chance — rabais avril 20%`;
+      const subject = `${prenom}, dernière chance — rabais mai 15%`;
 
       try {
         await sendProspectEmail({ to: lead.email!, subject, html });

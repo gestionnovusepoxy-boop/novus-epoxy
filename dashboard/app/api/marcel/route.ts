@@ -402,7 +402,7 @@ Date: ${new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric
             : `Objet: Votre projet de plancher époxy${l.superficie ? ` — ${l.superficie} pi²` : ''} — Soumission gratuite`;
 
           const objections_probables = [];
-          if (followups >= 1) objections_probables.push('A déjà reçu un contact — mentionner le rabais Avril 20%');
+          if (followups >= 1) objections_probables.push('A déjà reçu un contact — mentionner le rabais Mai 15%');
           if (jours > 7) objections_probables.push('Peut avoir trouvé un autre fournisseur — demander directement');
           if (!l.superficie) objections_probables.push('Pas encore qualifié — découvrir les besoins');
           if (l.temperature === 'froid') objections_probables.push('Lead refroidi — approche valeur long terme');
@@ -447,20 +447,20 @@ Date: ${new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric
 
           if (canal === 'sms') {
             if (ton === 'direct') {
-              message = `Bonjour ${prenom}! Jason de Novus Epoxy. Toujours intéressé par votre projet${superficie}? On a le rabais Avril 20% en ce moment. Soumission gratuite: novusepoxy.ca/#contact ou 581-307-2678`;
+              message = `Bonjour ${prenom}! Jason de Novus Epoxy. Toujours intéressé par votre projet${superficie}? On a le rabais Mai 15% en ce moment. Soumission gratuite: novusepoxy.ca/#contact ou 581-307-2678`;
             } else if (ton === 'urgence') {
-              message = `${prenom}! Rabais 20% Avril se termine bientôt. Votre projet${superficie}${ville} — on peut vous préparer une soumission cette semaine. Intéressé? 581-307-2678`;
+              message = `${prenom}! Rabais 15% Mai se termine bientôt. Votre projet${superficie}${ville} — on peut vous préparer une soumission cette semaine. Intéressé? 581-307-2678`;
             } else {
               message = `Bonjour ${prenom}! C'est Jason de Novus Epoxy. On pense encore à votre projet de ${service}${superficie}${ville}. Si vous avez des questions ou voulez une soumission gratuite, on est là! 581-307-2678`;
             }
           } else {
             const sujet = ton === 'urgence'
-              ? `Rabais 20% Avril — Votre projet ${service}${superficie}`
+              ? `Rabais 15% Mai — Votre projet ${service}${superficie}`
               : `Votre soumission ${service}${superficie} — Novus Epoxy`;
 
             const corps = ton === 'direct'
-              ? `Bonjour ${prenom},\n\nSuite à votre intérêt pour un ${service}${superficie}${ville}, nous voulions vous rappeler que notre équipe est disponible pour vous préparer une soumission gratuite.\n\nEn avril, nous offrons un rabais de 20% sur tous nos projets.\n\nPour obtenir votre soumission: novusepoxy.ca/#contact\n\nÀ bientôt,\nJason — Novus Epoxy\n581-307-2678`
-              : `Bonjour ${prenom},\n\nNous espérons que tout va bien! Nous pensons encore à votre projet de ${service}${superficie}${ville}.\n\nNous avons actuellement un rabais spécial de 20% pour les projets d'avril — c'est une belle opportunité!\n\nSi vous avez des questions ou souhaitez qu'on vous prépare une soumission personnalisée, on est disponibles.\n\nBonne journée,\nJason — Novus Epoxy\n📞 581-307-2678\n🌐 novusepoxy.ca`;
+              ? `Bonjour ${prenom},\n\nSuite à votre intérêt pour un ${service}${superficie}${ville}, nous voulions vous rappeler que notre équipe est disponible pour vous préparer une soumission gratuite.\n\nEn mai, nous offrons un rabais de 15% sur tous nos projets.\n\nPour obtenir votre soumission: novusepoxy.ca/#contact\n\nÀ bientôt,\nJason — Novus Epoxy\n581-307-2678`
+              : `Bonjour ${prenom},\n\nNous espérons que tout va bien! Nous pensons encore à votre projet de ${service}${superficie}${ville}.\n\nNous avons actuellement un rabais spécial de 15% pour les projets de mai — c'est une belle opportunité!\n\nSi vous avez des questions ou souhaitez qu'on vous prépare une soumission personnalisée, on est disponibles.\n\nBonne journée,\nJason — Novus Epoxy\n📞 581-307-2678\n🌐 novusepoxy.ca`;
 
             message = `SUJET: ${sujet}\n\n${corps}`;
           }

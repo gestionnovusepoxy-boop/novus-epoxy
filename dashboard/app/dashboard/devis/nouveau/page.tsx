@@ -312,11 +312,11 @@ export default function NouveauDevisPage() {
           <label className="flex items-center gap-3 cursor-pointer select-none">
             <input
               type="checkbox"
-              checked={form.rabais_pct === 20}
-              onChange={e => setForm(prev => ({ ...prev, rabais_pct: e.target.checked ? 20 : 0 }))}
+              checked={form.rabais_pct === 15}
+              onChange={e => setForm(prev => ({ ...prev, rabais_pct: e.target.checked ? 15 : 0 }))}
               className="w-4 h-4 accent-amber-500"
             />
-            <span className="text-sm text-amber-400 font-medium">Appliquer le rabais Avril 20%</span>
+            <span className="text-sm text-amber-400 font-medium">Appliquer le rabais Mai 15%</span>
           </label>
         </div>
 

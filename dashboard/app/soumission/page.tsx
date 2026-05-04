@@ -84,8 +84,8 @@ function SoumissionForm() {
               Votre soumission est en preparation. On vous contacte tres bientot!
             </p>
             <div className="bg-amber-400/10 border border-amber-400/30 rounded-2xl p-5 mb-6">
-              <p className="text-amber-400 font-bold text-xl mb-1">20% de rabais applique!</p>
-              <p className="text-amber-400/60 text-sm">Offre valide jusqu'au 30 avril 2026</p>
+              <p className="text-amber-400 font-bold text-xl mb-1">15% de rabais appliqué!</p>
+              <p className="text-amber-400/60 text-sm">Offre valide jusqu'au 31 mai 2026</p>
             </div>
             <div className="space-y-3">
               <a href="tel:5813075983" className="flex items-center justify-center gap-3 bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700 rounded-xl p-3 transition-all">
@@ -122,7 +122,7 @@ function SoumissionForm() {
             <p className="text-[#0f172a] font-extrabold text-xl leading-tight">Soumission gratuite</p>
             <p className="text-[#0f172a]/80 font-bold text-sm mt-1">+ consultation sur place — Places limitees</p>
             <div className="mt-2 inline-block bg-[#0f172a]/15 rounded-lg px-3 py-1">
-              <p className="text-[#0f172a] font-extrabold text-sm">🔥 20% de rabais en avril</p>
+              <p className="text-[#0f172a] font-extrabold text-sm">🔥 15% de rabais en mai</p>
             </div>
           </div>
         </div>
