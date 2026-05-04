@@ -137,7 +137,7 @@ export interface QuoteExtra {
 export function calculateMultiQuote(
   items: { type_service: ServiceType; superficie: number; prix_fixe?: number }[],
   extras: { description: string; quantite: number; prix_unitaire: number }[],
-  rabais_pct = PROMO_DEFAULT_RABAIS,
+  rabais_pct = 0,
 ) {
   // Calculate each service item (supports prix_fixe override)
   const calcItems: QuoteItem[] = items.map(item => {
