@@ -35,7 +35,7 @@ export default function NouveauDevisPage() {
     client_adresse: searchParams.get('ville') ?? '',
     etat_plancher: '',
     notes: searchParams.get('notes') ?? '',
-    rabais_pct: 20,
+    rabais_pct: 15,
   });
 
   const [items, setItems] = useState<ServiceItem[]>([
@@ -343,7 +343,7 @@ export default function NouveauDevisPage() {
 
               {preview.rabais_pct > 0 && (
                 <div className="flex justify-between text-green-400 font-medium">
-                  <span>Rabais Avril {preview.rabais_pct}% (sur services)</span>
+                  <span>Rabais Mai {preview.rabais_pct}% (sur services)</span>
                   <span>-{formatMoney(preview.rabais_montant)}</span>
                 </div>
               )}
