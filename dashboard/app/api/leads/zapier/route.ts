@@ -8,7 +8,7 @@ function normalizeService(raw: string | null): string | null {
   if (!raw) return null;
   const t = raw.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
   // Exact code match
-  const codes = ['flake', 'metallique', 'couleur_unie', 'quartz', 'commercial', 'antiderapant', 'meulage'];
+  const codes = ['flake', 'metallique', 'couleur_unie', 'quartz', 'commercial', 'antiderapant', 'meulage', 'vinyl_click'];
   if (codes.includes(t)) return t;
   // Fuzzy match on keywords
   if (t.includes('flocon') || t.includes('flake') || t.includes('garage')) return 'flake';
@@ -18,6 +18,7 @@ function normalizeService(raw: string | null): string | null {
   if (t.includes('commercial') || t.includes('industriel') || t.includes('entrepot')) return 'commercial';
   if (t.includes('antiderapant') || t.includes('anti-derapant') || t.includes('anti derapant') || t.includes('patio') || t.includes('balcon') || t.includes('escalier') || t.includes('marche')) return 'antiderapant';
   if (t.includes('meulage') || t.includes('diamant') || t.includes('poli')) return 'meulage';
+  if (t.includes('vinyl') || t.includes('click') || t.includes('flottant') || t.includes('stratifie') || t.includes('stratifié')) return 'vinyl_click';
   return raw; // return original if no match
 }
 
@@ -180,6 +181,7 @@ export async function POST(req: NextRequest) {
       const SERVICE_LABELS: Record<string, string> = {
         flake: 'Flocon (Flake)', metallique: 'Métallique', couleur_unie: 'Couleur unie',
         quartz: 'Quartz', commercial: 'Commercial', antiderapant: 'Antidérapant', meulage: 'Meulage',
+        vinyl_click: 'Plancher Vinyl Click',
       };
       const serviceLabel = service ? (SERVICE_LABELS[service] ?? service) : null;
       const lines = [

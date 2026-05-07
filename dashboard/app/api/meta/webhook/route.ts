@@ -92,6 +92,7 @@ const FB_SERVICE_MAP: Record<string, ServiceType> = {
   'antiderapant': 'antiderapant', 'antidérapant': 'antiderapant',
   'commercial': 'commercial', 'industriel': 'commercial',
   'meulage': 'meulage', 'meulage au diamant': 'meulage',
+  'vinyl': 'vinyl_click', 'vinyl click': 'vinyl_click', 'plancher vinyl': 'vinyl_click', 'flottant': 'vinyl_click',
 };
 
 const FB_ESPACE_MAP: Record<string, string> = {

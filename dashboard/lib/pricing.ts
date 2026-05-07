@@ -7,6 +7,7 @@ export const SERVICES = {
   commercial:    { label: 'Commercial',      prix: 15.00 },
   meulage:       { label: 'Meulage au diamant', prix: 3.50 },
   autonivelant:  { label: 'Auto-nivelant / Réparation béton', prix: 3.25 },
+  vinyl_click:   { label: 'Plancher Vinyl Click',             prix: 2.00 },
 } as const;
 
 // Note: les prix peuvent varier si les travaux sont a plus de 65 km de distance
@@ -76,6 +77,16 @@ export const SERVICE_DESCRIPTION: Record<string, { etapes: string[]; epaisseur_t
       'Topcoat polyuréthane protection UV (2-4 mils)',
     ],
     epaisseur_totale: '12-20 mils (0.30-0.51 mm)',
+  },
+  vinyl_click: {
+    etapes: [
+      'Nettoyage et préparation du sous-plancher',
+      'Vérification du niveau et réparation si nécessaire',
+      'Installation du vinyl click flottant (pose sans colle)',
+      'Pose des moulures et baguettes de finition',
+      'Nettoyage complet après chantier',
+    ],
+    epaisseur_totale: '4-8 mm selon le produit choisi',
   },
   commercial: {
     etapes: [
