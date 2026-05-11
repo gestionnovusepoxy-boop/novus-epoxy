@@ -10,12 +10,17 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: 'Token requis' }, { status: 403 });
   }
 
+  const quoteId = parseInt(id);
+  if (isNaN(quoteId)) {
+    return NextResponse.json({ error: 'ID invalide' }, { status: 400 });
+  }
+
   const rows = await query(
     `SELECT id, client_nom, type_service, superficie, total, depot_requis, statut,
             deposit_paid_at, balance_paid_at, booking_id, contrat_signe_at,
             rabais_pct, rabais_montant, sous_total, tps, tvq, prix_pied_carre
      FROM quotes WHERE id = $1 AND secret_token = $2`,
-    [parseInt(id), token]
+    [quoteId, token]
   );
 
   if (rows.length === 0) {
