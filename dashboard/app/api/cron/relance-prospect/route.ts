@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
        AND prospect_sent_at <= NOW() - INTERVAL '48 hours'
        AND prospect_relance_1_at IS NULL
        AND prospect_followup1_at IS NULL
-       AND statut IN ('nouveau', 'contacte')
+       AND statut IN ('nouveau', 'contacte', 'offre_envoyee')
        AND email IS NOT NULL AND email != ''`,
     [],
   );
@@ -35,7 +35,7 @@ export async function GET(req: NextRequest) {
        AND prospect_relance_1_at IS NOT NULL
        AND prospect_relance_2_at IS NULL
        AND prospect_followup2_at IS NULL
-       AND statut IN ('nouveau', 'contacte')
+       AND statut IN ('nouveau', 'contacte', 'offre_envoyee')
        AND email IS NOT NULL AND email != ''`,
     [],
   );

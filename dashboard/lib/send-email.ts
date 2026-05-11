@@ -66,7 +66,7 @@ async function sendViaGmail({
     `To: ${to}`,
     cc ? `Cc: ${cc}` : null,
     bcc ? `Bcc: ${bcc}` : null,
-    `Subject: ${subject}`,
+    `Subject: =?UTF-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`,
     replyTo ? `Reply-To: ${replyTo}` : null,
     'MIME-Version: 1.0',
     'Content-Type: text/html; charset=utf-8',
