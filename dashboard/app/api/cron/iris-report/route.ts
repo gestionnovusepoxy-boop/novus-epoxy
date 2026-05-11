@@ -152,15 +152,18 @@ export async function GET(req: NextRequest) {
 
   const msg = lines.join('\n');
 
-  // Send to all admins
+  // Envoyer seulement s'il y a quelque chose d'important
+  const hasAction = pendingDeposits.length > 0 || staleQuotes.length > 0 || Number(rev.rev_today) > 0 || bookings.length > 0;
   const chatIds = ADMIN_CHAT_IDS();
-  for (const chatId of chatIds) {
-    await sendTelegram(chatId, msg);
+  if (hasAction) {
+    for (const chatId of chatIds) {
+      await sendTelegram(chatId, msg);
+    }
   }
 
   return NextResponse.json({
     ok: true,
-    sent_to: chatIds.length,
+    sent_to: hasAction ? chatIds.length : 0,
     revenue: { today: Number(rev.rev_today), week: Number(rev.rev_week), month: Number(rev.rev_month) },
     expenses: { today: Number(exp.exp_today), week: Number(exp.exp_week), month: Number(exp.exp_month) },
     pending_deposits: pendingDeposits.length,
