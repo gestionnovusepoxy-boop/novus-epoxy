@@ -46,6 +46,24 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get('x-hub-signature-256');
   if (!verifyMetaSignature(rawBody, signature)) {
     console.error('Meta webhook signature verification failed');
+    // Alerte Telegram si META_APP_SECRET manquant (leads perdus en silence)
+    if (!process.env.META_APP_SECRET) {
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+      if (botToken && chatIds.length) {
+        await Promise.all(chatIds.map(id =>
+          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: id.trim(),
+              text: `🚨 <b>META_APP_SECRET manquant dans Vercel!</b>\n\nTous les leads Facebook sont rejetés. Configurer META_APP_SECRET dans les env vars Vercel.`,
+              parse_mode: 'HTML',
+            }),
+          }).catch(() => {})
+        ));
+      }
+    }
     return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
   }
 
@@ -165,7 +183,33 @@ async function handleLeadgen(change: Record<string, unknown>) {
     const leadRes = await fetch(
       `https://graph.facebook.com/v25.0/${leadgenId}?access_token=${accessToken}`,
     );
-    if (!leadRes.ok) return;
+    if (!leadRes.ok) {
+      // Token expiré ou erreur Meta — alerte critique Telegram
+      const errData = await leadRes.json().catch(() => ({}));
+      const errMsg = (errData as Record<string, Record<string, string>>).error?.message ?? `HTTP ${leadRes.status}`;
+      const botToken = process.env.TELEGRAM_BOT_TOKEN;
+      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+      if (botToken && chatIds.length) {
+        const alert = [
+          `🚨 <b>LEAD FACEBOOK PERDU!</b>`,
+          ``,
+          `Un lead FB est arrivé mais impossible de le récupérer.`,
+          `Lead ID: <code>${leadgenId}</code>`,
+          `Erreur: ${errMsg}`,
+          ``,
+          `⚠️ <b>Token META_PAGE_TOKEN probablement expiré.</b>`,
+          `Va dans Meta Business Suite → renouveler le token.`,
+        ].join('\n');
+        await Promise.all(chatIds.map(id =>
+          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ chat_id: id.trim(), text: alert, parse_mode: 'HTML' }),
+          }).catch(() => {})
+        ));
+      }
+      return;
+    }
 
     const leadData = await leadRes.json();
     const fields: Record<string, string> = {};
