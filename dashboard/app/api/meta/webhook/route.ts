@@ -132,7 +132,9 @@ function matchMap<T>(value: string, map: Record<string, T>): T | null {
 async function notifyTelegramFacebookLead(nom: string, email: string, telephone: string | null, extra?: { service?: string; espace?: string; superficie?: number; adresse?: string; quoteId?: number; total?: number }) {
   // Leads FB = toujours notifier, pas de quiet hours (premier qui rappelle gagne)
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const chatIds = groupId ? [groupId] : adminIds; // groupe en priorité
   if (!botToken || chatIds.length === 0) return;
 
   const lines = [
