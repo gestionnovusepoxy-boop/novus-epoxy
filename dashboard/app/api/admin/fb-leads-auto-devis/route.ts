@@ -75,9 +75,21 @@ export async function POST(req: NextRequest) {
     let quoteId: number | null = null;
     let quoteTotal: number | null = null;
 
-    // Créer devis si service valide + superficie connue
+    // Créer devis si service valide + superficie connue + aucun devis existant pour ce lead
     if (VALID_SERVICES.includes(service as ServiceType) && !isNaN(surf) && surf > 0) {
       try {
+        // Vérifier si un devis existe déjà pour ce lead (par email ou par notes contenant le lead ID)
+        const existingQuote = await query(
+          `SELECT id FROM quotes WHERE notes LIKE $1 OR (client_email = $2 AND client_email IS NOT NULL AND client_email != '') LIMIT 1`,
+          [`%Lead Facebook #${lead.id}%`, email || 'NOEMAIL']
+        );
+        if (existingQuote.length > 0) {
+          quoteId = existingQuote[0].id as number;
+          quoteTotal = null; // already exists, don't show total
+          telegramSent++; // still notify
+          continue; // skip creation
+        }
+
         const calc = calculateQuote(service as ServiceType, surf);
         const rows = await query(
           `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie,
