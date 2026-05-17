@@ -14,19 +14,42 @@ export async function POST(req: NextRequest) {
   }
 
   let days = 7;
+  let statsOnly = false;
+  let nouveauOnly = false;
   try {
     const body = await req.json();
     if (body.days) days = Number(body.days);
-  } catch { /* default 7 days */ }
+    if (body.stats_only) statsOnly = true;
+    if (body.nouveau_only) nouveauOnly = true;
+  } catch { /* defaults */ }
 
-  // Récupère tous les leads FB des X derniers jours
+  // Récupère leads FB — option nouveau_only pour juste les jamais contactés
   const leads = await query(
-    `SELECT id, nom, email, telephone, service, superficie, ville, adresse, notes, created_at
+    `SELECT id, nom, email, telephone, service, superficie, ville, adresse, notes, source, statut, created_at
      FROM crm_leads
      WHERE source IN ('facebook-zapier', 'facebook-leadad')
        AND created_at >= NOW() - INTERVAL '${days} days'
+       ${nouveauOnly ? `AND statut IN ('nouveau','interesse')` : ''}
      ORDER BY created_at DESC`,
   );
+
+  // Stats only mode — retourne juste les chiffres et dates
+  if (statsOnly) {
+    const byDate: Record<string, number> = {};
+    const byStatut: Record<string, number> = {};
+    const bySource: Record<string, number> = {};
+    for (const l of leads) {
+      const d = String(l.created_at).slice(0, 10);
+      byDate[d] = (byDate[d] ?? 0) + 1;
+      const s = String(l.statut ?? 'inconnu');
+      byStatut[s] = (byStatut[s] ?? 0) + 1;
+      const src = String(l.source ?? '');
+      bySource[src] = (bySource[src] ?? 0) + 1;
+    }
+    const oldest = leads.length > 0 ? String(leads[leads.length-1].created_at).slice(0, 10) : null;
+    const newest = leads.length > 0 ? String(leads[0].created_at).slice(0, 10) : null;
+    return NextResponse.json({ ok: true, total: leads.length, oldest, newest, by_date: byDate, by_statut: byStatut, by_source: bySource });
+  }
 
   if (leads.length === 0) {
     return NextResponse.json({ ok: true, notified: 0, message: 'Aucun lead FB trouvé dans cette période' });
