@@ -23,7 +23,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   // Notify admins on Telegram
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const chatIds = groupId ? [groupId] : adminIds;
   if (botToken) {
     const tgMsg = [
       `💸 <b>Virement Interac en route!</b>`,

@@ -9,8 +9,11 @@ export const maxDuration = 60; // Allow up to 60s for large CSV imports
 const CRON_SECRET = () => process.env.CRON_SECRET ?? '';
 const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
-const ADMIN_CHAT_IDS = () =>
-  (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+const ADMIN_CHAT_IDS = () => {
+  const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  return groupId ? [groupId] : adminIds;
+};
 
 // Categories for auto-classification
 const CATEGORIES = [

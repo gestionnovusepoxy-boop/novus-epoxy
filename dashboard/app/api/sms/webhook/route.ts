@@ -133,7 +133,9 @@ export async function POST(req: NextRequest) {
 async function forwardToTelegram(from: string, body: string, cleaned: string) {
   if (isQuietHours()) return;
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const chatIds = groupId ? [groupId] : adminIds;
 
   if (!botToken || chatIds.length === 0) return;
 

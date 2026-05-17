@@ -3,8 +3,7 @@ import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 import { sendEmail } from '@/lib/send-email';
 
-// TODO: Replace with real Google review link once Google Business Profile is verified
-const GOOGLE_REVIEW_URL = process.env.GOOGLE_REVIEW_URL ?? 'https://novusepoxy.ca';
+const GOOGLE_REVIEW_URL = process.env.GOOGLE_REVIEW_URL ?? '';
 
 export const maxDuration = 60;
 
@@ -47,6 +46,10 @@ export async function GET(req: NextRequest) {
        AND q.client_tel IS NOT NULL`,
     []
   );
+
+  if (!GOOGLE_REVIEW_URL) {
+    return NextResponse.json({ ok: false, error: 'GOOGLE_REVIEW_URL non configuré — aucun SMS envoyé', rows: rows.length });
+  }
 
   let sent = 0;
 

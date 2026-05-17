@@ -61,10 +61,6 @@
       "schedule": "0 16 * * 1"
     },
     {
-      "path": "/api/cron/prospect-followup",
-      "schedule": "0 14 * * *"
-    },
-    {
       "path": "/api/cron/iris-report",
       "schedule": "0 13 * * *"
     },
