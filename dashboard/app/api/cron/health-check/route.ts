@@ -352,13 +352,20 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* ignore */ }
 
-  // 3e-bis. Meta Page leadgen subscription — auto-repair if expired
+  // 3e-bis. Meta Page leadgen subscription + token validity + lead flow check
   try {
     const metaToken = process.env.META_PAGE_TOKEN;
-    if (metaToken) {
+    if (!metaToken) {
+      checks.push({ name: 'Meta FB Token', ok: false, detail: 'META_PAGE_TOKEN manquant dans Vercel env', severity: 'critical' });
+    } else {
       const meRes = await fetch(`https://graph.facebook.com/v25.0/me?access_token=${metaToken}`);
       const me = await meRes.json();
-      if (me.id) {
+      if (me.error) {
+        // Token expired or invalid — alert critical
+        checks.push({ name: 'Meta FB Token', ok: false, detail: `Token expire ou invalide: ${me.error.message}. Renouveler dans Meta Business Suite.`, severity: 'critical' });
+      } else if (me.id) {
+        checks.push({ name: 'Meta FB Token', ok: true, detail: `Token valide (${me.name ?? me.id})` });
+        // Check leadgen subscription
         const subRes = await fetch(`https://graph.facebook.com/v25.0/${me.id}/subscribed_apps?access_token=${metaToken}`);
         const subData = await subRes.json();
         const hasLeadgen = (subData.data ?? []).some((s: Record<string, unknown>) =>
@@ -370,10 +377,26 @@ export async function GET(req: NextRequest) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ subscribed_fields: ['leadgen'], access_token: metaToken }),
           });
-          checks.push({ name: 'Meta Leadgen', ok: true, detail: 'Abonnement leadgen renouvele automatiquement', autoFixed: true, severity: 'critical' });
+          checks.push({ name: 'Meta Leadgen Sub', ok: true, detail: 'Abonnement leadgen renouvele automatiquement', autoFixed: true, severity: 'critical' });
         } else {
-          checks.push({ name: 'Meta Leadgen', ok: true, detail: 'Abonnement leadgen actif' });
+          checks.push({ name: 'Meta Leadgen Sub', ok: true, detail: 'Abonnement leadgen actif' });
         }
+      }
+    }
+  } catch { /* ignore */ }
+
+  // 3e-ter. Verifier que des leads FB rentrent bien (sinon alerte si aucun depuis 48h et pubs probablement actives)
+  try {
+    const lastFbLead = await query(
+      `SELECT MAX(created_at) as last_at FROM crm_leads WHERE source IN ('facebook-zapier','facebook-leadad')`
+    );
+    const lastAt = lastFbLead[0]?.last_at ? new Date(String(lastFbLead[0].last_at)) : null;
+    if (lastAt) {
+      const hoursAgo = (Date.now() - lastAt.getTime()) / 3600000;
+      if (hoursAgo > 48) {
+        checks.push({ name: 'Leads FB', ok: false, detail: `Aucun lead Facebook depuis ${Math.round(hoursAgo)}h — verifie Zapier et les pubs actives!`, severity: 'critical' });
+      } else {
+        checks.push({ name: 'Leads FB', ok: true, detail: `Dernier lead il y a ${hoursAgo.toFixed(1)}h` });
       }
     }
   } catch { /* ignore */ }
