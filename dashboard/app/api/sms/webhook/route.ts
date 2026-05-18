@@ -98,6 +98,13 @@ export async function POST(req: NextRequest) {
       return twiml('Vous etes reabonne aux messages de Novus Epoxy.');
     }
 
+    // --- Save inbound SMS to DB so Luca can see client replies ---
+    await query(
+      `INSERT INTO sms_logs (direction, from_number, to_number, message, statut)
+       VALUES ('inbound', $1, $2, $3, 'received')`,
+      [phone, process.env.TWILIO_PHONE_NUMBER ?? '+15817014055', body.slice(0, 1000)]
+    ).catch(() => {});
+
     // --- Forward to Telegram admins ---
     await forwardToTelegram(from, body, cleaned);
 

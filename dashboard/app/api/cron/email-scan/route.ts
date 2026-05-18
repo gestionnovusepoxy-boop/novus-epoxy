@@ -738,6 +738,14 @@ export async function GET(req: NextRequest) {
         continue;
       }
 
+      // Save inbound client reply to DB so Luca can read conversation history
+      await query(
+        `INSERT INTO email_logs (resend_id, destinataire, sujet, statut, direction, reply_body)
+         VALUES ($1, $2, $3, 'received', 'inbound', $4)
+         ON CONFLICT (resend_id) DO NOTHING`,
+        [`inbound-${msg.id}`, fromEmail, subject ?? '', bodyText.slice(0, 5000)]
+      ).catch(() => {});
+
       await handleLeadFollowUp(msg.id, fromEmail, subject, bodyText, lead.id, lead.nom);
 
       // Try to auto-create quote from email reply (keyword-based, complements Claude closer)
