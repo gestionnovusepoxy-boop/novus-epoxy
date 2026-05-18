@@ -183,15 +183,13 @@ async function handleLeadFollowUp(
   leadId: number,
   leadNom: string,
 ): Promise<void> {
-  // 1. Dedup check
-  const alreadyHandled = await query(`SELECT id FROM email_logs WHERE resend_id = $1`, [`lead-${msgId}`]);
-  if (alreadyHandled.length > 0) return;
-
-  // 2. Mark as processing
-  await query(
-    `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1,$2,$3,'processing')`,
+  // 1. Atomic dedup: claim this email — if another run already claimed it, stop immediately
+  const claimed = await query(
+    `INSERT INTO email_logs (resend_id, destinataire, sujet, statut) VALUES ($1,$2,$3,'processing')
+     ON CONFLICT (resend_id) DO NOTHING RETURNING id`,
     [`lead-${msgId}`, fromEmail, subject]
   );
+  if (!claimed || claimed.length === 0) return; // already being handled by another run
 
   // 3. Load conversation history from kv_store
   const sanitizedEmail = fromEmail.toLowerCase().replace(/[^a-z0-9]/g, '_');
