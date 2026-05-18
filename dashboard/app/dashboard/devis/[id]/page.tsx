@@ -132,6 +132,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ client_nom: '', client_email: '', client_tel: '', client_adresse: '', type_service: '', superficie: '', notes: '', description_travaux: '', couleur_flake: '', rabais_pct: '', prix_fixe_montant: '' });
+  const [editExtras, setEditExtras] = useState<{ id?: number; description: string; quantite: string; prix_unitaire: string; sous_total: string }[]>([]);
   const [saving, setSaving] = useState(false);
 
   function startEdit() {
@@ -149,6 +150,13 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       rabais_pct: String(quote.rabais_pct ?? 0),
       prix_fixe_montant: Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0 ? String(quote.sous_total) : '',
     });
+    setEditExtras((quote.extras ?? []).map(ex => ({
+      id: ex.id as number | undefined,
+      description: String(ex.description ?? ''),
+      quantite: String(ex.quantite ?? 1),
+      prix_unitaire: String(ex.prix_unitaire ?? 0),
+      sous_total: String(ex.sous_total ?? 0),
+    })));
     setEditing(true);
   }
 
@@ -164,6 +172,21 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         rabais_pct: parseFloat(editForm.rabais_pct) || 0,
         ...(isPrixFixe && editForm.prix_fixe_montant ? { sous_total: parseFloat(editForm.prix_fixe_montant) } : {}),
       } as Record<string, unknown>);
+
+      // Save extras: delete all then re-insert
+      await fetch(`/api/quotes/${quote.id}/extras`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editExtras.map((ex, i) => ({
+          id: ex.id,
+          description: ex.description,
+          quantite: parseFloat(ex.quantite) || 1,
+          prix_unitaire: parseFloat(ex.prix_unitaire) || 0,
+          sous_total: parseFloat(ex.sous_total) || parseFloat(ex.quantite) * parseFloat(ex.prix_unitaire),
+          sort_order: i,
+        }))),
+      }).catch(() => {});
+
       setQuote(updated);
       setEditing(false);
       setSendSuccess('Modifications sauvegardées!');
@@ -335,6 +358,49 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             <div>
               <label className="text-slate-500 text-xs mb-1 block">Rabais %</label>
               <input value={editForm.rabais_pct} onChange={e => setEditForm(f => ({ ...f, rabais_pct: e.target.value }))} type="number" className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white w-full focus:outline-none focus:border-amber-500" />
+            </div>
+            <div className="col-span-2">
+              <label className="text-slate-500 text-xs mb-2 block">Extras / Lignes supplémentaires</label>
+              <div className="space-y-2">
+                {editExtras.map((ex, i) => (
+                  <div key={i} className="grid grid-cols-12 gap-1 items-center">
+                    <input
+                      value={ex.description}
+                      onChange={e => setEditExtras(prev => prev.map((x, j) => j === i ? { ...x, description: e.target.value } : x))}
+                      placeholder="Description"
+                      className="col-span-5 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                    />
+                    <input
+                      value={ex.quantite}
+                      onChange={e => {
+                        const q = e.target.value;
+                        setEditExtras(prev => prev.map((x, j) => j === i ? { ...x, quantite: q, sous_total: String(Math.round(parseFloat(q || '0') * parseFloat(x.prix_unitaire || '0') * 100) / 100) } : x));
+                      }}
+                      placeholder="Qté"
+                      type="number"
+                      className="col-span-2 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                    />
+                    <input
+                      value={ex.prix_unitaire}
+                      onChange={e => {
+                        const p = e.target.value;
+                        setEditExtras(prev => prev.map((x, j) => j === i ? { ...x, prix_unitaire: p, sous_total: String(Math.round(parseFloat(x.quantite || '0') * parseFloat(p || '0') * 100) / 100) } : x));
+                      }}
+                      placeholder="$/u"
+                      type="number"
+                      className="col-span-2 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500"
+                    />
+                    <div className="col-span-2 text-amber-400 text-sm text-right pr-1">{formatMoney(parseFloat(ex.sous_total) || 0)}</div>
+                    <button onClick={() => setEditExtras(prev => prev.filter((_, j) => j !== i))} className="col-span-1 text-red-400 hover:text-red-300 text-lg leading-none">×</button>
+                  </div>
+                ))}
+                <button
+                  onClick={() => setEditExtras(prev => [...prev, { description: '', quantite: '1', prix_unitaire: '0', sous_total: '0' }])}
+                  className="text-amber-400 hover:text-amber-300 text-sm font-medium"
+                >
+                  + Ajouter une ligne
+                </button>
+              </div>
             </div>
             <div className="col-span-2">
               <label className="text-slate-500 text-xs mb-1 block">Description des travaux</label>
