@@ -259,6 +259,12 @@ export default function ClientPortalPage() {
                   <span style={{ fontSize: '13px', fontWeight: 600 }}>{row.value}</span>
                 </div>
               ))}
+              {(data.extras ?? []).map((ex, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '13px' }}>{ex.description}{Number(ex.quantite) > 1 ? ` x${ex.quantite}` : ''}</span>
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>{formatMoney(Number(ex.sous_total))}</span>
+                </div>
+              ))}
             </>
           )}
           {Number(data.rabais_pct) > 0 && (
