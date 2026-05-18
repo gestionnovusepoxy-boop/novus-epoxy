@@ -81,7 +81,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   Payer mon solde — ${formatMoney(solde)}
 </a>
 </div>
-<p style="text-align:center;color:#64748b;font-size:12px;margin:0 0 16px;">Virement Interac (0$ de frais) ou carte de crédit (3% frais) — votre choix sur la page de paiement.</p>
+<p style="text-align:center;color:#64748b;font-size:12px;margin:0 0 16px;">Virement Interac uniquement — envoyez au 581-307-5983 ou gestionnovusepoxy@gmail.com</p>
 <div style="background:#f1f5f9;border-radius:6px;padding:10px;font-size:12px;color:#475569;">
 <strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
 <strong>Chantier :</strong> Jason — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>
@@ -135,7 +135,7 @@ ${Number(quote.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><
 <p style="margin:0 0 4px;color:#92400e;font-weight:700;font-size:15px;">Dépôt (30%) : ${formatMoney(Number(quote.depot_requis))}</p>
 <p style="margin:0 0 6px;color:#78716c;font-size:12px;">Le dépôt confirme votre réservation. Nous vous contacterons pour planifier les travaux.</p>
 <p style="margin:0 0 6px;color:#64748b;font-size:13px;border-top:1px dashed #d6d3d1;padding-top:6px;">Solde (70%) à la fin des travaux : <strong>${solde70}</strong></p>
-<p style="margin:0;color:#94a3b8;font-size:11px;">Virement Interac : 0$ de frais | Carte de crédit : 3% frais de traitement</p>
+<p style="margin:0;color:#94a3b8;font-size:11px;">Virement Interac : 581-307-5983 ou gestionnovusepoxy@gmail.com</p>
 </div>
 <div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 12px;">
 <p style="margin:0 0 8px;color:#1e293b;font-weight:700;font-size:14px;">Comment proceder :</p>

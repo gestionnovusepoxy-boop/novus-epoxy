@@ -121,10 +121,6 @@ export default function ClientPortalPage() {
   const balance = total - depot;
   const statut = data.statut as string;
 
-  // 3% card processing fee
-  const depotFraisCarte = Math.round(depot * 0.03 * 100) / 100;
-  const balanceFraisCarte = Math.round(balance * 0.03 * 100) / 100;
-
   const hasDates = !!data.jour1_date;
   const contractSigned = !!data.contrat_signe_at || ['contrat_signe', 'depot_paye', 'planifie', 'complete'].includes(statut);
   const depositPaid = !!data.deposit_paid_at || (success && statut === 'contrat_signe');
@@ -344,21 +340,11 @@ export default function ClientPortalPage() {
               <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '16px', textAlign: 'center', marginBottom: '12px' }}>
                 <p style={{ color: '#22c55e', fontWeight: 700, margin: '0 0 8px' }}>Notre equipe a ete notifiee!</p>
                 <p style={{ color: '#86efac', fontSize: '13px', margin: '0 0 8px' }}>Envoyez <strong>{formatMoney(depot)}</strong> par virement Interac a :</p>
-                <p style={{ color: '#f59e0b', fontWeight: 700, fontSize: '16px', margin: '0 0 4px' }}>gestionnovusepoxy@gmail.com</p>
-                <p style={{ color: '#64748b', fontSize: '12px', margin: '4px 0 0' }}>Message: Devis #{data.id} — {data.client_nom}</p>
+                <p style={{ color: '#f59e0b', fontWeight: 700, fontSize: '16px', margin: '0 0 2px' }}>581-307-5983</p>
+                <p style={{ color: '#94a3b8', fontSize: '12px', margin: '0 0 6px' }}>ou gestionnovusepoxy@gmail.com</p>
+                <p style={{ color: '#64748b', fontSize: '12px', margin: '0' }}>Message: Devis #{data.id} — {data.client_nom}</p>
               </div>
             )}
-            <p style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', margin: '12px 0 8px' }}>— ou —</p>
-            {/* Carte en petit en dessous */}
-            <a href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}`}
-              style={{
-                display: 'block', width: '100%', padding: '14px', textAlign: 'center',
-                background: '#1e293b', color: '#94a3b8', borderRadius: '10px', border: '1px solid #334155',
-                textDecoration: 'none', fontWeight: 600, fontSize: '14px',
-                boxSizing: 'border-box',
-              }}>
-              Payer par carte de crédit — {formatMoney(depot + depotFraisCarte)} (incl. 3% frais)
-            </a>
           </div>
         )}
 
@@ -382,20 +368,11 @@ export default function ClientPortalPage() {
             ) : (
               <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '14px', textAlign: 'center', marginBottom: '12px' }}>
                 <p style={{ color: '#22c55e', fontWeight: 700, margin: '0 0 6px' }}>Notre equipe a ete notifiee!</p>
-                <p style={{ color: '#86efac', fontSize: '13px', margin: 0 }}>Envoyez <strong>{formatMoney(balance)}</strong> a <strong style={{ color: '#f59e0b' }}>gestionnovusepoxy@gmail.com</strong></p>
+                <p style={{ color: '#86efac', fontSize: '13px', margin: '0 0 4px' }}>Envoyez <strong>{formatMoney(balance)}</strong> par virement Interac a :</p>
+                <p style={{ color: '#f59e0b', fontWeight: 700, fontSize: '15px', margin: '0 0 2px' }}>581-307-5983</p>
+                <p style={{ color: '#94a3b8', fontSize: '12px', margin: 0 }}>ou gestionnovusepoxy@gmail.com</p>
               </div>
             )}
-            <p style={{ textAlign: 'center', color: '#64748b', fontSize: '12px', margin: '12px 0 8px' }}>— ou —</p>
-            {/* Carte en petit */}
-            <a href={`/api/quotes/${data.id}/pay?token=${encodeURIComponent(token)}&type=balance`}
-              style={{
-                display: 'block', width: '100%', padding: '14px', textAlign: 'center',
-                background: '#1e293b', color: '#94a3b8', borderRadius: '10px', border: '1px solid #334155',
-                textDecoration: 'none', fontWeight: 600, fontSize: '14px',
-                boxSizing: 'border-box',
-              }}>
-              Payer par carte de crédit — {formatMoney(balance + balanceFraisCarte)} (incl. 3% frais)
-            </a>
           </div>
         )}
 
