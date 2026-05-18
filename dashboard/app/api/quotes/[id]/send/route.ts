@@ -23,7 +23,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const quote = rows[0];
   if (!quote) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
-  const allowedStatuts = ['approuve', 'envoye', 'contrat_signe', 'depot_paye', 'planifie', 'complete'];
+  // Guard: email required
+  if (!quote.client_email || !(quote.client_email as string).includes('@')) {
+    return NextResponse.json({ error: 'Email client manquant ou invalide' }, { status: 400 });
+  }
+
+    const allowedStatuts = ['approuve', 'envoye', 'contrat_signe', 'depot_paye', 'planifie', 'complete'];
   if (!allowedStatuts.includes(quote.statut as string)) {
     return NextResponse.json({ error: 'Statut invalide pour envoi email' }, { status: 400 });
   }

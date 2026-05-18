@@ -80,7 +80,13 @@ export async function POST(req: NextRequest) {
     const clientEmail = quote.client_email as string;
     const secretToken = quote.secret_token as string;
 
-    if (paymentType === 'deposit') {
+    // Idempotency: skip if this Stripe session was already processed
+    if (quote.stripe_deposit_session_id === session.id) {
+      console.log('[Stripe] Session already processed, skipping:', session.id);
+      return NextResponse.json({ received: true });
+    }
+
+        if (paymentType === 'deposit') {
       // Check if booking dates are still available
       let datesAvailable = true;
       if (quote.booking_id) {
@@ -196,7 +202,7 @@ ${calendarHtml}
              VALUES (
                $1 || LPAD((COALESCE((SELECT MAX(CAST(SPLIT_PART(numero,'-',3) AS INT)) FROM invoices WHERE numero LIKE $2), 0) + 1)::text, 3, '0'),
                $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'depot_recu',CURRENT_DATE
-             ) RETURNING id`,
+             ) ON CONFLICT (quote_id) DO UPDATE SET statut = EXCLUDED.statut RETURNING id`,
             [prefix, `${prefix}%`, parseInt(quoteId), clientId, quote.type_service, quote.superficie, quote.prix_pied_carre, quote.rabais_pct ?? 0, quote.rabais_montant ?? 0, quote.sous_total, quote.tps, quote.tvq, quote.total, depotMontant, Number(quote.total) - depotMontant]
           );
           invoiceId = invRows[0].id as number;
