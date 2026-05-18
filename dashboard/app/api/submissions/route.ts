@@ -1,3 +1,4 @@
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query as db } from '@/lib/db';
@@ -167,7 +168,7 @@ async function notifyAdminsWithQuote(
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
-  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const adminIds = getAdminChatIds();
   const chatIds = groupId ? [groupId] : adminIds;
 
   // Build Telegram message
@@ -421,7 +422,7 @@ export async function POST(req: NextRequest) {
 
     // Also Telegram
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+    const chatIds = getAdminChatIds();
     if (botToken && !isQuietHours()) {
       const tgMsg = `\ud83c\udfa8 <b>METALLIQUE — Couleurs en personne</b>\n\nJason, appelle ${clientName} pour choisir les couleurs!\n\ud83d\udcde ${clientTel}\n\ud83d\udce7 ${clientEmail}${clientVille ? `\n\ud83d\udccd ${clientVille}` : ''}`;
       await Promise.all(chatIds.map(chatId =>

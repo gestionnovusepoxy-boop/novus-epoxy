@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { sendSMS, sendDepositConfirmationSMS } from '@/lib/sms';
 import { formatMoney } from '@/lib/pricing';
@@ -9,7 +10,7 @@ import Stripe from 'stripe';
 
 async function notifyTelegram(message: string) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const chatIds = getAdminChatIds();
   if (!botToken || chatIds.length === 0) return;
 
   await Promise.all(chatIds.map(chatId =>

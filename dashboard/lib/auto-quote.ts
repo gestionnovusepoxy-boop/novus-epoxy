@@ -1,4 +1,5 @@
 import { query } from '@/lib/db';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
 import { sendSMS } from '@/lib/sms';
@@ -237,7 +238,7 @@ export async function tryCreateQuoteFromReply(
   if (BLACKLISTED_PHONES.includes(cleanPhone)) return null;
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const chatIds = getAdminChatIds();
 
   // ── AUTO-CREATE QUOTE — need at least a service + superficie ──────────
   if (parsed.confidence >= 40 && parsed.type_service && parsed.superficie) {

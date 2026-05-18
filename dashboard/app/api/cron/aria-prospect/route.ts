@@ -1,3 +1,4 @@
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getQuebecHour } from '@/lib/timezone';
@@ -10,7 +11,7 @@ export const maxDuration = 60;
 
 async function sendTelegram(text: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = process.env.TELEGRAM_GROUP_CHAT_ID ?? process.env.TELEGRAM_ADMIN_CHAT_IDS?.split(',').find(id => id.trim().startsWith('-')) ?? process.env.TELEGRAM_ADMIN_CHAT_IDS?.split(',')[0];
+  const chatId = getAdminChatIds()[0];
   if (!token || !chatId) return;
   await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: 'POST',

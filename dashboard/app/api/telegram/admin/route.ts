@@ -1,3 +1,4 @@
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney, getServiceDescriptionHtml } from '@/lib/pricing';
@@ -36,7 +37,7 @@ function safeCompare(a: string, b: string): boolean {
 }
 
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
-const ADMIN_CHAT_IDS = () => (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+const ADMIN_CHAT_IDS = () => getAdminChatIds();
 
 async function sendTelegram(chatId: string, text: string) {
   const token = BOT_TOKEN();

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { isQuietHours } from '@/lib/telegram-utils';
 
@@ -73,7 +74,7 @@ export async function GET(req: NextRequest) {
   ].join('\n');
 
   // Send to all admin chat IDs
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const chatIds = getAdminChatIds();
   for (const chatId of chatIds) {
     await sendTelegram(chatId.trim(), msg);
   }

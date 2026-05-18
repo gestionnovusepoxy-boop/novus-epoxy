@@ -1,3 +1,4 @@
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { query } from '@/lib/db';
@@ -11,7 +12,7 @@ const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
 const ADMIN_CHAT_IDS = () => {
   const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
-  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const adminIds = getAdminChatIds();
   return groupId ? [groupId] : adminIds;
 };
 

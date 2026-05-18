@@ -3,6 +3,7 @@ import { streamText, tool } from 'ai';
 import { anthropic } from '@ai-sdk/anthropic';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { sendSMS } from '@/lib/sms';
@@ -656,9 +657,9 @@ function buildTools(agentId: AgentId) {
       parameters: z.object({ message: z.string() }),
       execute: async ({ message }) => {
         const token = process.env.TELEGRAM_BOT_TOKEN;
-        const chatIds = process.env.TELEGRAM_ADMIN_CHAT_IDS;
-        if (!token || !chatIds) return { error: 'Telegram non configure' };
-        const ids = chatIds.split(',').map(id => id.trim()).filter(Boolean);
+        const allChatIds = getAdminChatIds();
+        if (!token || allChatIds.length === 0) return { error: 'Telegram non configure' };
+        const ids = allChatIds;
         const results = [];
         for (const chatId of ids) {
           try {

@@ -1,3 +1,4 @@
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getOrCreateConversation, processMessage } from '@/lib/agent';
@@ -141,7 +142,7 @@ async function forwardToTelegram(from: string, body: string, cleaned: string) {
   if (isQuietHours()) return;
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
-  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const adminIds = getAdminChatIds();
   const chatIds = groupId ? [groupId] : adminIds;
 
   if (!botToken || chatIds.length === 0) return;

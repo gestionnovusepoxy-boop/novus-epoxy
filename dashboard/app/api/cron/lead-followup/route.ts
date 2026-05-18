@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { sendEmail } from '@/lib/send-email';
 import { isQuietHours } from '@/lib/telegram-utils';
@@ -6,7 +7,7 @@ import { isQuietHours } from '@/lib/telegram-utils';
 const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
 const ADMIN_CHAT_IDS = () =>
-  (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  getAdminChatIds();
 
 async function sendTelegram(chatId: string, text: string) {
   const token = BOT_TOKEN();

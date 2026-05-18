@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { google } from 'googleapis';
 import { isQuietHours } from '@/lib/telegram-utils';
@@ -20,7 +21,7 @@ async function notifyTelegram(message: string) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   // Send to group if available, otherwise DM admins
   const groupId = process.env.TELEGRAM_GROUP_CHAT_ID;
-  const chatIds = groupId ? [groupId] : (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const chatIds = groupId ? [groupId] : getAdminChatIds();
   if (!botToken || chatIds.length === 0) return;
   await Promise.all(chatIds.map(id =>
     fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

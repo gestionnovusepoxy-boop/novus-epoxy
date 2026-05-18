@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { auth } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -72,7 +73,7 @@ async function restartAgent(agentId: string): Promise<{ ok: boolean; message: st
     }
     case 'bolt': {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+      const chatIds = getAdminChatIds();
       if (!botToken || chatIds.length === 0) return { ok: false, message: 'Config Telegram manquante' };
       try {
         const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

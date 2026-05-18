@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { google } from 'googleapis';
 import { auth } from '@/lib/auth';
 
@@ -52,7 +53,7 @@ export async function GET(req: NextRequest) {
 
     // Notify on Telegram
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+    const chatIds = getAdminChatIds();
     if (botToken) {
       for (const chatId of chatIds) {
         await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

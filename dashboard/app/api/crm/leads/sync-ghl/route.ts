@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 
 export const maxDuration = 60;
@@ -23,7 +24,7 @@ function scoreTemperature(lead: { email?: string; phone?: string; source?: strin
 
 async function notifyTelegram(text: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const chatIds = getAdminChatIds();
   if (!token) return;
   for (const id of chatIds) {
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {

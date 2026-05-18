@@ -1,3 +1,4 @@
+import { getAdminChatIds } from '@/lib/telegram-utils';
 // Echo — Auto-heal system
 // Runs on every major API call. Checks all critical systems, auto-repairs, notifies group.
 // NOTHING should ever stay broken. Echo fixes it or alerts immediately.
@@ -5,7 +6,7 @@
 import { query } from '@/lib/db';
 
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
-const GROUP_CHAT_ID = () => process.env.TELEGRAM_GROUP_CHAT_ID ?? process.env.TELEGRAM_ADMIN_CHAT_IDS?.split(',')[0] ?? '';
+const GROUP_CHAT_ID = () => getAdminChatIds()[0] ?? '';
 
 async function notifyGroup(message: string) {
   const token = BOT_TOKEN();

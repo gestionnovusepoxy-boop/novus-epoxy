@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { createHmac, timingSafeEqual } from 'crypto';
 import { query } from '@/lib/db';
 import { getOrCreateConversation, processMessage } from '@/lib/agent';
@@ -49,7 +50,7 @@ export async function POST(req: NextRequest) {
     // Alerte Telegram si META_APP_SECRET manquant (leads perdus en silence)
     if (!process.env.META_APP_SECRET) {
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+      const chatIds = getAdminChatIds();
       if (botToken && chatIds.length) {
         await Promise.all(chatIds.map(id =>
           fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -133,7 +134,7 @@ async function notifyTelegramFacebookLead(nom: string, email: string, telephone:
   // Leads FB = toujours notifier, pas de quiet hours (premier qui rappelle gagne)
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
-  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const adminIds = getAdminChatIds();
   const chatIds = groupId ? [groupId] : adminIds; // groupe en priorité
   if (!botToken || chatIds.length === 0) return;
 
@@ -190,7 +191,7 @@ async function handleLeadgen(change: Record<string, unknown>) {
       const errData = await leadRes.json().catch(() => ({}));
       const errMsg = (errData as Record<string, Record<string, string>>).error?.message ?? `HTTP ${leadRes.status}`;
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+      const chatIds = getAdminChatIds();
       if (botToken && chatIds.length) {
         const alert = [
           `🚨 <b>LEAD FACEBOOK PERDU!</b>`,

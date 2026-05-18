@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { google } from 'googleapis';
 
 export const maxDuration = 120;
@@ -180,7 +181,7 @@ export async function POST(req: NextRequest) {
   // Notify admins
   if (total > 0) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+    const chatIds = getAdminChatIds();
     if (botToken) {
       const lines = [`🧹 <b>Ménage Gmail terminé!</b>\n`, `✅ <b>${total}</b> emails nettoyés:\n`];
       for (const [key, count] of Object.entries(results)) {

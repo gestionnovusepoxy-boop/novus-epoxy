@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { sendSMS } from '@/lib/sms';
@@ -12,7 +13,7 @@ async function notifyTelegramBooking(quoteId: number, clientName: string, jour1:
   const groupId = process.env.TELEGRAM_GROUP_CHAT_ID;
   const chatIds = groupId
     ? [groupId]
-    : (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+    : getAdminChatIds();
   if (!botToken || chatIds.length === 0) return;
 
   const msg = [

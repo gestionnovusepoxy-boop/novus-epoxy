@@ -1,4 +1,5 @@
 import { query } from '@/lib/db';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { getColorCatalogText } from '@/lib/torginol';
 import { notifyAdminSMS } from '@/lib/sms';
@@ -10,7 +11,7 @@ async function notifyTelegramHandoff(conversationId: number, visitorName: string
   const groupId = process.env.TELEGRAM_GROUP_CHAT_ID;
   const chatIds = groupId
     ? [groupId]
-    : (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+    : getAdminChatIds();
   if (!botToken || chatIds.length === 0) return;
 
   const msg = [
@@ -354,7 +355,7 @@ async function createQuoteFromConversation(conversationId: number, data: {
 
   // Notify admins via Telegram with approve/reject buttons (same as form submissions)
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+  const chatIds = getAdminChatIds();
   if (botToken && chatIds.length > 0) {
     const serviceLabel = SERVICES[data.type_service as ServiceType]?.label ?? data.type_service;
     const tgLines = [
@@ -601,7 +602,7 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
       console.error('Failed to parse quote data from agent response:', err);
       // Alert admins via Telegram
       const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+      const chatIds = getAdminChatIds();
       if (botToken && chatIds.length > 0) {
         await Promise.all(chatIds.map(chatId =>
           fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {

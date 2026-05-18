@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { calculateQuote, formatMoney, type ServiceType } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
@@ -33,7 +34,7 @@ export async function POST(req: NextRequest) {
 
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
-  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const adminIds = getAdminChatIds();
   const chatIds = groupId ? [groupId] : adminIds;
 
   const VALID_SERVICES: ServiceType[] = ['flake', 'metallique', 'couleur_unie', 'quartz', 'commercial', 'antiderapant', 'meulage', 'vinyl_click'];

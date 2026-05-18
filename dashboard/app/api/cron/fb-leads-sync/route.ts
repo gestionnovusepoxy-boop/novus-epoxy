@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 
 export const maxDuration = 60;
@@ -36,7 +37,7 @@ async function notifyTelegram(nom: string, email: string, telephone: string | nu
   // Leads FB = toujours notifier, pas de quiet hours
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
-  const adminIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean);
+  const adminIds = getAdminChatIds();
   const chatIds = groupId ? [groupId] : adminIds; // groupe en priorité
   if (!botToken || !chatIds.length) return;
 
@@ -144,7 +145,7 @@ export async function GET(req: NextRequest) {
 
   if (imported > 0) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatIds = (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').filter(Boolean);
+    const chatIds = getAdminChatIds();
     if (botToken && chatIds.length && imported > 1) {
       // Summary only if more than 1 lead recovered (avoid spam for 1 lead already notified individually)
     }
