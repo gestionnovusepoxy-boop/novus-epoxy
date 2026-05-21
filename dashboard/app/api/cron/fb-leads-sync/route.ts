@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
+import { SERVICES, type ServiceType, calculateQuote } from '@/lib/pricing';
 
 export const maxDuration = 60;
 
@@ -33,27 +34,35 @@ function extractVille(adresse: string): string | null {
   return adresse.trim() || null;
 }
 
-async function notifyTelegram(nom: string, email: string, telephone: string | null, extra: { service?: string; espace?: string; superficie?: string; adresse?: string }) {
+async function notifyTelegram(nom: string, email: string, telephone: string | null, extra: { service?: string; espace?: string; superficie?: string; adresse?: string; quoteId?: number }) {
   // Leads FB = toujours notifier, pas de quiet hours
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
-  const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
-  const adminIds = getAdminChatIds();
-  const chatIds = groupId ? [groupId] : adminIds; // groupe en priorité
+  const chatIds = getAdminChatIds();
   if (!botToken || !chatIds.length) return;
 
   const lines = [
     `🔥 <b>Nouveau lead Facebook!</b>`,
     ``,
     `👤 ${nom}`,
-    `📧 ${email}`,
+    email ? `📧 ${email}` : '',
     telephone ? `📞 ${telephone}` : '',
     extra.espace ? `🏗 ${extra.espace}` : '',
     extra.service ? `🔧 ${extra.service}` : '',
     extra.superficie ? `📐 ${extra.superficie} pi²` : '',
     extra.adresse ? `🏠 ${extra.adresse}` : '',
     ``,
-    `<i>⚡ Contacte-le ASAP — premier rendu gagne!</i>`,
+    extra.quoteId
+      ? `✅ <b>Devis #${extra.quoteId} prêt — approuve pour envoyer!</b>`
+      : `<i>⚡ Contacte-le ASAP — premier rendu gagne!</i>`,
   ].filter(Boolean).join('\n');
+
+  const buttons = extra.quoteId
+    ? [[
+        { text: '✅ Approuver & envoyer', callback_data: `approve_quote_${extra.quoteId}` },
+      ], [
+        { text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' },
+      ]]
+    : [[{ text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' }]];
 
   await Promise.all(chatIds.map(chatId =>
     fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
@@ -61,10 +70,42 @@ async function notifyTelegram(nom: string, email: string, telephone: string | nu
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chatId.trim(), text: lines, parse_mode: 'HTML',
-        reply_markup: { inline_keyboard: [[{ text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' }]] },
+        reply_markup: { inline_keyboard: buttons },
       }),
     }).catch(() => {})
   ));
+}
+
+async function tryCreateDraftQuote(leadId: number, nom: string, email: string | null, telephone: string | null, adresse: string | null, service: string, superficieStr: string): Promise<number | null> {
+  if (!SERVICES[service as ServiceType]) return null;
+  const superficie = parseFloat(superficieStr);
+  if (!superficie || superficie < 10) return null;
+
+  // Avoid duplicate quotes for same lead
+  const existing = await query(`SELECT id FROM quotes WHERE client_tel = $1 AND statut = 'brouillon' AND created_at >= NOW() - INTERVAL '7 days' LIMIT 1`, [telephone]).catch(() => []);
+  if (existing?.length > 0) return existing[0].id as number;
+
+  // Check active promo
+  let rabaisPct = 0;
+  try {
+    const promoRows = await query(`SELECT rabais_pct FROM promotions WHERE actif = true AND date_debut <= CURRENT_DATE AND date_fin >= CURRENT_DATE ORDER BY rabais_pct DESC LIMIT 1`);
+    if (promoRows.length > 0) rabaisPct = Number(promoRows[0].rabais_pct);
+  } catch { /* no promo */ }
+
+  const calc = calculateQuote(service as ServiceType, superficie, rabaisPct);
+  const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+
+  const rows = await query(
+    `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie,
+      prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis, statut, secret_token, notes)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'brouillon',$15,$16) RETURNING id`,
+    [nom, email, telephone, adresse, service, superficie,
+     calc.prixPiedCarre, calc.rabaisPct, calc.rabaisMontant,
+     calc.sousTotal, calc.tps, calc.tvq, calc.total, calc.depotRequis,
+     token, `Lead Facebook #${leadId} — auto-devis`]
+  ).catch(() => []);
+
+  return rows?.[0]?.id ?? null;
 }
 
 export async function GET(req: NextRequest) {
@@ -147,7 +188,13 @@ export async function GET(req: NextRequest) {
 
       if (result?.[0]?.id) {
         imported++;
-        await notifyTelegram(nom, email ?? '', telephone, { service: service ?? undefined, espace: espace ?? undefined, superficie: superficie ?? undefined, adresse: adresse ?? undefined });
+        const leadId = result[0].id as number;
+        // Auto-create draft quote if we have enough info
+        let quoteId: number | null = null;
+        if (service && superficie && SERVICES[service as ServiceType]) {
+          quoteId = await tryCreateDraftQuote(leadId, nom, email, telephone, adresse, service, superficie);
+        }
+        await notifyTelegram(nom, email ?? '', telephone, { service: service ?? undefined, espace: espace ?? undefined, superficie: superficie ?? undefined, adresse: adresse ?? undefined, quoteId: quoteId ?? undefined });
       } else {
         skipped++;
       }
