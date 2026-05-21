@@ -76,18 +76,32 @@ export async function GET(req: NextRequest) {
   const accessToken = process.env.META_PAGE_TOKEN;
   if (!accessToken) return NextResponse.json({ error: 'META_PAGE_TOKEN missing' }, { status: 500 });
 
-  // Fetch last 50 leads from the active form
-  const formId = '1645385520039445';
-  const res = await fetch(
-    `https://graph.facebook.com/v25.0/${formId}/leads?fields=id,created_time,field_data&limit=50&access_token=${accessToken}`
+  // Fetch all active forms on the page, then sync leads from each
+  const pageId = '636757822863288';
+  const formsRes = await fetch(
+    `https://graph.facebook.com/v25.0/${pageId}/leadgen_forms?fields=id,status,leads_count&limit=50&access_token=${accessToken}`
   );
-  if (!res.ok) return NextResponse.json({ error: 'Meta API error', status: res.status });
-
-  const data = await res.json();
-  const fbLeads: Array<{ id: string; created_time: string; field_data: Array<{ name: string; values: string[] }> }> = data.data ?? [];
+  if (!formsRes.ok) return NextResponse.json({ error: 'Meta forms API error', status: formsRes.status });
+  const formsData = await formsRes.json();
+  const activeForms: Array<{ id: string; leads_count: number }> = (formsData.data ?? [])
+    .filter((f: { status: string; leads_count: number }) => f.status === 'ACTIVE' && f.leads_count > 0);
 
   let imported = 0;
   let skipped = 0;
+  const allLeads: Array<{ id: string; created_time: string; field_data: Array<{ name: string; values: string[] }> }> = [];
+
+  for (const form of activeForms) {
+    const res = await fetch(
+      `https://graph.facebook.com/v25.0/${form.id}/leads?fields=id,created_time,field_data&limit=50&access_token=${accessToken}`
+    );
+    if (!res.ok) continue;
+    const data = await res.json();
+    allLeads.push(...(data.data ?? []));
+  }
+
+  // Deduplicate by lead ID before processing
+  const seen = new Set<string>();
+  const fbLeads = allLeads.filter(l => { if (seen.has(l.id)) return false; seen.add(l.id); return true; });
 
   for (const lead of fbLeads) {
     // Skip test leads
