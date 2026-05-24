@@ -167,6 +167,10 @@ export async function GET(req: NextRequest) {
     let superficie = fields['superficie_approximative_(pi²)?'] ?? null;
     if (superficie) {
       superficie = superficie.replace(/\s*(sf|pi2?|pi²|pieds?\s*carr[eé]s?|sqft|p2|pc)\s*$/i, '').trim();
+      // Strip apostrophes (foot marks): "20' x 10'" → "20 x 10"
+      superficie = superficie.replace(/'/g, '').trim();
+      // Strip trailing non-numeric chars like "200+" → "200"
+      superficie = superficie.replace(/[^\d.x×\s]+$/i, '').trim();
       if (/^\d+\s*[x×]\s*\d+$/i.test(superficie)) {
         const parts = superficie.split(/[x×]/i).map(s => parseFloat(s.trim()));
         superficie = String(Math.round(parts[0] * parts[1]));
@@ -196,6 +200,26 @@ export async function GET(req: NextRequest) {
         }
         await notifyTelegram(nom, email ?? '', telephone, { service: service ?? undefined, espace: espace ?? undefined, superficie: superficie ?? undefined, adresse: adresse ?? undefined, quoteId: quoteId ?? undefined });
       } else {
+        // Lead already exists — check if it needs a quote auto-created (e.g. superficie wasn't parseable before)
+        if (service && superficie && SERVICES[service as ServiceType]) {
+          const existing = await query(
+            `SELECT id, nom, email, telephone, adresse FROM crm_leads WHERE (email = $1 AND email IS NOT NULL AND email != '') OR (telephone = $2 AND telephone IS NOT NULL) LIMIT 1`,
+            [email, telephone]
+          ).catch(() => []);
+          if (existing?.[0]?.id) {
+            const existingLead = existing[0];
+            const hasQuote = await query(
+              `SELECT id FROM quotes WHERE client_tel = $1 AND statut IN ('brouillon','en_attente','envoye') AND created_at >= NOW() - INTERVAL '14 days' LIMIT 1`,
+              [existingLead.telephone]
+            ).catch(() => []);
+            if (!hasQuote?.length) {
+              const quoteId = await tryCreateDraftQuote(existingLead.id as number, existingLead.nom as string, existingLead.email as string | null, existingLead.telephone as string | null, existingLead.adresse as string | null, service, superficie);
+              if (quoteId) {
+                await notifyTelegram(existingLead.nom as string, existingLead.email as string ?? '', existingLead.telephone as string | null, { service: service ?? undefined, espace: espace ?? undefined, superficie: superficie ?? undefined, adresse: adresse ?? undefined, quoteId });
+              }
+            }
+          }
+        }
         skipped++;
       }
     } catch (err) {
