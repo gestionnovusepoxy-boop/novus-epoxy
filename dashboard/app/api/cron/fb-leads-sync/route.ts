@@ -100,12 +100,12 @@ async function tryCreateDraftQuote(leadId: number, nom: string, email: string | 
       prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis, statut, secret_token, notes)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'brouillon',$15,$16) RETURNING id`,
     [nom, email, telephone, adresse, service, superficie,
-     calc.prixPiedCarre, calc.rabaisPct, calc.rabaisMontant,
-     calc.sousTotal, calc.tps, calc.tvq, calc.total, calc.depotRequis,
+     calc.prix_pied_carre, calc.rabais_pct, calc.rabais_montant,
+     calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
      token, `Lead Facebook #${leadId} — auto-devis`]
   ).catch(() => []);
 
-  return rows?.[0]?.id ?? null;
+  return (rows?.[0]?.id as number) ?? null;
 }
 
 export async function GET(req: NextRequest) {
