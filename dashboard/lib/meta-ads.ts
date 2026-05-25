@@ -47,27 +47,19 @@ const SERVICE_LABELS: Record<string, string> = {
   vinyl_click: 'Vinyl click',
 };
 
-// Default targeting: 55km radius around Quebec City, age 30-65, homeowner +
-// renovation interest. MTL exclu. Broad audience pour Advantage+ optimization
-// sur le LEAD event. (user 2026-05-25: 55km only, no MTL)
+// Default targeting: 55km radius around Quebec City, age 30-65, French.
+// MTL exclu. BROAD audience (no interest/behavior filter) → Advantage+ optimise
+// mieux avec volume → ciblage sur le LEAD event de la pixel/form.
+// Interest/behavior IDs require Meta Targeting Search API to discover real IDs.
+// (user 2026-05-25: 55km only, no MTL)
 const DEFAULT_TARGETING = {
   geo_locations: {
     custom_locations: [
-      { latitude: 46.8139, longitude: -71.2080, radius: 55, distance_unit: 'kilometer', name: 'Quebec City' },
+      { latitude: 46.8139, longitude: -71.2080, radius: 55, distance_unit: 'kilometer' },
     ],
   },
   age_min: 30,
   age_max: 65,
-  flexible_spec: [{
-    interests: [
-      { id: '6003020834693', name: 'Home improvement' },
-      { id: '6003107902433', name: 'Renovation' },
-      { id: '6003277229095', name: 'Garage' },
-    ],
-    behaviors: [
-      { id: '6002714895372', name: 'Homeowners' },
-    ],
-  }],
   locales: [6, 24], // French (Canada), French
 };
 
