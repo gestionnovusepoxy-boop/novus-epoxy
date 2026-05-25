@@ -66,7 +66,8 @@ export async function GET(req: NextRequest) {
       OR (telephone IS NOT NULL AND telephone != '' AND (
         telephone ~ '(418|581|819|450|438|514|579|873|367)'
       ))
-    ) ORDER BY id LIMIT ${remaining}`
+    ) ORDER BY id LIMIT $1`,
+    [remaining]
   );
 
   if (pending.length === 0) {
