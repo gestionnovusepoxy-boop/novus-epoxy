@@ -33,10 +33,18 @@ async function notifyTelegram(message: string) {
   ));
 }
 
-function getGmailClient() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+async function getGmailClient() {
+  let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
+  let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  let refreshToken = process.env.GOOGLE_REFRESH_TOKEN ?? '';
+  try {
+    const rows = await query(`SELECT key, value FROM kv_store WHERE key IN ('google_client_id','google_client_secret','google_refresh_token')`);
+    for (const row of (rows ?? [])) {
+      if (row.key === 'google_client_id' && row.value) clientId = row.value as string;
+      if (row.key === 'google_client_secret' && row.value) clientSecret = row.value as string;
+      if (row.key === 'google_refresh_token' && row.value) refreshToken = row.value as string;
+    }
+  } catch { /* ignore */ }
   if (!clientId || !clientSecret || !refreshToken) return null;
   const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
   oauth2.setCredentials({ refresh_token: refreshToken });
@@ -120,7 +128,7 @@ export async function GET(req: NextRequest) {
 
   // 1e. Gmail OAuth + Watch auto-renew
   try {
-    const gmail = getGmailClient();
+    const gmail = await getGmailClient();
     if (!gmail) {
       checks.push({ name: 'Gmail OAuth', ok: false, detail: 'Credentials manquantes', severity: 'critical' });
     } else {
