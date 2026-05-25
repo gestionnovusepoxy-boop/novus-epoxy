@@ -1,5 +1,27 @@
 {
   "mcpServers": {
+    "meta": {
+      "command": "npx",
+      "args": ["-y", "@oliverames/meta-mcp-server"],
+      "env": {
+        "META_ACCESS_TOKEN": "${META_PAGE_TOKEN}"
+      }
+    },
+    "twilio": {
+      "command": "npx",
+      "args": ["-y", "@twilio-alpha/mcp"],
+      "env": {
+        "TWILIO_ACCOUNT_SID": "${TWILIO_ACCOUNT_SID}",
+        "TWILIO_AUTH_TOKEN": "${TWILIO_AUTH_TOKEN}"
+      }
+    },
+    "stripe": {
+      "command": "npx",
+      "args": ["-y", "@stripe/mcp"],
+      "env": {
+        "STRIPE_SECRET_KEY": "${STRIPE_SECRET_KEY}"
+      }
+    },
     "claude-flow": {
       "command": "npx",
       "args": [
