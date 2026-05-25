@@ -40,19 +40,23 @@ async function sendTelegram(chatId: string, text: string) {
 }
 
 async function getGmailClient() {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+  // All 3 values can be overridden by kv_store (shared DB = single source of truth across Vercel + VPS)
+  let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
+  let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  let refreshToken = process.env.GOOGLE_REFRESH_TOKEN ?? '';
 
-  if (!clientId || !clientSecret) return null;
-
-  // Check DB first (renewed via OAuth flow), then fall back to env var
-  let refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
   try {
-    const rows = await query(`SELECT value FROM kv_store WHERE key = 'google_refresh_token'`);
-    if (rows?.[0]?.value) refreshToken = rows[0].value as string;
-  } catch { /* ignore — use env var */ }
+    const rows = await query(
+      `SELECT key, value FROM kv_store WHERE key IN ('google_client_id','google_client_secret','google_refresh_token')`
+    );
+    for (const row of (rows ?? [])) {
+      if (row.key === 'google_client_id' && row.value) clientId = row.value as string;
+      if (row.key === 'google_client_secret' && row.value) clientSecret = row.value as string;
+      if (row.key === 'google_refresh_token' && row.value) refreshToken = row.value as string;
+    }
+  } catch { /* ignore — use env vars */ }
 
-  if (!refreshToken) return null;
+  if (!clientId || !clientSecret || !refreshToken) return null;
 
   const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
   oauth2.setCredentials({ refresh_token: refreshToken });
