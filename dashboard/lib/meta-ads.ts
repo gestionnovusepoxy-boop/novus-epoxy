@@ -331,6 +331,48 @@ export async function sendDraftToTelegram(draft: AdDraft, chatId: string): Promi
 }
 
 /**
+ * Pause all previously launched Novus ads (statut='lance') in Meta.
+ * Called automatically when a new ad is approved → keeps total active ads = 1.
+ * Returns array of paused campaign IDs.
+ */
+export async function pausePreviousLaunchedAds(): Promise<{ paused: string[]; failed: Array<{ id: string; error: string }> }> {
+  const token = (process.env.META_PAGE_TOKEN ?? '').trim();
+  if (!token) return { paused: [], failed: [] };
+
+  const rows = await query(
+    `SELECT id, meta_campaign_id FROM meta_ads_drafts WHERE statut = 'lance' AND meta_campaign_id IS NOT NULL`
+  ).catch(() => []);
+  if (!rows.length) return { paused: [], failed: [] };
+
+  const paused: string[] = [];
+  const failed: Array<{ id: string; error: string }> = [];
+
+  for (const row of rows) {
+    const r = row as Record<string, unknown>;
+    const campaignId = String(r.meta_campaign_id ?? '');
+    if (!campaignId) continue;
+    try {
+      const res = await fetch(`https://graph.facebook.com/${META_API_VERSION}/${campaignId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'PAUSED', access_token: token }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        paused.push(campaignId);
+        await query(`UPDATE meta_ads_drafts SET statut = 'remplacee', updated_at = NOW() WHERE id = $1`, [r.id]);
+      } else {
+        failed.push({ id: campaignId, error: data.error?.message ?? `HTTP ${res.status}` });
+      }
+    } catch (err) {
+      failed.push({ id: campaignId, error: (err as Error).message });
+    }
+  }
+
+  return { paused, failed };
+}
+
+/**
  * Create the actual Meta ad campaign in PAUSED state.
  * Requires AD_ACCOUNT_ID env. Returns Meta IDs.
  */
