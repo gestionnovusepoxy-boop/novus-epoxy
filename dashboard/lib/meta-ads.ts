@@ -168,19 +168,33 @@ export async function generateAdImage(service: string): Promise<{ url: string; p
 export async function generateAdCopy(service: string, options?: { promoPct?: number }): Promise<{ headline: string; primary_text: string; cta: string }> {
   const label = SERVICE_LABELS[service] ?? service;
   const promo = options?.promoPct ?? 0;
-  const promoLine = promo > 0 ? `Mentionne le rabais ${promo}% actuel.` : '';
+  const promoLine = promo > 0
+    ? `IMPORTANT: mentionne SPÉCIAL PRINTEMPS — MAI SEULEMENT avec le rabais ${promo}%. Crée l'urgence.`
+    : '';
 
-  const system = `Tu es un copywriter Facebook Ads pour Novus Epoxy, planchers époxy haut de gamme à Québec. Tu écris pour des propriétaires résidentiels (garage, sous-sol, balcon). Style: direct, chaleureux, québécois, jamais corporate. Réponds STRICTEMENT en JSON: {"headline":"...","primary_text":"...","cta":"LEARN_MORE"}.
+  const system = `Tu es un copywriter Facebook Ads pour Novus Epoxy — planchers époxy haut de gamme à Québec. Tu écris pour des PROPRIÉTAIRES Quebec ville (rayon 55km), 30-65 ans, intérêt garage/rénovation.
+
+Angle marketing CORE de Novus Epoxy:
+- Transforme garage en espace PREMIUM (pas juste un plancher)
+- Soumission gratuite envoyée par SMS+email en moins de 5 minutes (vraiment, automatique)
+- Spécial printemps mai 15% rabais
+- Finition haut de gamme, résistante chocs/produits, garantie écrite
+- Compagnie Québec — Luca 581-307-5983
+
+Style: direct, chaleureux, québécois, jamais corporate. Tu parles comme un voisin.
+
+Réponds STRICTEMENT en JSON: {"headline":"...","primary_text":"...","cta":"SIGN_UP"}.
 
 Règles:
-- Headline: max 27 caractères, accrocheur, mentionne le service.
-- Primary text: 3 paragraphes courts, max 125 caractères total. Hook → bénéfice → CTA implicite.
-- CTA: parmi LEARN_MORE, GET_QUOTE, MESSAGE_PAGE.
-- Jamais d'emojis dans headline. Max 2 emojis dans primary_text.
-- Pas de prix exacts. Mention "soumission gratuite" OK.
+- Headline: max 40 caractères, accrocheur, mentionne le service OU le bénéfice.
+- Primary text: 3-4 lignes courtes, total max 200 caractères. Hook (problème ou rêve) → bénéfice (transformation) → urgence (mai 15%) → CTA implicite.
+- CTA fixé à SIGN_UP (Lead Ad form).
+- Max 2 emojis total. Aucun dans headline.
+- Mentionne "soumission en 5 min" si pertinent.
+- Aucun prix exact dans le texte.
 ${promoLine}`;
 
-  const userPrompt = `Service: ${label}. Génère 1 annonce pour Quebec, propriétaires 30-55 ans, intérêt rénovation.`;
+  const userPrompt = `Service: ${label}. Génère 1 annonce Lead Ad pour propriétaires 30-65 ans, rayon 55km Québec ville, intérêt rénovation garage.`;
 
   try {
     const text = await callLLM({
@@ -194,15 +208,16 @@ ${promoLine}`;
     });
     const parsed = JSON.parse(text);
     return {
-      headline: String(parsed.headline ?? `${label} de qualité`).slice(0, 27),
+      headline: String(parsed.headline ?? `Plancher ${label} premium`).slice(0, 40),
       primary_text: String(parsed.primary_text ?? '').slice(0, 500),
-      cta: ['LEARN_MORE', 'GET_QUOTE', 'MESSAGE_PAGE'].includes(parsed.cta) ? parsed.cta : 'LEARN_MORE',
+      cta: 'SIGN_UP', // Lead Ad always SIGN_UP
     };
   } catch {
+    const promoTag = promo > 0 ? `Spécial printemps mai — ${promo}% rabais. ` : '';
     return {
-      headline: `Plancher ${label}`,
-      primary_text: `Votre garage mérite mieux. Plancher époxy ${label} fini main par Novus Epoxy. Soumission gratuite en 24h. 581-307-2678.`,
-      cta: 'LEARN_MORE',
+      headline: `Plancher ${label} premium`,
+      primary_text: `${promoTag}Transforme ton garage en espace premium. Soumission envoyée par SMS en moins de 5 minutes. Compagnie Québec — garantie écrite. 581-307-5983.`,
+      cta: 'SIGN_UP',
     };
   }
 }
