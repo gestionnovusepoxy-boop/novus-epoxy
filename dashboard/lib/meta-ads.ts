@@ -60,7 +60,8 @@ const DEFAULT_TARGETING = {
   locales: [6, 24], // French (Canada), French
 };
 
-/** Pick best Sage portfolio image for a service (quality_score >= 9 preferred). */
+/** Pick best Sage portfolio image for a service (quality_score >= 9 preferred).
+ *  Returns an ABSOLUTE URL so Telegram and Meta image upload both work. */
 export async function pickSageImage(service: string): Promise<string | null> {
   const rows = await query(
     `SELECT photos, videos, titre, description FROM portfolio
@@ -72,9 +73,16 @@ export async function pickSageImage(service: string): Promise<string | null> {
   const r = rows[0] as Record<string, unknown>;
   const photos = (r.photos ?? []) as string[];
   const videos = (r.videos ?? []) as string[];
-  if (Array.isArray(photos) && photos.length > 0) return photos[0];
-  if (Array.isArray(videos) && videos.length > 0) return videos[0];
-  return null;
+  let url: string | null = null;
+  if (Array.isArray(photos) && photos.length > 0) url = photos[0];
+  else if (Array.isArray(videos) && videos.length > 0) url = videos[0];
+  if (!url) return null;
+  // Convert relative paths (e.g. /portfolio/foo.jpg) to absolute URLs
+  if (url.startsWith('/')) {
+    const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
+    return `${base}${url}`;
+  }
+  return url;
 }
 
 /** Generate a hyperrealistic ad image via OpenRouter image model. */
