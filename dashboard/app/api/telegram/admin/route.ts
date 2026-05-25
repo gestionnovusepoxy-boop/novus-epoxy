@@ -1456,23 +1456,37 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       return NextResponse.json({ ok: true });
     }
 
-    // approve_ad_123 — Approve FB ad draft: pause previous Novus ads, then create new one PAUSED
+    // approve_ad_123 — Approve FB ad draft: pause ALL active ads, then create new one PAUSED
     if (cbData.startsWith('approve_ad_')) {
       const draftId = parseInt(cbData.replace('approve_ad_', ''));
-      const { createMetaCampaignPaused, pausePreviousLaunchedAds } = await import('@/lib/meta-ads');
+      const { createMetaCampaignPaused, pausePreviousLaunchedAds, pauseAllActiveCampaigns } = await import('@/lib/meta-ads');
       await query(
         `UPDATE meta_ads_drafts SET statut = 'approve', approved_at = NOW(), approved_by = $1 WHERE id = $2 AND statut = 'brouillon'`,
         [cbChatId, draftId]
       );
       await sendTelegram(cbChatId, `⏳ Création de la pub Meta en cours pour #${draftId}...`);
 
-      // Auto-pause previously launched Novus ads (one active at a time)
-      const pauseResult = await pausePreviousLaunchedAds();
-      if (pauseResult.paused.length > 0) {
-        await sendTelegram(cbChatId, `⏸️ <b>${pauseResult.paused.length} ancienne(s) pub(s) Novus mise(s) en pause</b>\n\nCampaign IDs: ${pauseResult.paused.map(c => `<code>${c}</code>`).join(', ')}`, { parse_mode: 'HTML' });
+      // Auto-pause previously launched Novus ads (tracked in our DB)
+      const novusPause = await pausePreviousLaunchedAds();
+
+      // Auto-pause ALL OTHER active ads in the account (B option — user 2026-05-25)
+      const allPause = await pauseAllActiveCampaigns();
+
+      const totalPaused = new Set([...novusPause.paused, ...allPause.paused]);
+      if (totalPaused.size > 0) {
+        await sendTelegram(cbChatId, `⏸️ <b>${totalPaused.size} pub(s) active(s) mise(s) en pause</b>\n\nCampaign IDs: ${[...totalPaused].map(c => `<code>${c}</code>`).join(', ')}`, { parse_mode: 'HTML' });
       }
-      if (pauseResult.failed.length > 0) {
-        await sendTelegram(cbChatId, `⚠️ <b>Impossible de pauser ${pauseResult.failed.length} pub(s) ancienne(s)</b>\n\n${pauseResult.failed.map(f => `${f.id}: ${f.error.slice(0,80)}`).join('\n')}\n\n<i>Pause-les manuellement dans Ads Manager.</i>`, { parse_mode: 'HTML' });
+      const allFailed = [...novusPause.failed, ...allPause.failed].filter(f => !totalPaused.has(f.id));
+      if (allFailed.length > 0 || allPause.listError) {
+        const lines = [`⚠️ <b>Impossible de pauser certaines pubs via API</b>`];
+        if (allPause.listError) lines.push(`Listing: ${allPause.listError.slice(0, 120)}`);
+        if (allFailed.length > 0) lines.push(...allFailed.slice(0, 5).map(f => `${f.id}: ${f.error.slice(0, 80)}`));
+        lines.push(``, `<b>👉 Pause-les manuellement dans Ads Manager:</b>`);
+        const adsManagerUrl = `https://business.facebook.com/adsmanager/manage/campaigns?act=${(process.env.META_AD_ACCOUNT_ID ?? '').replace(/^act_/, '')}`;
+        await sendTelegram(cbChatId, lines.join('\n'), {
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[{ text: '📊 Ouvrir Ads Manager', url: adsManagerUrl }]] },
+        });
       }
 
       const result = await createMetaCampaignPaused(draftId);

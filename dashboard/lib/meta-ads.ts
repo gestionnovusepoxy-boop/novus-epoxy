@@ -443,6 +443,72 @@ export async function pausePreviousLaunchedAds(): Promise<{ paused: string[]; fa
 }
 
 /**
+ * Pause ALL active campaigns in the ad account (not just Novus-tracked ones).
+ * Best-effort: tries 3 different Graph API endpoints since the PAGE token
+ * has limited access. Returns what was found + paused.
+ */
+export async function pauseAllActiveCampaigns(): Promise<{ paused: string[]; failed: Array<{ id: string; error: string }>; listError?: string }> {
+  const token = (process.env.META_PAGE_TOKEN ?? '').trim();
+  const adAccountId = (process.env.META_AD_ACCOUNT_ID ?? '').trim().replace(/^act_/, '');
+  if (!token || !adAccountId) return { paused: [], failed: [], listError: 'token or ad account missing' };
+
+  // Try 3 endpoints to list active campaigns (page tokens often lack ads_read).
+  const endpoints = [
+    `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/campaigns?fields=id,name,effective_status&effective_status=%5B%22ACTIVE%22%5D&limit=50&access_token=${token}`,
+    `https://graph.facebook.com/${META_API_VERSION}/${NOVUS_PAGE_ID}/ads_posts?fields=id&limit=50&access_token=${token}`,
+    `https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/ads?fields=id,name,campaign_id,effective_status&effective_status=%5B%22ACTIVE%22%5D&limit=50&access_token=${token}`,
+  ];
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let listed: any[] = [];
+  let listError: string | undefined;
+  for (const url of endpoints) {
+    try {
+      const res = await fetch(url);
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.data) && data.data.length > 0) {
+        listed = data.data;
+        listError = undefined;
+        break;
+      }
+      if (data.error) listError = data.error.message;
+    } catch (err) {
+      listError = (err as Error).message;
+    }
+  }
+
+  if (listed.length === 0) {
+    return { paused: [], failed: [], listError: listError ?? 'No active campaigns found via available endpoints' };
+  }
+
+  const paused: string[] = [];
+  const failed: Array<{ id: string; error: string }> = [];
+
+  // Try to POST status=PAUSED on each — works if the campaign was created via this page
+  for (const item of listed) {
+    const id = String(item.campaign_id ?? item.id ?? '');
+    if (!id || paused.includes(id)) continue;
+    try {
+      const res = await fetch(`https://graph.facebook.com/${META_API_VERSION}/${id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'PAUSED', access_token: token }),
+      });
+      const data = await res.json();
+      if (res.ok && (data.success || data.id)) {
+        paused.push(id);
+      } else {
+        failed.push({ id, error: data.error?.message ?? `HTTP ${res.status}` });
+      }
+    } catch (err) {
+      failed.push({ id, error: (err as Error).message });
+    }
+  }
+
+  return { paused, failed };
+}
+
+/**
  * Create the actual Meta ad campaign in PAUSED state.
  * Requires AD_ACCOUNT_ID env. Returns Meta IDs.
  */
