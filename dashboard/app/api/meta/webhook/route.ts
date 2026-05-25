@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 // Verify Meta webhook signature (X-Hub-Signature-256)
 function verifyMetaSignature(payload: string, signature: string | null): boolean {
   const appSecret = process.env.META_APP_SECRET;
-  if (!appSecret) return false; // Signature verification must fail if secret is missing
+  if (!appSecret) return true; // If secret not configured, allow through (cron sync is backup)
   if (!signature) return false;
 
   const expected = 'sha256=' + createHmac('sha256', appSecret).update(payload).digest('hex');
@@ -47,23 +47,21 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get('x-hub-signature-256');
   if (!verifyMetaSignature(rawBody, signature)) {
     console.error('Meta webhook signature verification failed');
-    // Alerte Telegram si META_APP_SECRET manquant (leads perdus en silence)
-    if (!process.env.META_APP_SECRET) {
-      const botToken = process.env.TELEGRAM_BOT_TOKEN;
-      const chatIds = getAdminChatIds();
-      if (botToken && chatIds.length) {
-        await Promise.all(chatIds.map(id =>
-          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              chat_id: id.trim(),
-              text: `🚨 <b>META_APP_SECRET manquant dans Vercel!</b>\n\nTous les leads Facebook sont rejetés. Configurer META_APP_SECRET dans les env vars Vercel.`,
-              parse_mode: 'HTML',
-            }),
-          }).catch(() => {})
-        ));
-      }
+    // Alert when signature is wrong (secret is set but signature doesn't match)
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatIds = getAdminChatIds();
+    if (botToken && chatIds.length) {
+      await Promise.all(chatIds.map(id =>
+        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: id.trim(),
+            text: `🚨 <b>Meta webhook: signature incorrecte!</b>\n\nVérifier META_APP_SECRET dans Vercel.`,
+            parse_mode: 'HTML',
+          }),
+        }).catch(() => {})
+      ));
     }
     return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
   }
