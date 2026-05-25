@@ -475,9 +475,17 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
     }
 
     case 'resume_emails': {
-      const clientId = process.env.GOOGLE_CLIENT_ID;
-      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-      const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+      let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
+      let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+      let refreshToken = process.env.GOOGLE_REFRESH_TOKEN ?? '';
+      try {
+        const kvRows = await query(`SELECT key, value FROM kv_store WHERE key IN ('google_client_id','google_client_secret','google_refresh_token')`);
+        for (const row of (kvRows ?? [])) {
+          if (row.key === 'google_client_id' && row.value) clientId = row.value as string;
+          if (row.key === 'google_client_secret' && row.value) clientSecret = row.value as string;
+          if (row.key === 'google_refresh_token' && row.value) refreshToken = row.value as string;
+        }
+      } catch { /* ignore */ }
       if (!clientId || !clientSecret || !refreshToken) {
         return JSON.stringify({ error: 'Gmail API non configure (GOOGLE_CLIENT_ID/SECRET/REFRESH_TOKEN manquant)' });
       }

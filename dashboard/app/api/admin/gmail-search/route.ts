@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
+import { query } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   const apiKey = req.headers.get('x-api-key') ?? req.nextUrl.searchParams.get('key') ?? '';
@@ -11,9 +12,17 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q') ?? '';
   if (!q) return NextResponse.json({ error: 'q parameter required' }, { status: 400 });
 
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
+  let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  let refreshToken = process.env.GOOGLE_REFRESH_TOKEN ?? '';
+  try {
+    const rows = await query(`SELECT key, value FROM kv_store WHERE key IN ('google_client_id','google_client_secret','google_refresh_token')`);
+    for (const row of (rows ?? [])) {
+      if (row.key === 'google_client_id' && row.value) clientId = row.value as string;
+      if (row.key === 'google_client_secret' && row.value) clientSecret = row.value as string;
+      if (row.key === 'google_refresh_token' && row.value) refreshToken = row.value as string;
+    }
+  } catch { /* ignore */ }
   if (!clientId || !clientSecret || !refreshToken) {
     return NextResponse.json({ error: 'Gmail not configured' }, { status: 500 });
   }

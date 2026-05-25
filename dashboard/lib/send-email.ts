@@ -1,4 +1,5 @@
 import { google } from 'googleapis';
+import { query } from '@/lib/db';
 
 /**
  * Sends system emails (devis, contrats, replies Aria, etc.)
@@ -48,9 +49,21 @@ async function sendViaGmail({
 }: {
   to: string; subject: string; html: string; replyTo?: string; cc?: string; bcc?: string;
 }): Promise<{ id: string }> {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
+  let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  let refreshToken = process.env.GOOGLE_REFRESH_TOKEN ?? '';
+
+  // kv_store overrides env vars (source de vérité après le flow OAuth Web)
+  try {
+    const rows = await query(
+      `SELECT key, value FROM kv_store WHERE key IN ('google_client_id','google_client_secret','google_refresh_token')`
+    );
+    for (const row of (rows ?? [])) {
+      if (row.key === 'google_client_id' && row.value) clientId = row.value as string;
+      if (row.key === 'google_client_secret' && row.value) clientSecret = row.value as string;
+      if (row.key === 'google_refresh_token' && row.value) refreshToken = row.value as string;
+    }
+  } catch { /* ignore — use env vars */ }
 
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error('Gmail credentials missing');
