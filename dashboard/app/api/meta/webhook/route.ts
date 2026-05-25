@@ -297,11 +297,60 @@ async function handleLeadgen(change: Record<string, unknown>) {
     // Only notify + trigger Aria if this is a NEW lead (not a duplicate)
     const newLeadId = crmResult?.[0]?.id;
     if (newLeadId) {
-      // 3. Telegram notification with full details
-      await notifyTelegramFacebookLead(nom, email, telephone, { service: service ?? undefined, espace: espace ?? undefined, superficie: superficie ? Number(superficie) : undefined, adresse: adresse ?? undefined });
+      // 3. Auto-create draft quote if we have enough info (service + superficie >= 10)
+      let quoteId: number | null = null;
+      let quoteTotal: number | undefined;
+      const superficieNum = superficie ? Number(superficie) : 0;
+      if (service && superficieNum >= 10 && SERVICES[service as ServiceType]) {
+        try {
+          // Active promo lookup
+          let rabaisPct = 0;
+          const promoRows = await query(
+            `SELECT rabais_pct FROM promotions WHERE actif = true AND date_debut <= CURRENT_DATE AND date_fin >= CURRENT_DATE ORDER BY rabais_pct DESC LIMIT 1`
+          ).catch(() => []);
+          if (promoRows[0]) rabaisPct = Number(promoRows[0].rabais_pct);
 
-      // 4. SMS notification to Luca + Jason
-      const smsMsg = `🔥 LEAD FB - Contacte ASAP! ${nom} - ${telephone ?? 'N/A'} - ${email}`;
+          // Skip if a recent draft already exists for this phone
+          const existing = await query(
+            `SELECT id FROM quotes WHERE client_tel = $1 AND statut = 'brouillon' AND created_at >= NOW() - INTERVAL '7 days' LIMIT 1`,
+            [telephone]
+          ).catch(() => []);
+
+          if (existing?.length > 0) {
+            quoteId = existing[0].id as number;
+          } else {
+            const calc = calculateQuote(service as ServiceType, superficieNum, rabaisPct);
+            const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+            const inserted = await query(
+              `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie,
+                prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis, statut, secret_token, notes)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'brouillon',$15,$16) RETURNING id`,
+              [nom.slice(0, 120), email.slice(0, 255) || null, telephone, adresse, service, superficieNum,
+               calc.prix_pied_carre, calc.rabais_pct, calc.rabais_montant, calc.sous_total, calc.tps, calc.tvq,
+               calc.total, calc.depot_requis, token, `Lead Facebook Ad #${leadgenId} — auto-devis`]
+            ).catch(() => []);
+            if (inserted?.[0]?.id) {
+              quoteId = inserted[0].id as number;
+              quoteTotal = calc.total;
+            }
+          }
+        } catch (qErr) {
+          console.error('Auto-quote creation failed:', qErr);
+        }
+      }
+
+      // 4. Telegram notification with full details + approve button if quote ready
+      await notifyTelegramFacebookLead(nom, email, telephone, {
+        service: service ?? undefined,
+        espace: espace ?? undefined,
+        superficie: superficieNum || undefined,
+        adresse: adresse ?? undefined,
+        quoteId: quoteId ?? undefined,
+        total: quoteTotal,
+      });
+
+      // 5. SMS alert to Luca + Jason
+      const smsMsg = `🔥 LEAD FB - Contacte ASAP! ${nom} - ${telephone ?? 'N/A'} - ${email}${quoteId ? ` — Devis #${quoteId} prêt` : ''}`;
       const adminPhone = process.env.ADMIN_PHONE;
       const jasonPhone = process.env.JASON_PHONE;
       if (adminPhone) sendSMS(adminPhone, smsMsg, undefined, true).catch(() => {});
