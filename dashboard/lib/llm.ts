@@ -126,8 +126,14 @@ export async function callLLM({
   throw new Error('OPENROUTER_API_KEY missing — set it in Vercel env. No Anthropic fallback.');
 }
 
-/** Vercel AI SDK model instance for streamText/generateText (OpenRouter only). */
-export function getStreamingModel(tier: LLMTier = 'smart') {
+/** Vercel AI SDK model instance for streamText/generateText (OpenRouter only).
+ *
+ * Returns `any` to bridge @ai-sdk/openai v3 (LanguageModelV3) with `ai` v4
+ * (expects LanguageModelV1). Both interfaces are runtime-compatible — only
+ * the TS types diverged. Upgrade `ai` to v5 to drop the cast.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function getStreamingModel(tier: LLMTier = 'smart'): any {
   if (!isOpenRouter()) {
     throw new Error('OPENROUTER_API_KEY missing — set it in Vercel env. No Anthropic fallback.');
   }
