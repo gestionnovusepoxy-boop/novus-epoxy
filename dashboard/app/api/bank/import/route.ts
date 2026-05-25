@@ -183,7 +183,7 @@ Candidates:
 ${candidateList}`,
       }],
       maxTokens: 100,
-      tier: 'fast',
+      tier: 'bulk',
     });
     const match = text.match(/\b(\d+)\b/);
     if (match && text.toUpperCase() !== 'NONE') {
