@@ -12,6 +12,10 @@ const FB_SERVICE_MAP: Record<string, string> = {
   'couleur_unie': 'couleur_unie', 'couleur unie': 'couleur_unie',
   'antiderapant': 'antiderapant', 'antidérapant': 'antiderapant',
   'commercial': 'commercial',
+  'meulage': 'meulage', 'meulage au diamant': 'meulage', 'meulage diamant': 'meulage',
+  'vinyl': 'vinyl_click', 'vinyl click': 'vinyl_click', 'plancher vinyl': 'vinyl_click',
+  'flottant': 'vinyl_click', 'vinyle': 'vinyl_click', 'vinyl_click': 'vinyl_click',
+  'industriel': 'commercial',
 };
 
 function mapService(raw: string): string {

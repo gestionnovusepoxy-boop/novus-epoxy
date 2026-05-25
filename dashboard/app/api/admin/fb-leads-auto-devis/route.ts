@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   }
 
   let days = 30;
-  try { const b = await req.json(); if (b.days) days = Number(b.days); } catch { /* default */ }
+  try { const b = await req.json(); if (b.days) { days = Number(b.days); if (isNaN(days) || days < 1 || days > 365) days = 30; } } catch { /* default */ }
 
   // Leads FB sans devis envoyé
   const leads = await query(

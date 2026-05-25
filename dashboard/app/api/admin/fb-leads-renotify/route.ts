@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   let nouveauOnly = false;
   try {
     const body = await req.json();
-    if (body.days) days = Number(body.days);
+    if (body.days) { days = Number(body.days); if (isNaN(days) || days < 1 || days > 365) days = 7; }
     if (body.stats_only) statsOnly = true;
     if (body.nouveau_only) nouveauOnly = true;
   } catch { /* defaults */ }
