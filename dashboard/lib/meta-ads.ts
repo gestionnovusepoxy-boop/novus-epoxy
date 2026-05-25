@@ -161,54 +161,75 @@ export async function generateAdCopy(service: string, options?: { promoPct?: num
   const label = SERVICE_LABELS[service] ?? service;
   const promo = options?.promoPct ?? 0;
   const promoLine = promo > 0
-    ? `IMPORTANT: mentionne SPÉCIAL PRINTEMPS — MAI SEULEMENT avec le rabais ${promo}%. Crée l'urgence.`
+    ? `RÈGLE ABSOLUE: la 1ère ligne du primary_text DOIT commencer par "SPÉCIAL MAI — ${promo}% rabais" pour créer l'urgence.`
     : '';
 
-  const system = `Tu es un copywriter Facebook Ads pour Novus Epoxy — planchers époxy haut de gamme à Québec. Tu écris pour des PROPRIÉTAIRES Quebec ville (rayon 55km), 30-65 ans, intérêt garage/rénovation.
+  const system = `Tu es Luca, propriétaire de Novus Epoxy à Québec. Tu écris une pub Facebook qui te ressemble — direct, chaleureux, sans flafla corporate. Tu vises les propriétaires (30-65 ans) dans un rayon de 55km autour de Québec ville qui rêvent d'un beau garage/sous-sol.
 
-Angle marketing CORE de Novus Epoxy:
-- Transforme garage en espace PREMIUM (pas juste un plancher)
-- Soumission gratuite envoyée par SMS+email en moins de 5 minutes (vraiment, automatique)
-- Spécial printemps mai 15% rabais
-- Finition haut de gamme, résistante chocs/produits, garantie écrite
-- Compagnie Québec — Luca 581-307-5983
+CE QUE NOVUS EPOXY OFFRE:
+- Plancher époxy haut de gamme — finition lisse, brillante, durable 10+ ans
+- Transformation garage en espace PREMIUM (la voiture sport, le bar, le workshop)
+- Soumission gratuite envoyée par SMS+email en MOINS DE 5 MIN (automatique, vraiment)
+- Garantie écrite, finition résistante chocs/huiles/sels d'hiver
+- Installation 2 jours, pas de chantier qui traîne
+- Compagnie locale Québec — Luca te répond direct au 581-307-5983
 
-Style: direct, chaleureux, québécois, jamais corporate. Tu parles comme un voisin.
+TON STYLE (apprends de ces exemples):
+✅ "Ton garage mérite mieux qu'un dépotoir."
+✅ "Imagine ta voiture sur un plancher qui shine comme un showroom."
+✅ "Fini les fissures, les taches d'huile, le béton poreux."
+✅ "On t'envoie ta soumission par texto en 5 minutes — c'est-tu hot ça?"
+❌ "Notre entreprise est leader dans le domaine de la finition de planchers..."
+❌ "Solution premium pour résidences modernes."
 
-Réponds STRICTEMENT en JSON: {"headline":"...","primary_text":"...","cta":"SIGN_UP"}.
+RÉPONDS STRICTEMENT EN JSON: {"headline":"...","primary_text":"...","cta":"SIGN_UP"}.
 
-Règles:
-- Headline: max 40 caractères, accrocheur, mentionne le service OU le bénéfice.
-- Primary text: 3-4 lignes courtes, total max 200 caractères. Hook (problème ou rêve) → bénéfice (transformation) → urgence (mai 15%) → CTA implicite.
-- CTA fixé à SIGN_UP (Lead Ad form).
-- Max 2 emojis total. Aucun dans headline.
-- Mentionne "soumission en 5 min" si pertinent.
-- Aucun prix exact dans le texte.
+RÈGLES:
+- headline: max 40 char. Accroche-toi. Ex: "Ton garage mérite mieux." OU "Plancher époxy 5★ en 2 jours."
+- primary_text: 4 lignes courtes, total max 220 char. Structure OBLIGATOIRE:
+    Ligne 1: HOOK (problème vif OU rêve concret)
+    Ligne 2: BÉNÉFICE (transformation + 1 chiffre clé OU "mai 15%")
+    Ligne 3: URGENCE — "soumission gratuite par texto en 5 min" OU "places limitées mai"
+    Ligne 4: TÉLÉPHONE — DOIT contenir EXACTEMENT "📞 581-307-5983 — Luca" (beaucoup de clients préfèrent appeler direct, on garde ça top of mind)
+- Aucun prix exact (\$/pi² etc) dans le texte
+- Max 2 emojis dans tout le texte (le 📞 de la ligne 4 compte), aucun dans headline
+- Verbe à l'impératif/2e personne — "transforme", "imagine", "fini les..."
+- cta fixé à SIGN_UP
+
 ${promoLine}`;
 
-  const userPrompt = `Service: ${label}. Génère 1 annonce Lead Ad pour propriétaires 30-65 ans, rayon 55km Québec ville, intérêt rénovation garage.`;
+  const userPrompt = `Service à mettre en vedette: ${label} (${service}).
+Audience: propriétaires Québec ville et banlieue, 30-65 ans, intéressés rénovation garage/sous-sol.
+Objectif: lead form fill (soumission gratuite).
+
+Génère LA pub la plus accrocheuse possible. Pense impact en 1 seconde de scroll.`;
 
   try {
     const text = await callLLM({
       system,
       messages: [{ role: 'user', content: userPrompt }],
-      maxTokens: 400,
-      tier: 'smart',
+      maxTokens: 500,
+      tier: 'top', // Gemini 3.1 Pro — meilleure quality pour copywriting marketing
       jsonMode: true,
       agent: 'ads-generator',
       traceName: `ad-copy-${service}`,
     });
     const parsed = JSON.parse(text);
+    let primary = String(parsed.primary_text ?? '').slice(0, 500);
+    // Failsafe: si le LLM oublie le téléphone, on l'ajoute
+    if (!primary.includes('581-307-5983')) {
+      primary = primary.trim() + '\n📞 581-307-5983 — Luca';
+    }
     return {
       headline: String(parsed.headline ?? `Plancher ${label} premium`).slice(0, 40),
-      primary_text: String(parsed.primary_text ?? '').slice(0, 500),
-      cta: 'SIGN_UP', // Lead Ad always SIGN_UP
+      primary_text: primary,
+      cta: 'SIGN_UP',
     };
   } catch {
-    const promoTag = promo > 0 ? `Spécial printemps mai — ${promo}% rabais. ` : '';
+    const promoTag = promo > 0 ? `SPÉCIAL MAI — ${promo}% rabais.\n` : '';
     return {
-      headline: `Plancher ${label} premium`,
-      primary_text: `${promoTag}Transforme ton garage en espace premium. Soumission envoyée par SMS en moins de 5 minutes. Compagnie Québec — garantie écrite. 581-307-5983.`,
+      headline: `Ton garage mérite mieux`,
+      primary_text: `${promoTag}Transforme ton garage en espace premium.\nSoumission gratuite par texto en 5 min.\n📞 581-307-5983 — Luca`,
       cta: 'SIGN_UP',
     };
   }
