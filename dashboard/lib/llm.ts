@@ -52,6 +52,42 @@ type TextContent = { type: 'text'; text: string };
 type ImageContent = { type: 'image_url'; image_url: { url: string } };
 type MessageContent = string | Array<TextContent | ImageContent>;
 
+// Approx prices per million tokens (input/output) — kept in sync with OR_MODELS defaults.
+// Used for cost estimation only. Real cost data is on OpenRouter dashboard.
+const TIER_PRICES_PER_M: Record<LLMTier, { in: number; out: number }> = {
+  bulk:   { in: 0.10, out: 0.20 },
+  fast:   { in: 0.25, out: 1.50 },
+  medium: { in: 0.50, out: 3.00 },
+  smart:  { in: 1.25, out: 2.50 },
+  top:    { in: 2.00, out: 12.00 },
+};
+
+async function logLLMCall(params: {
+  agent: string;
+  tier: LLMTier;
+  model: string;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  latencyMs: number;
+  traceId?: string;
+  traceName?: string;
+  error?: string;
+}): Promise<void> {
+  try {
+    const { query } = await import('@/lib/db');
+    const price = TIER_PRICES_PER_M[params.tier];
+    const inTok = params.promptTokens ?? 0;
+    const outTok = params.completionTokens ?? 0;
+    const costUsd = (inTok * price.in + outTok * price.out) / 1_000_000;
+    await query(
+      `INSERT INTO llm_calls (agent, tier, model, prompt_tokens, completion_tokens, total_tokens, latency_ms, cost_usd, trace_id, trace_name, error)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+      [params.agent, params.tier, params.model, inTok, outTok, params.totalTokens ?? (inTok + outTok), params.latencyMs, costUsd.toFixed(6), params.traceId ?? null, params.traceName ?? null, params.error ?? null]
+    );
+  } catch { /* never block on cost logging */ }
+}
+
 /** Raw LLM call — returns text. Works for all non-streaming cases. */
 export async function callLLM({
   system,
@@ -61,6 +97,7 @@ export async function callLLM({
   jsonMode = false,
   traceId,
   traceName,
+  agent = 'system',
 }: {
   system?: string;
   messages: Array<{ role: 'user' | 'assistant'; content: MessageContent }>;
@@ -69,6 +106,7 @@ export async function callLLM({
   jsonMode?: boolean;
   traceId?: string;
   traceName?: string;
+  agent?: string;
 }): Promise<string> {
   const startTime = Date.now();
   let result = '';
@@ -102,6 +140,20 @@ export async function callLLM({
 
     const data = await res.json();
     result = (data.choices?.[0]?.message?.content as string) ?? '';
+    const latencyMs = Date.now() - startTime;
+
+    // Cost logging (fire-and-forget)
+    void logLLMCall({
+      agent,
+      tier,
+      model,
+      promptTokens: data.usage?.prompt_tokens,
+      completionTokens: data.usage?.completion_tokens,
+      totalTokens: data.usage?.total_tokens,
+      latencyMs,
+      traceId,
+      traceName,
+    });
 
     // Langfuse tracing (best-effort, never blocks the response)
     try {
@@ -114,7 +166,7 @@ export async function callLLM({
           input: { system, messages },
           output: result,
           usage: { totalTokens: data.usage?.total_tokens },
-          metadata: { tier, latencyMs: Date.now() - startTime },
+          metadata: { tier, latencyMs, agent },
         }).end({ output: result });
       }
     } catch { /* never block on observability */ }

@@ -18,7 +18,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const rows = await query(
     `SELECT id, client_nom, type_service, superficie, total, depot_requis, statut,
             deposit_paid_at, balance_paid_at, booking_id, contrat_signe_at,
-            rabais_pct, rabais_montant, sous_total, tps, tvq, prix_pied_carre
+            rabais_pct, rabais_montant, sous_total, tps, tvq, prix_pied_carre,
+            first_view_at
      FROM quotes WHERE id = $1 AND secret_token = $2`,
     [quoteId, token]
   );
@@ -28,6 +29,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   }
 
   const quote = rows[0];
+
+  // Mark first view (fire-and-forget, single shot per quote)
+  if (!quote.first_view_at) {
+    query(`UPDATE quotes SET first_view_at = NOW() WHERE id = $1 AND first_view_at IS NULL`, [quoteId]).catch(() => {});
+  }
 
   // Allow access for quotes that have been sent or later
   const allowedStatuts = ['envoye', 'contrat_signe', 'depot_paye', 'planifie', 'complete'];

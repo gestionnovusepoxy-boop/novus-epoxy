@@ -137,12 +137,67 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Telegram summary if anything sent
-  if (sent1 > 0 || sent2 > 0) {
+  // Relance "Vu non accepté" — quote first_view_at >= 24h ago, no acceptance, no vu-relance yet
+  // Higher intent → Telegram alert to Luca + Jason for personal follow-up (no auto email)
+  const vuQuotes = await query(
+    `SELECT id, client_nom, client_email, client_tel, total, first_view_at
+       FROM quotes
+      WHERE statut = 'envoye'
+        AND first_view_at IS NOT NULL
+        AND first_view_at <= NOW() - INTERVAL '24 hours'
+        AND relance_vu_at IS NULL`,
+    []
+  ).catch(() => []);
+
+  let alertedVu = 0;
+  if (vuQuotes.length > 0) {
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const chatIds = getAdminChatIds();
     if (botToken && chatIds.length) {
-      const msg = [`📬 <b>Relances soumissions</b>`, ``, `✅ Relance 1: ${sent1} envoyée(s)`, `🔔 Relance 2: ${sent2} envoyée(s) (avec SMS)`].join('\n');
+      for (const q of vuQuotes) {
+        const hoursAgo = Math.floor((Date.now() - new Date(q.first_view_at as string).getTime()) / 3_600_000);
+        const msg = [
+          `👀 <b>Devis CONSULTÉ mais pas accepté</b>`,
+          ``,
+          `Client: ${String(q.client_nom)}`,
+          `Total: $${Number(q.total).toFixed(2)}`,
+          q.client_tel ? `📞 ${String(q.client_tel)}` : '',
+          q.client_email ? `📧 ${String(q.client_email)}` : '',
+          ``,
+          `<b>Vu il y a ${hoursAgo}h</b> — chaud, contacte-le directement!`,
+        ].filter(Boolean).join('\n');
+        await Promise.all(chatIds.map(id =>
+          fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: id.trim(),
+              text: msg,
+              parse_mode: 'HTML',
+              reply_markup: {
+                inline_keyboard: [[
+                  { text: '📋 Voir devis', url: `${process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app'}/dashboard/devis/${q.id}` },
+                ]],
+              },
+            }),
+          }).catch(() => {})
+        ));
+        await query(`UPDATE quotes SET relance_vu_at = NOW() WHERE id = $1`, [q.id]);
+        alertedVu++;
+      }
+    }
+  }
+
+  // Telegram summary if anything sent
+  if (sent1 > 0 || sent2 > 0 || alertedVu > 0) {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatIds = getAdminChatIds();
+    if (botToken && chatIds.length) {
+      const parts = [`📬 <b>Relances soumissions</b>`, ``];
+      if (sent1 > 0) parts.push(`✅ Relance 1: ${sent1} envoyée(s)`);
+      if (sent2 > 0) parts.push(`🔔 Relance 2: ${sent2} envoyée(s) (avec SMS)`);
+      if (alertedVu > 0) parts.push(`👀 Alerte "vu non accepté": ${alertedVu} client(s) signalé(s)`);
+      const msg = parts.join('\n');
       await Promise.all(chatIds.map(id =>
         fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
@@ -157,5 +212,6 @@ export async function GET(req: NextRequest) {
     ok: true,
     relance_1: { found: relance1.length, sent: sent1 },
     relance_2: { found: relance2.length, sent: sent2 },
+    vu_alert: { found: vuQuotes.length, alerted: alertedVu },
   });
 }

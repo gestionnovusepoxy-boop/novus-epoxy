@@ -99,6 +99,14 @@
     {
       "path": "/api/cron/monthly-accounting",
       "schedule": "0 13 1 * *"
+    },
+    {
+      "path": "/api/cron/worker-reminders",
+      "schedule": "0 22 * * *"
+    },
+    {
+      "path": "/api/cron/meta-ads-spend",
+      "schedule": "0 10 * * *"
     }
   ],
   "headers": [
