@@ -7,6 +7,7 @@ import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { sendSMS } from '@/lib/sms';
 import { google } from 'googleapis';
+import { runAction } from '@/lib/composio';
 
 export const maxDuration = 60;
 
@@ -68,7 +69,9 @@ IMPORTANT:
 - Si quelqu'un demande quels leads contacter en priorité → utilise scorer_leads
 - Si quelqu'un veut savoir comment approcher un lead spécifique → utilise plan_attaque
 - Si quelqu'un veut un message de relance → utilise generer_relance_ia puis propose envoyer_sms
-- Tu peux agir: créer devis, envoyer SMS, modifier statuts, scorer leads, générer relances
+- Si quelqu'un demande un rapport / export / tableau → utilise generer_rapport_sheets
+- Si quelqu'un veut planifier un RDV / chantier → utilise creer_event_calendar
+- Tu peux agir: créer devis, envoyer SMS, modifier statuts, scorer leads, générer relances, créer des rapports Sheets, planifier des events Calendar
 
 Date: ${new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
 
@@ -508,6 +511,50 @@ Date: ${new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric
             });
           }
           return emails;
+        },
+      }),
+
+      generer_rapport_sheets: tool({
+        description: 'Génère un rapport Google Sheets (CRM ou revenus) et retourne le lien. Utilise quand quelqu\'un demande un rapport, export CRM, ou statistiques en tableau.',
+        parameters: z.object({
+          type: z.enum(['crm', 'revenue']).describe('crm = leads par source/statut/température, revenue = revenus par mois'),
+        }),
+        execute: async ({ type }) => {
+          const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.srv1478812.hstgr.cloud';
+          try {
+            const res = await fetch(`${base}/api/composio/sheets-report`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type }),
+            });
+            const data = await res.json() as { url?: string; title?: string; error?: string };
+            if (data.url) return { url: data.url, titre: data.title, statut: 'ok' };
+            return { erreur: data.error ?? 'rapport échoué — connecte Google Sheets dans Intégrations' };
+          } catch (err) {
+            return { erreur: String(err) };
+          }
+        },
+      }),
+
+      creer_event_calendar: tool({
+        description: 'Crée un événement Google Calendar. Utilise pour planifier des RDV, suivis, chantiers.',
+        parameters: z.object({
+          titre: z.string().describe('Titre de l\'événement'),
+          date: z.string().describe('Date et heure ISO (ex: 2026-05-30T09:00:00)'),
+          duree_minutes: z.number().optional().describe('Durée en minutes (défaut: 60)'),
+          description: z.string().optional().describe('Notes / détails'),
+        }),
+        execute: async ({ titre, date, duree_minutes = 60, description }) => {
+          const start = new Date(date);
+          const end = new Date(start.getTime() + duree_minutes * 60000);
+          const result = await runAction('GOOGLECALENDAR_CREATE_EVENT', {
+            summary: titre,
+            start: { dateTime: start.toISOString(), timeZone: 'America/Toronto' },
+            end: { dateTime: end.toISOString(), timeZone: 'America/Toronto' },
+            description: description ?? '',
+          });
+          if (result.ok) return { statut: 'créé', titre, date: start.toLocaleString('fr-CA') };
+          return { erreur: result.error ?? 'Événement non créé — connecte Google Calendar dans Intégrations' };
         },
       }),
     },
