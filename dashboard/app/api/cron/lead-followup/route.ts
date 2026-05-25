@@ -45,7 +45,12 @@ export async function GET(req: NextRequest) {
        AND TRIM(email) != ''
        AND (last_agent_reply_at IS NULL OR last_agent_reply_at < NOW() - INTERVAL '4 days')
        AND created_at < NOW() - INTERVAL '4 days'
-       AND COALESCE(followup_count, 0) < 2`
+       AND COALESCE(followup_count, 0) < 2
+       AND NOT EXISTS (
+         SELECT 1 FROM email_logs
+         WHERE destinataire = crm_leads.email
+           AND created_at > NOW() - INTERVAL '48 hours'
+       )`
   );
 
   let sent = 0;

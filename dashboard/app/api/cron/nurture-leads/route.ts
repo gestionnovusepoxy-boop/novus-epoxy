@@ -121,6 +121,9 @@ function buildNurture3Html(prenom: string, photos: { url: string; caption: strin
 <div style="background:#f1f5f9;padding:12px 24px;text-align:center;border-radius:0 0 8px 8px;">
   <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Québec, G2N 1G8 | novusepoxy.ca</p>
 </div>
+<div style="text-align:center;padding:12px;background:#f8fafc;">
+  <p style="color:#94a3b8;font-size:11px;margin:0;">Pour ne plus recevoir nos communications: <a href="mailto:gestionnovusepoxy@gmail.com?subject=Désabonnement" style="color:#94a3b8;">cliquez ici</a></p>
+</div>
 </div></body></html>`;
 }
 
@@ -164,6 +167,9 @@ function buildNurture5Html(prenom: string, promo?: { nom: string; description: s
 </div>
 <div style="background:#f1f5f9;padding:12px 24px;text-align:center;border-radius:0 0 8px 8px;">
   <p style="color:#94a3b8;font-size:11px;margin:0;">Novus Epoxy — 44 rue de la Polyvalente, Québec, G2N 1G8 | novusepoxy.ca</p>
+</div>
+<div style="text-align:center;padding:12px;background:#f8fafc;">
+  <p style="color:#94a3b8;font-size:11px;margin:0;">Pour ne plus recevoir nos communications: <a href="mailto:gestionnovusepoxy@gmail.com?subject=Désabonnement" style="color:#94a3b8;">cliquez ici</a></p>
 </div>
 </div></body></html>`;
 }
@@ -226,6 +232,11 @@ export async function GET(req: NextRequest) {
          AND statut NOT IN ('contacte', 'converti', 'ferme', 'perdu')
          AND email IS NOT NULL AND email != ''
          AND (notes IS NULL OR notes NOT LIKE '%Nurture-3%')
+         AND NOT EXISTS (
+           SELECT 1 FROM email_logs
+           WHERE destinataire = crm_leads.email
+             AND created_at > NOW() - INTERVAL '48 hours'
+         )
        ORDER BY prospect_relance_2_at ASC
        LIMIT 20`,
       [],
@@ -318,6 +329,11 @@ export async function GET(req: NextRequest) {
          AND statut NOT IN ('contacte', 'converti', 'ferme', 'perdu')
          AND email IS NOT NULL AND email != ''
          AND (notes IS NULL OR notes NOT LIKE '%Nurture-5%')
+         AND NOT EXISTS (
+           SELECT 1 FROM email_logs
+           WHERE destinataire = crm_leads.email
+             AND created_at > NOW() - INTERVAL '48 hours'
+         )
        ORDER BY updated_at ASC
        LIMIT 20`,
       [],
