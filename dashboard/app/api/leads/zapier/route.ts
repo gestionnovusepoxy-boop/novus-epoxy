@@ -3,6 +3,7 @@ import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
+import { scoreLead } from '@/lib/lead-scoring';
 
 // Map FB form free-text answers to CRM service codes
 function normalizeService(raw: string | null): string | null {
@@ -113,8 +114,12 @@ export async function POST(req: NextRequest) {
   ].filter(Boolean);
   const notes = noteParts.join(' — ');
 
+  // --- Auto-score temperature (chaud/tiède/froid) ---
+  const scoring = scoreLead({ nom, email, telephone, service, superficie, espace, adresse, source: 'facebook-zapier' });
+
   // --- Atomic dedupe via INSERT ... ON CONFLICT (race-condition safe) ---
   let newLeadId: number | undefined;
+  const notesWithScore = `${notes} — Score ${scoring.score} [${scoring.reasons.join(',')}]`;
   const crmResult = await query(
     `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, adresse, source, statut, temperature, notes, type)
      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -130,8 +135,8 @@ export async function POST(req: NextRequest) {
       adresse,
       'facebook-zapier',
       'nouveau',
-      'chaud',
-      notes,
+      scoring.temperature,
+      notesWithScore,
       'residential',
     ],
   );

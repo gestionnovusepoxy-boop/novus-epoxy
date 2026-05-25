@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote } from '@/lib/pricing';
+import { scoreLead } from '@/lib/lead-scoring';
 
 export const maxDuration = 60;
 
@@ -238,15 +239,16 @@ export async function GET(req: NextRequest) {
     const adresse = (fields['quel_est_votre_adresse_complete_des_travaux?'] ?? '').trim().slice(0, 255) || null;
     const ville = adresse ? extractVille(adresse) : null;
 
-    const notes = `Lead Facebook Ad #${lead.id}${espace ? ` — Espace: ${espace}` : ''}${service ? ` — Service: ${service}` : ''}${superficie ? ` — Superficie: ${superficie} pi²` : ''}${adresse ? ` — Adresse: ${adresse}` : ''}`;
+    const scoring = scoreLead({ nom, email, telephone, service, superficie, espace, adresse, source: 'facebook-leadad' });
+    const notes = `Lead Facebook Ad #${lead.id}${espace ? ` — Espace: ${espace}` : ''}${service ? ` — Service: ${service}` : ''}${superficie ? ` — Superficie: ${superficie} pi²` : ''}${adresse ? ` — Adresse: ${adresse}` : ''} — Score ${scoring.score} [${scoring.reasons.join(',')}]`;
 
     try {
       const result = await query(
         `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, adresse, source, statut, temperature, notes, type, created_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'facebook-leadad','nouveau','chaud',$8,'residential',$9)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'facebook-leadad','nouveau',$8,$9,'residential',$10)
          ON CONFLICT (email) WHERE email IS NOT NULL AND email != '' DO NOTHING
          RETURNING id`,
-        [nom, email, telephone, service, superficie, ville, adresse, notes, lead.created_time]
+        [nom, email, telephone, service, superficie, ville, adresse, scoring.temperature, notes, lead.created_time]
       );
 
       if (result?.[0]?.id) {

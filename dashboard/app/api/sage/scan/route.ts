@@ -169,11 +169,18 @@ export async function POST(req: Request) {
   let rejected = 0;
   let alreadyImported = 0;
   let totalAdded = 0;
+  const scanStartMs = Date.now();
+  const BUDGET_MS = 240_000; // 4 min — leave 1 min buffer before Vercel 5-min cap
+  let budgetHit = false;
 
   for (const file of driveFiles) {
     if (totalAdded >= MAX_ADD_PER_SCAN) {
       results.push({ name: file.name ?? '', type: 'limit', status: 'limite atteinte — prochain scan' });
       continue;
+    }
+    if (Date.now() - scanStartMs > BUDGET_MS) {
+      budgetHit = true;
+      break;
     }
 
     const fileId = file.id!;
@@ -295,7 +302,31 @@ export async function POST(req: Request) {
         });
 
       } else {
-        // ── PHOTOS: download, upload, classify, filter ──
+        // ── PHOTOS: classify via thumbnail FIRST (skip download for rejects) ──
+        let thumbnailUrl = file.thumbnailLink;
+        if (!thumbnailUrl) {
+          const meta = await drive.files.get({ fileId, fields: 'thumbnailLink' });
+          thumbnailUrl = meta.data.thumbnailLink;
+        }
+
+        // Classify on thumbnail if available (saves ~80% of bandwidth on rejects)
+        if (thumbnailUrl) {
+          const bigThumb = thumbnailUrl.replace(/=s\d+/, '=s800');
+          const cPre = await classifyMedia(bigThumb, fileName, false);
+          if (!cPre.portfolio_worthy || cPre.quality_score < MIN_QUALITY) {
+            results.push({ name: fileName, type: 'photo', status: 'rejeté (thumb)', quality: cPre.quality_score, reason: cPre.reject_reason ?? `Score ${cPre.quality_score}/10` });
+            rejected++;
+            continue;
+          }
+          const count = typeCounts[cPre.type_service] ?? 0;
+          if (count >= 20) {
+            results.push({ name: fileName, type: 'photo', status: 'rejeté (thumb)', quality: cPre.quality_score, reason: `Portfolio saturé en ${cPre.type_service}` });
+            rejected++;
+            continue;
+          }
+        }
+
+        // Pre-classified worthy (or no thumbnail) → download full
         const downloadRes = await drive.files.get(
           { fileId, alt: 'media' },
           { responseType: 'arraybuffer' },
@@ -321,6 +352,7 @@ export async function POST(req: Request) {
           contentType: mime || 'image/jpeg',
         });
 
+        // Re-classify on full-res blob (more accurate scoring for final decision)
         const c = await classifyMedia(blob.url, fileName, false);
 
         if (!c.portfolio_worthy || c.quality_score < MIN_QUALITY) {
@@ -371,11 +403,13 @@ export async function POST(req: Request) {
   const totalVideos = driveFiles.filter(f => isVideoMime(f.mimeType ?? '')).length;
 
   return NextResponse.json({
-    message: `Sage a analysé ${totalMedia} médias (${totalPhotos} photos, ${totalVideos} vidéos): ${photosAdded} photos + ${videosAdded} vidéos sélectionnées, ${rejected} rejetés, ${alreadyImported} déjà importés`,
+    message: `Sage a analysé ${totalMedia} médias (${totalPhotos} photos, ${totalVideos} vidéos): ${photosAdded} photos + ${videosAdded} vidéos sélectionnées, ${rejected} rejetés, ${alreadyImported} déjà importés${budgetHit ? ' — budget temps épuisé, relancer pour continuer' : ''}`,
     scanned: { total: totalMedia, photos: totalPhotos, videos: totalVideos },
     added: { photos: photosAdded, videos: videosAdded, total: totalAdded },
     rejected,
     already_imported: alreadyImported,
+    budget_hit: budgetHit,
+    elapsed_ms: Date.now() - scanStartMs,
     seuil_qualite: `${MIN_QUALITY}/10 minimum`,
     results,
   });

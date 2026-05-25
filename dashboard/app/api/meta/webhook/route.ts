@@ -6,6 +6,7 @@ import { getOrCreateConversation, processMessage } from '@/lib/agent';
 import { sendSMS } from '@/lib/sms';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
+import { scoreLead } from '@/lib/lead-scoring';
 
 // GET — Meta webhook verification (subscribe handshake)
 export async function GET(req: NextRequest) {
@@ -267,7 +268,11 @@ async function handleLeadgen(change: Record<string, unknown>) {
       ],
     );
 
-    // 2. Insert into crm_leads with ALL fields (service, superficie, adresse, ville, espace)
+    // 2. Auto-score temperature (chaud/tiède/froid) — never blanket 'chaud'
+    const scoring = scoreLead({ nom, email, telephone, service, superficie, espace, adresse, source: 'facebook-leadad' });
+    const notesWithScore = `${noteParts} — Score ${scoring.score} [${scoring.reasons.join(',')}]`;
+
+    // 3. Insert into crm_leads with ALL fields (service, superficie, adresse, ville, espace)
     const crmResult = await query(
       `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, adresse, source, statut, temperature, notes, type)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
@@ -283,8 +288,8 @@ async function handleLeadgen(change: Record<string, unknown>) {
         adresse,
         'facebook-leadad',
         'nouveau',
-        'chaud',
-        noteParts,
+        scoring.temperature,
+        notesWithScore,
         'residential',
       ],
     );
