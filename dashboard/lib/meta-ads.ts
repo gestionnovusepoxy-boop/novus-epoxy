@@ -593,20 +593,9 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
     }
     const adsetId = adsetData.id;
 
-    // 3) Upload image to Meta (returns hash)
-    const imageRes = await fetch(`https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/adimages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: String(d.image_url), access_token: token }),
-    });
-    const imageData = await imageRes.json();
-    if (!imageRes.ok || !imageData.images) {
-      return { error: `Image upload failed: ${imageData.error?.message ?? JSON.stringify(imageData)}` };
-    }
-    const imageHash = Object.values(imageData.images)[0] as { hash: string };
-
-    // 4) Create ad creative — Lead Ad linked to existing form
-    // Form ID overridable via META_LEAD_FORM_ID env; defaults to wired form 1645385520039445
+    // 3) Create ad creative — uses `picture` URL directly (no adimages upload required).
+    // Bypasses Marketing API "Standard Access tier" requirement — works with app's
+    // existing Limited tier + ads_management scope.
     const leadFormId = (process.env.META_LEAD_FORM_ID ?? DEFAULT_LEAD_FORM_ID).trim();
     const creativeRes = await fetch(`https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/adcreatives`, {
       method: 'POST',
@@ -616,7 +605,7 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
         object_story_spec: {
           page_id: NOVUS_PAGE_ID,
           link_data: {
-            image_hash: imageHash.hash,
+            picture: String(d.image_url),
             // Lead Ads: link points to the form's facebook URL (Meta hands form natively)
             link: `https://fb.me/${leadFormId}`,
             message: String(d.primary_text),
