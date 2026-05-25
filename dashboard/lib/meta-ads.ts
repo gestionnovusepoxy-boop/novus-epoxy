@@ -280,37 +280,106 @@ export async function buildAdDraft(input: AdDraftInput): Promise<AdDraft> {
   };
 }
 
-/** Send the draft to Telegram group with photo preview + Approve button. */
+/** Send the draft to Telegram group: photo + short caption, then detailed breakdown with buttons. */
 export async function sendDraftToTelegram(draft: AdDraft, chatId: string): Promise<boolean> {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) return false;
 
+  const serviceLabel = SERVICE_LABELS[draft.service] ?? draft.service;
   const totalBudget = draft.daily_budget_usd * draft.duration_days;
-  const caption = [
-    `📢 <b>Nouvelle pub Facebook prête</b>`,
-    ``,
-    `<b>${SERVICE_LABELS[draft.service] ?? draft.service}</b>`,
+  const endDate = new Date(Date.now() + draft.duration_days * 86400_000).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' });
+  const formId = (process.env.META_LEAD_FORM_ID ?? '1645385520039445').trim();
+  // CPL benchmark for home-services Quebec ~$25-50 CAD
+  const estLeadsLow = Math.floor(totalBudget * 1.36 / 50);
+  const estLeadsHigh = Math.floor(totalBudget * 1.36 / 25);
+
+  // STEP 1 — Photo with hero caption (1024 char max)
+  const heroCaption = [
+    `📢 <b>Nouvelle pub Facebook — ${serviceLabel}</b>`,
     ``,
     `🎯 <b>${draft.headline}</b>`,
     ``,
     draft.primary_text,
-    ``,
-    `━━━━━━━━━━`,
-    `💰 Budget: <b>$${draft.daily_budget_usd}/jour × ${draft.duration_days}j = $${totalBudget}</b> USD`,
-    `🎯 CTA: ${draft.cta}`,
-    `📸 Image: ${draft.image_source === 'sage' ? 'portfolio Sage' : '✨ générée IA'}`,
-    `📍 Audience: Québec, 25-65 ans, intérêt rénovation`,
-    ``,
-    `<i>Mode: PAUSED — tu valides avant LIVE</i>`,
-  ].join('\n');
+  ].join('\n').slice(0, 1024);
 
-  const res = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+  const photoRes = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       chat_id: chatId,
       photo: draft.image_url,
-      caption: caption.slice(0, 1024),
+      caption: heroCaption,
+      parse_mode: 'HTML',
+    }),
+  });
+  const photoJ = await photoRes.json();
+  if (!photoJ.ok) {
+    console.error('Telegram sendPhoto failed:', photoJ);
+    // Fallback: send as URL message if photo fails
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text: `📷 Image: ${draft.image_url}`, parse_mode: 'HTML' }),
+    });
+  }
+
+  // STEP 2 — Detailed breakdown + buttons
+  const details = [
+    `📋 <b>DÉTAILS COMPLETS — Pub #${draft.id}</b>`,
+    ``,
+    `<b>💼 SERVICE</b>`,
+    `${serviceLabel}`,
+    ``,
+    `<b>💰 BUDGET & DURÉE</b>`,
+    `$${draft.daily_budget_usd}/jour × ${draft.duration_days} jours = <b>$${totalBudget} USD</b> total`,
+    `Se termine: <b>${endDate}</b>`,
+    `Conversion CAD ≈ <b>$${(totalBudget * 1.36).toFixed(0)} CAD</b>`,
+    ``,
+    `<b>🎯 TARGETING</b>`,
+    `📍 Rayon <b>55 km</b> autour de Québec ville (Lévis, Beauport, Charlesbourg, Sainte-Foy inclus)`,
+    `👥 Âge: <b>30-65 ans</b>`,
+    `🏠 Behaviors: Propriétaires`,
+    `❤️ Intérêts: Rénovation, Home improvement, Garage`,
+    `🗣 Langue: Français`,
+    `🚫 Montréal exclu`,
+    ``,
+    `<b>📝 FORMULAIRE LEAD AD</b>`,
+    `Form ID: <code>${formId}</code> (déjà actif)`,
+    `Champs demandés: nom, tél, email, service, superficie, espace, adresse`,
+    `→ Lead arrive direct dans CRM en <b>&lt;5 sec</b>`,
+    `→ Devis brouillon auto + bouton Approuver dans le groupe`,
+    `→ SMS+email au client en <b>&lt;5 min</b> après ton clic`,
+    ``,
+    `<b>⚙️ CONFIG META</b>`,
+    `Objectif: <code>OUTCOME_LEADS</code>`,
+    `Optimization: <code>LEAD_GENERATION</code>`,
+    `Bid: <code>LOWEST_COST_WITHOUT_CAP</code> (auto-bid)`,
+    `Placements: Advantage+ (Feed FB + IG + Reels + Stories)`,
+    `CTA: <code>SIGN_UP</code> (ouvre form natif dans FB)`,
+    ``,
+    `<b>📸 IMAGE</b>`,
+    `Source: ${draft.image_source === 'sage' ? '📁 portfolio Sage' : draft.image_source === 'llm' ? '✨ générée IA (Gemini 3 Pro)' : '📤 uploadée par toi'}`,
+    ``,
+    `<b>📊 PROJECTION (CPL Québec ~$25-50)</b>`,
+    `Leads estimés sur ${draft.duration_days}j: <b>${estLeadsLow}-${estLeadsHigh}</b>`,
+    `Pipeline: lead → devis auto → close ~25% = <b>${Math.floor(estLeadsLow * 0.25)}-${Math.floor(estLeadsHigh * 0.25)} projets fermés</b>`,
+    ``,
+    `━━━━━━━━━━━━━━━━━━━━━━`,
+    `<b>⏸ MODE: PAUSED jusqu'à approbation</b>`,
+    ``,
+    `Si tu cliques <b>✅ Approuver</b>:`,
+    `1. Pause auto des anciennes pubs Novus actives`,
+    `2. Crée campagne PAUSED dans Meta Ads Manager`,
+    `3. Te donne lien direct pour activer le toggle`,
+    `4. Leads commencent dès toggle ON`,
+  ].join('\n');
+
+  const detailsRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      chat_id: chatId,
+      text: details.slice(0, 4096),
       parse_mode: 'HTML',
       reply_markup: {
         inline_keyboard: [
@@ -319,15 +388,16 @@ export async function sendDraftToTelegram(draft: AdDraft, chatId: string): Promi
             { text: '❌ Rejeter', callback_data: `reject_ad_${draft.id}` },
           ],
           [
-            { text: '🔁 Régénérer', callback_data: `regen_ad_${draft.id}` },
+            { text: '🔁 Régénérer (autre copy/photo)', callback_data: `regen_ad_${draft.id}` },
           ],
         ],
       },
     }),
   });
-  const j = await res.json();
-  if (!j.ok) console.error('Telegram sendPhoto failed:', j);
-  return Boolean(j.ok);
+  const detailsJ = await detailsRes.json();
+  if (!detailsJ.ok) console.error('Telegram details failed:', detailsJ);
+
+  return Boolean(photoJ.ok && detailsJ.ok);
 }
 
 /**
