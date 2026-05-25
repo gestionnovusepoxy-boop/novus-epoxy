@@ -1537,54 +1537,60 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
   // GROUP MESSAGE: respond to "Aria ...", auto-detect leads, hours, or process CSV files
   // Photos and videos in group fall through to the shared handlers below
   if (isGroup) {
-    // Photo + caption "pub <service>" or "ad <service>" → create FB Lead Ad draft with this image
-    if (isAdmin && message.photo && typeof message.caption === 'string') {
-      const cap = String(message.caption).toLowerCase().trim();
-      const adMatch = cap.match(/^(?:pub|ad|annonce)\s+(flake|metallique|m[eé]tallique|quartz|couleur[_\s]unie|antiderapant|antid[eé]rapant|commercial|meulage|vinyl(?:_click)?)\s*(\d+)?/i);
-      if (adMatch) {
-        const svcRaw = adMatch[1].toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\s+/g, '_');
-        const svcMap: Record<string, string> = {
-          flake: 'flake', metallique: 'metallique', quartz: 'quartz',
-          couleur_unie: 'couleur_unie', antiderapant: 'antiderapant',
-          commercial: 'commercial', meulage: 'meulage',
-          vinyl: 'vinyl_click', vinyl_click: 'vinyl_click',
-        };
-        const service = svcMap[svcRaw] ?? 'flake';
-        const budget = adMatch[2] ? Math.min(parseInt(adMatch[2]), 50) : 30; // default $30/day
-
-        await sendTelegram(chatId, `📸 <b>Photo reçue!</b>\n\nService: ${service}\nBudget: $${budget}/jour\n\n⏳ Je télécharge ton image et je prépare la pub...`);
-
-        try {
-          // Get highest-res photo from the array
-          const photos = message.photo as Array<{ file_id: string; file_size?: number; width: number; height: number }>;
-          const best = photos.sort((a, b) => (b.width * b.height) - (a.width * a.height))[0];
-          const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${best.file_id}`);
-          const fileData = await fileRes.json();
-          if (!fileData.result?.file_path) throw new Error('Cannot get file path from Telegram');
-
-          const dlRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${fileData.result.file_path}`);
-          const buffer = Buffer.from(await dlRes.arrayBuffer());
-          const ext = (fileData.result.file_path.split('.').pop() ?? 'jpg').toLowerCase();
-          const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
-
-          const { put } = await import('@vercel/blob');
-          const blob = await put(`ads-creatives/tg-${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`, buffer, {
-            access: 'public', addRandomSuffix: false, contentType: mime,
-          });
-
-          const { buildAdDraft, sendDraftToTelegram } = await import('@/lib/meta-ads');
-          const draft = await buildAdDraft({
-            service: service as 'flake',
-            dailyBudgetUsd: budget,
-            durationDays: 7,
-            customImageUrl: blob.url,
-          });
-          await sendDraftToTelegram(draft, chatId);
-        } catch (err) {
-          await sendTelegram(chatId, `❌ Erreur: ${(err as Error).message.slice(0, 250)}`);
-        }
-        return NextResponse.json({ ok: true });
+    // ANY photo dropped by admin in group → treat as ad creative
+    // Caption flexible: looks for service keyword + optional budget; defaults flake/$30
+    if (isAdmin && message.photo) {
+      const cap = String(message.caption ?? '').toLowerCase().trim();
+      // Detect service anywhere in caption (no "pub" prefix required)
+      let service = 'flake'; // default if nothing matches
+      const svcKeywords: Array<[RegExp, string]> = [
+        [/m[eé]tallique?|metal\b/i, 'metallique'],
+        [/quartz/i, 'quartz'],
+        [/couleur[\s_]?unie?|uni\b/i, 'couleur_unie'],
+        [/antid[eé]rapant|anti[\s-]?d[eé]rapant/i, 'antiderapant'],
+        [/commercial|industriel/i, 'commercial'],
+        [/meulage|diamant|poli/i, 'meulage'],
+        [/vinyl|click|flottant/i, 'vinyl_click'],
+        [/flocon|flake/i, 'flake'],
+      ];
+      for (const [rx, svc] of svcKeywords) {
+        if (rx.test(cap)) { service = svc; break; }
       }
+      // Detect budget number (1-2 digits up to 50)
+      const budgetMatch = cap.match(/\$?\s*(\d{2,3})\s*\$?(?:\s*\/?\s*j(?:our)?)?/i);
+      const budget = budgetMatch ? Math.min(parseInt(budgetMatch[1]), 50) : 30;
+
+      await sendTelegram(chatId, `📸 <b>Photo reçue!</b>\n\nService détecté: <b>${service}</b>\nBudget: <b>$${budget}/jour</b>\n\n⏳ Je télécharge et prépare la pub...`);
+
+      try {
+        const photos = message.photo as Array<{ file_id: string; file_size?: number; width: number; height: number }>;
+        const best = photos.sort((a, b) => (b.width * b.height) - (a.width * a.height))[0];
+        const fileRes = await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/getFile?file_id=${best.file_id}`);
+        const fileData = await fileRes.json();
+        if (!fileData.result?.file_path) throw new Error('Cannot get file path from Telegram');
+
+        const dlRes = await fetch(`https://api.telegram.org/file/bot${BOT_TOKEN()}/${fileData.result.file_path}`);
+        const buffer = Buffer.from(await dlRes.arrayBuffer());
+        const ext = (fileData.result.file_path.split('.').pop() ?? 'jpg').toLowerCase();
+        const mime = ext === 'png' ? 'image/png' : 'image/jpeg';
+
+        const { put } = await import('@vercel/blob');
+        const blob = await put(`ads-creatives/tg-${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`, buffer, {
+          access: 'public', addRandomSuffix: false, contentType: mime,
+        });
+
+        const { buildAdDraft, sendDraftToTelegram } = await import('@/lib/meta-ads');
+        const draft = await buildAdDraft({
+          service: service as 'flake',
+          dailyBudgetUsd: budget,
+          durationDays: 7,
+          customImageUrl: blob.url,
+        });
+        await sendDraftToTelegram(draft, chatId);
+      } catch (err) {
+        await sendTelegram(chatId, `❌ Erreur: ${(err as Error).message.slice(0, 250)}`);
+      }
+      return NextResponse.json({ ok: true });
     }
 
     // Photos and videos in group → fall through to shared photo/video handlers below
