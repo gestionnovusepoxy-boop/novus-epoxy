@@ -1,12 +1,15 @@
 /**
- * lib/llm.ts — Centralized LLM routing via OpenRouter + Langfuse observability
+ * lib/llm.ts — Centralized LLM routing via OpenRouter (NO Anthropic, May 2026 stack)
  *
- * Tiers:
- *   bulk   → deepseek/deepseek-v3   ($0.14/$0.28 per M) — lead scoring, bulk classification, summaries
- *   fast   → google/gemini-flash-1.5-8b ($0.04/$0.15 per M) — parsing, ping, simple tasks
- *   medium → google/gemini-flash-1.5    ($0.075/$0.30 per M) — short agents, analysis
- *   smart  → anthropic/claude-sonnet-4-5 ($3/$15 per M)    — agents, email, content
- *   top    → anthropic/claude-opus-4    ($15/$75 per M)    — Marcel, critical decisions
+ * Live-priced from openrouter.ai/api/v1/models on 2026-05-25:
+ *   bulk   → deepseek/deepseek-v4-flash       $0.10/$0.20 per M  (1M ctx) — bulk classify, scoring
+ *   fast   → google/gemini-3.1-flash-lite     $0.25/$1.50 per M  (1M ctx) — ping, parsing
+ *   medium → google/gemini-3-flash-preview    $0.50/$3.00 per M  (1M ctx) — short agents
+ *   smart  → x-ai/grok-4.20                   $1.25/$2.50 per M  (2M ctx) — Aria, content, email
+ *   top    → google/gemini-3.1-pro-preview    $2.00/$12.00 per M (1M ctx) — Marcel, reasoning
+ *
+ * Override per env: OR_MODEL_BULK / FAST / MEDIUM / SMART / TOP
+ * Alternates: openai/gpt-5.5 ($5/$30), openai/gpt-5.4 ($2.50/$15), x-ai/grok-4.20-multi-agent ($2/$6, 2M ctx).
  */
 
 import { createOpenAI } from '@ai-sdk/openai';
@@ -14,11 +17,11 @@ import { createOpenAI } from '@ai-sdk/openai';
 export type LLMTier = 'bulk' | 'fast' | 'medium' | 'smart' | 'top';
 
 export const OR_MODELS: Record<LLMTier, string> = {
-  bulk:   'deepseek/deepseek-v3',
-  fast:   'google/gemini-flash-1.5-8b',
-  medium: 'google/gemini-flash-1.5',
-  smart:  'anthropic/claude-sonnet-4-5',
-  top:    'anthropic/claude-opus-4',
+  bulk:   process.env.OR_MODEL_BULK   ?? 'deepseek/deepseek-v4-flash',
+  fast:   process.env.OR_MODEL_FAST   ?? 'google/gemini-3.1-flash-lite',
+  medium: process.env.OR_MODEL_MEDIUM ?? 'google/gemini-3-flash-preview',
+  smart:  process.env.OR_MODEL_SMART  ?? 'x-ai/grok-4.20',
+  top:    process.env.OR_MODEL_TOP    ?? 'google/gemini-3.1-pro-preview',
 };
 
 function isOpenRouter(): boolean {
@@ -119,57 +122,22 @@ export async function callLLM({
     return result;
   }
 
-  // Fallback: Anthropic direct API
-  const modelMap: Record<LLMTier, string> = {
-    bulk:   'claude-haiku-4-5-20251001',
-    fast:   'claude-haiku-4-5-20251001',
-    medium: 'claude-haiku-4-5-20251001',
-    smart:  'claude-sonnet-4-6',
-    top:    'claude-opus-4-6',
-  };
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': process.env.ANTHROPIC_API_KEY ?? '',
-      'anthropic-version': '2023-06-01',
-      'content-type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: modelMap[tier],
-      max_tokens: maxTokens,
-      ...(system ? { system } : {}),
-      messages,
-    }),
-  });
-
-  if (!res.ok) throw new Error(`Anthropic error ${res.status}`);
-  const data = await res.json();
-  return (data.content?.[0]?.text as string) ?? '';
+  // No OPENROUTER_API_KEY configured — surface a hard error so it's not silently lost.
+  throw new Error('OPENROUTER_API_KEY missing — set it in Vercel env. No Anthropic fallback.');
 }
 
-/** Vercel AI SDK model instance for streamText/generateText */
+/** Vercel AI SDK model instance for streamText/generateText (OpenRouter only). */
 export function getStreamingModel(tier: LLMTier = 'smart') {
-  if (isOpenRouter()) {
-    const openrouter = createOpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
-      apiKey: process.env.OPENROUTER_API_KEY ?? '',
-      headers: {
-        'HTTP-Referer': 'https://novusepoxy.ca',
-        'X-Title': 'Novus Epoxy',
-      },
-    });
-    return openrouter(OR_MODELS[tier]);
+  if (!isOpenRouter()) {
+    throw new Error('OPENROUTER_API_KEY missing — set it in Vercel env. No Anthropic fallback.');
   }
-
-  // Fallback: use @ai-sdk/anthropic
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { anthropic } = require('@ai-sdk/anthropic');
-  const modelMap: Record<LLMTier, string> = {
-    bulk:   'claude-haiku-4-5-20251001',
-    fast:   'claude-haiku-4-5-20251001',
-    medium: 'claude-haiku-4-5-20251001',
-    smart:  'claude-sonnet-4-6',
-    top:    'claude-opus-4-6',
-  };
-  return anthropic(modelMap[tier]);
+  const openrouter = createOpenAI({
+    baseURL: 'https://openrouter.ai/api/v1',
+    apiKey: process.env.OPENROUTER_API_KEY ?? '',
+    headers: {
+      'HTTP-Referer': 'https://novusepoxy.ca',
+      'X-Title': 'Novus Epoxy',
+    },
+  });
+  return openrouter(OR_MODELS[tier]);
 }
