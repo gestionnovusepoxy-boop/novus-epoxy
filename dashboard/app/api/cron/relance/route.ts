@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { sendFollowUpSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
+import { getQuebecHour } from '@/lib/timezone';
 
 export const maxDuration = 60;
 
@@ -17,6 +19,10 @@ export async function GET(req: NextRequest) {
   if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Only run during business hours (8h–20h Quebec) — no SMS/emails at night
+  const h = getQuebecHour();
+  if (h < 8 || h >= 20) return NextResponse.json({ skipped: 'outside business hours' });
 
   // Find quotes sent but not responded to, with no relance or relance due
   // Relance 1: sent >= 48h ago, no relance_1_at
@@ -75,6 +81,7 @@ export async function GET(req: NextRequest) {
 </div>
 </div></body></html>`;
 
+    if (!q.client_email) continue;
     try {
       await sendEmail({ to: q.client_email as string, subject: `${prenom}, votre soumission Novus Epoxy vous attend`, html });
       await query(`UPDATE quotes SET relance_1_at = NOW() WHERE id = $1`, [q.id]);
@@ -114,6 +121,7 @@ export async function GET(req: NextRequest) {
 </div>
 </div></body></html>`;
 
+    if (!q.client_email) continue;
     try {
       await sendEmail({ to: q.client_email as string, subject: `Dernière chance — votre projet époxy, ${prenom}`, html });
       await query(`UPDATE quotes SET relance_2_at = NOW() WHERE id = $1`, [q.id]);
@@ -126,6 +134,22 @@ export async function GET(req: NextRequest) {
       }
     } catch (err) {
       console.error('Relance 2 error:', err);
+    }
+  }
+
+  // Telegram summary if anything sent
+  if (sent1 > 0 || sent2 > 0) {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatIds = getAdminChatIds();
+    if (botToken && chatIds.length) {
+      const msg = [`📬 <b>Relances soumissions</b>`, ``, `✅ Relance 1: ${sent1} envoyée(s)`, `🔔 Relance 2: ${sent2} envoyée(s) (avec SMS)`].join('\n');
+      await Promise.all(chatIds.map(id =>
+        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: id.trim(), text: msg, parse_mode: 'HTML' }),
+        }).catch(() => {})
+      ));
     }
   }
 

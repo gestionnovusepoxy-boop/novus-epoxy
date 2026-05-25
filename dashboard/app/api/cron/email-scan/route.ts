@@ -405,8 +405,8 @@ Reponds en JSON strict (sans markdown):
   }
 
   await query(
-    `UPDATE crm_leads SET statut = 'interesse', temperature = $1, last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $2`,
-    [temperature, leadId]
+    `UPDATE crm_leads SET statut = CASE WHEN $1 = 'NON_INTERESSE' THEN 'contacte' ELSE 'interesse' END, temperature = $2, last_agent_reply_at = NOW(), updated_at = NOW() WHERE id = $3`,
+    [parsed.type, temperature, leadId]
   );
 
   // 8b. Get lead phone for Telegram alert

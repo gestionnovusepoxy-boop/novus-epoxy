@@ -1,3 +1,4 @@
+import { getQuebecHour } from '@/lib/timezone';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
@@ -14,6 +15,10 @@ export async function GET(req: NextRequest) {
   if (!authHeader || (authHeader !== cronSecret && authHeader !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+
+  // Only run during business hours (8h-20h Quebec)
+  const _h = getQuebecHour();
+  if (_h < 8 || _h >= 20) return NextResponse.json({ skipped: "outside business hours" });
 
   // Relance 1: prospect sent 48h+ ago, still nouveau/contacte, no relance_1
   const r1 = await query(
@@ -35,7 +40,7 @@ export async function GET(req: NextRequest) {
   const r2 = await query(
     `SELECT id, nom, email, notes, service, type FROM crm_leads
      WHERE prospect_sent_at IS NOT NULL
-       AND prospect_sent_at <= NOW() - INTERVAL '5 days'
+       AND prospect_relance_1_at <= NOW() - INTERVAL '5 days'
        AND prospect_relance_1_at IS NOT NULL
        AND prospect_relance_2_at IS NULL
        AND statut IN ('nouveau', 'contacte', 'offre_envoyee')
