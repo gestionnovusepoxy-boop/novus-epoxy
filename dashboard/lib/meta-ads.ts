@@ -209,7 +209,7 @@ Génère LA pub la plus accrocheuse possible. Pense impact en 1 seconde de scrol
       system,
       messages: [{ role: 'user', content: userPrompt }],
       maxTokens: 500,
-      tier: 'top', // Gemini 3.1 Pro — meilleure quality pour copywriting marketing
+      tier: 'smart', // Grok 4.20 — supporte json_object mode garanti
       jsonMode: true,
       agent: 'ads-generator',
       traceName: `ad-copy-${service}`,
