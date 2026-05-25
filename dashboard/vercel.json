@@ -91,6 +91,10 @@
     {
       "path": "/api/crm/leads/sync-ghl",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/soustraitants-paie",
+      "schedule": "0 13 * * 6"
     }
   ],
   "headers": [
