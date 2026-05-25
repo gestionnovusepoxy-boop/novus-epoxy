@@ -125,7 +125,14 @@ export async function GET(req: NextRequest) {
       } catch (err) { console.error('Reminder jour2 email failed:', err); }
     }
 
-    // Pas de SMS jour 2 — le client sait déjà, on évite le spam
+    // SMS jour 2 — important: client doit être à la maison pour la finition + 72h d'éviction
+    if (r.client_tel) {
+      const prenom = (r.client_nom as string).split(' ')[0];
+      await sendSMS(
+        r.client_tel as string,
+        `Salut ${prenom}! C'est Luca de Novus Epoxy. L'équipe arrive ${periode} à ${heures} pour la finition de ton plancher. Important: prévoir 72h avant de marcher dessus après les travaux. Questions: 581-307-5983`
+      ).catch(err => console.error('Reminder jour2 SMS failed:', err));
+    }
 
     await query(`UPDATE bookings SET rappel_jour2_sent = TRUE WHERE id = $1`, [r.booking_id]);
     rappelsJour2++;

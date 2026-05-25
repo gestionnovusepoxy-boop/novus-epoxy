@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
     FROM quotes q
     JOIN bookings b ON b.quote_id = q.id
     WHERE b.statut = 'complete'
-      AND q.statut IN ('planifie', 'depot_paye')
+      AND q.statut IN ('planifie', 'depot_paye', 'complete')
       AND NOT EXISTS (
         SELECT 1 FROM invoices inv
         JOIN payments p ON p.invoice_id = inv.id
@@ -158,9 +158,18 @@ export async function GET(req: NextRequest) {
     );
 
     const chatIds = ADMIN_CHAT_IDS();
-    const msg = `Travaux termines pour <b>#${q.id}</b> -- balance <b>${formatMoney(balance)}</b> en attente\nClient: ${q.client_nom}`;
+    const msg = `💰 <b>Balance en attente!</b>\n\n👤 ${q.client_nom}\n📋 Devis #${q.id}\n💵 Balance: <b>${formatMoney(balance)}</b>\n\n⚡ Contacter le client pour le paiement final.`;
+    const buttons = JSON.stringify({ inline_keyboard: [[
+      { text: '📋 Voir dashboard', url: 'https://novus-epoxy.vercel.app/dashboard/devis' },
+    ]]});
     for (const chatId of chatIds) {
-      await sendTelegram(chatId, msg);
+      const token = BOT_TOKEN();
+      if (!token) continue;
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML', reply_markup: buttons }),
+      }).catch(() => {});
     }
 
     balanceAlerts++;
