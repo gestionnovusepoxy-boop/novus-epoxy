@@ -56,7 +56,7 @@ function pickPhotos(portfolio: PortfolioPhoto[], count = 3): { url: string; capt
 // HTML builders — Novus Epoxy branded (dark header, gold #f59e0b accent)
 // ---------------------------------------------------------------------------
 
-function buildNurture3Html(prenom: string, photos: { url: string; caption: string }[]): string {
+function buildNurture3Html(prenom: string, photos: { url: string; caption: string }[], promo?: { nom: string; description: string; rabais_pct: string; date_fin: string } | null, promoText?: string | null, promoDeadline?: string | null): string {
   const photoGrid = photos.map((p, i) => {
     const pl = i === 0 ? '0' : '4px';
     const pr = i === photos.length - 1 ? '0' : '4px';
@@ -103,10 +103,10 @@ function buildNurture3Html(prenom: string, photos: { url: string; caption: strin
   ${photoGrid ? `<p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 8px;">Quelques-unes de nos réalisations :</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr>${photoGrid}</tr></table>` : ''}
 
-  <div style="background:#ecfdf5;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #6ee7b7;">
-    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">Spécial mai — 15% de rabais!</p>
+  ${promo ? `<div style="background:#ecfdf5;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #6ee7b7;">
+    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">${promo.nom} — ${promoText}!</p>
     <p style="color:#047857;font-size:13px;margin:0;">Le rabais s'applique automatiquement à votre soumission.</p>
-  </div>
+  </div>` : ''}
 
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
     On peut vous aider à faire le bon choix — <strong>répondez à ce courriel</strong> ou appelez-nous directement.
@@ -124,7 +124,7 @@ function buildNurture3Html(prenom: string, photos: { url: string; caption: strin
 </div></body></html>`;
 }
 
-function buildNurture5Html(prenom: string): string {
+function buildNurture5Html(prenom: string, promo?: { nom: string; description: string; rabais_pct: string; date_fin: string } | null, promoText?: string | null, promoDeadline?: string | null): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f8fafc;">
 <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
 <div style="background:#0f172a;padding:24px;text-align:center;border-radius:8px 8px 0 0;">
@@ -138,10 +138,10 @@ function buildNurture5Html(prenom: string): string {
     C'est un dernier message de notre part. On ne veut pas vous importuner, mais on voulait vous informer de deux choses :
   </p>
 
-  <div style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:20px;margin:0 0 20px;text-align:center;">
-    <p style="color:#dc2626;font-weight:700;font-size:18px;margin:0 0 8px;">Le rabais de 15% se termine bientôt</p>
-    <p style="color:#475569;font-size:14px;margin:0;">Profitez-en avant la fin du mois de mai!</p>
-  </div>
+  ${promo ? `<div style="background:#fef2f2;border:2px solid #ef4444;border-radius:12px;padding:20px;margin:0 0 20px;text-align:center;">
+    <p style="color:#dc2626;font-weight:700;font-size:18px;margin:0 0 8px;">Le ${promoText} se termine bientôt</p>
+    <p style="color:#475569;font-size:14px;margin:0;">Profitez-en avant le ${promoDeadline}!</p>
+  </div>` : ''}
 
   <div style="background:#f0fdf4;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #86efac;">
     <p style="color:#166534;font-size:14px;margin:0;">
@@ -201,6 +201,14 @@ export async function GET(req: NextRequest) {
   const portfolio = await loadPortfolio();
   const photos = pickPhotos(portfolio, 3);
 
+  // Promo active — lue depuis la DB (jamais hardcodée)
+  const promoRows = await query(
+    `SELECT nom, description, rabais_pct, date_fin FROM promotions WHERE actif = true AND date_fin >= NOW() ORDER BY created_at DESC LIMIT 1`
+  ).catch(() => []);
+  const promo = promoRows[0] as { nom: string; description: string; rabais_pct: string; date_fin: string } | undefined;
+  const promoText = promo ? `${Math.round(Number(promo.rabais_pct))}% de rabais` : null;
+  const promoDeadline = promo ? new Date(promo.date_fin as string).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' }) : null;
+
   let touch3Sent = 0;
   let touch4Sent = 0;
   let touch5Sent = 0;
@@ -228,7 +236,7 @@ export async function GET(req: NextRequest) {
       if (isBlacklisted(lead.email, lead.telephone)) continue;
 
       const prenom = getPrenom(lead.nom);
-      const html = buildNurture3Html(prenom, photos);
+      const html = buildNurture3Html(prenom, photos, promo, promoText, promoDeadline);
       const subject = `${prenom}, 3 erreurs à éviter avant de faire poser un plancher époxy`;
 
       try {
@@ -276,7 +284,9 @@ export async function GET(req: NextRequest) {
       if (daysSince < 7) continue;
 
       const prenom = getPrenom(lead.nom);
-      const smsText = `Bonjour ${prenom}! C'est Luca de Novus Epoxy. Notre rabais de 15% en mai se termine bientôt. Si vous avez des questions sur votre projet, je suis disponible au 581-307-5983. Bonne journée!`;
+      const smsText = promoText
+        ? `Bonjour ${prenom}! C'est Luca de Novus Epoxy. Notre ${promoText} se termine le ${promoDeadline}. Des questions sur votre projet? 581-307-5983. Bonne journée!`
+        : `Bonjour ${prenom}! C'est Luca de Novus Epoxy. Si vous avez des questions sur votre projet de plancher époxy, je suis disponible au 581-307-5983. Bonne journée!`;
 
       try {
         const sent = await sendSMS(lead.telephone!, smsText);
@@ -325,8 +335,8 @@ export async function GET(req: NextRequest) {
       if (daysSince < 8) continue;
 
       const prenom = getPrenom(lead.nom);
-      const html = buildNurture5Html(prenom);
-      const subject = `${prenom}, dernière chance — rabais mai 15%`;
+      const html = buildNurture5Html(prenom, promo, promoText, promoDeadline);
+      const subject = promoText ? `${prenom}, dernière chance — ${promoText}` : `${prenom}, un dernier mot de Novus Epoxy`;
 
       try {
         await sendProspectEmail({ to: lead.email!, subject, html });
