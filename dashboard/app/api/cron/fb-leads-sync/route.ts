@@ -115,17 +115,64 @@ export async function GET(req: NextRequest) {
   }
 
   const accessToken = process.env.META_PAGE_TOKEN;
-  if (!accessToken) return NextResponse.json({ error: 'META_PAGE_TOKEN missing' }, { status: 500 });
+  if (!accessToken) {
+    // Alert admins — token missing
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatIds = getAdminChatIds();
+    if (botToken && chatIds.length) {
+      await Promise.all(chatIds.map(id =>
+        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: id.trim(), text: `🚨 <b>LEADS FACEBOOK BLOQUÉS!</b>\n\n<b>META_PAGE_TOKEN manquant dans Vercel.</b>\n\nLes leads FB ne rentrent pas. Va dans Vercel → Settings → Environment Variables et ajoute META_PAGE_TOKEN.`, parse_mode: 'HTML' }),
+        }).catch(() => {})
+      ));
+    }
+    return NextResponse.json({ error: 'META_PAGE_TOKEN missing' }, { status: 500 });
+  }
+
+  // Validate token before proceeding
+  const pageId = '636757822863288';
+  const tokenCheck = await fetch(`https://graph.facebook.com/v25.0/me?access_token=${accessToken}`);
+  const tokenData = await tokenCheck.json();
+  if (tokenData.error) {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const chatIds = getAdminChatIds();
+    if (botToken && chatIds.length) {
+      const msg = [
+        `🚨 <b>LEADS FACEBOOK BLOQUÉS — TOKEN EXPIRÉ!</b>`,
+        ``,
+        `Erreur Meta: ${tokenData.error.message}`,
+        ``,
+        `⚠️ <b>Aucun lead Facebook ne rentre tant que ce n'est pas fixé.</b>`,
+        ``,
+        `<b>Pour obtenir un token permanent:</b>`,
+        `1. Va sur business.facebook.com`,
+        `2. Settings → Utilisateurs système → Créer utilisateur système`,
+        `3. Ajouter à la page + à l'app avec rôle Admin`,
+        `4. Générer token → cocher: leads_retrieval, pages_manage_ads, pages_read_engagement`,
+        `5. Copier le token dans Vercel env: META_PAGE_TOKEN`,
+      ].join('\n');
+      await Promise.all(chatIds.map(id =>
+        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: id.trim(), text: msg, parse_mode: 'HTML' }),
+        }).catch(() => {})
+      ));
+    }
+    return NextResponse.json({ error: 'META_PAGE_TOKEN expired', detail: tokenData.error.message }, { status: 401 });
+  }
 
   // Fetch all active forms on the page, then sync leads from each
-  const pageId = '636757822863288';
   const formsRes = await fetch(
     `https://graph.facebook.com/v25.0/${pageId}/leadgen_forms?fields=id,status,leads_count&limit=50&access_token=${accessToken}`
   );
   if (!formsRes.ok) return NextResponse.json({ error: 'Meta forms API error', status: formsRes.status });
   const formsData = await formsRes.json();
+  // Include ACTIVE forms + forms with recent leads (in case form is archived but has new leads)
   const activeForms: Array<{ id: string; leads_count: number }> = (formsData.data ?? [])
-    .filter((f: { status: string; leads_count: number }) => f.status === 'ACTIVE' && f.leads_count > 0);
+    .filter((f: { status: string; leads_count: number }) => (f.status === 'ACTIVE' || f.status === 'ARCHIVED') && f.leads_count > 0);
 
   let imported = 0;
   let skipped = 0;
