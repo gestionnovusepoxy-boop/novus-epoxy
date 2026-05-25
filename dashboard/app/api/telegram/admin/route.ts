@@ -517,7 +517,7 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       const id = Number(input.id);
       const type = input.type as string; // 'depot' ou 'solde'
       const col = type === 'solde' ? 'balance_paid_at' : 'deposit_paid_at';
-      const newStatut = type === 'solde' ? 'complete' : 'planifie';
+      const newStatut = type === 'solde' ? 'complete' : 'depot_paye';
       await query(`UPDATE quotes SET ${col} = NOW(), statut = $1 WHERE id = $2`, [newStatut, id]);
       return JSON.stringify({ ok: true, devis_id: id, paiement: type, nouveau_statut: newStatut });
     }

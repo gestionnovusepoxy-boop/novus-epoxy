@@ -242,8 +242,8 @@ export async function POST(req: NextRequest) {
     const smsMsg = smsLines.join(' | ');
     const adminPhone = process.env.ADMIN_PHONE;
     const jasonPhone = process.env.JASON_PHONE;
-    if (adminPhone) sendSMS(adminPhone, smsMsg).catch(() => {});
-    if (jasonPhone) sendSMS(jasonPhone, smsMsg).catch(() => {});
+    if (adminPhone) sendSMS(adminPhone, smsMsg, undefined, true).catch(() => {});
+    if (jasonPhone) sendSMS(jasonPhone, smsMsg, undefined, true).catch(() => {});
   }
 
   return NextResponse.json({

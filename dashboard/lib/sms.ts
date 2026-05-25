@@ -6,12 +6,14 @@ const TWILIO_SID = () => process.env.TWILIO_ACCOUNT_SID ?? '';
 const TWILIO_TOKEN = () => process.env.TWILIO_AUTH_TOKEN ?? '';
 const TWILIO_FROM = () => process.env.TWILIO_PHONE_NUMBER ?? '';
 
-export async function sendSMS(to: string, body: string, fromOverride?: string, _skipQuietHours = true): Promise<boolean> {
+export async function sendSMS(to: string, body: string, fromOverride?: string, skipQuietHours = false): Promise<boolean> {
   // Quiet hours: JAMAIS de SMS avant 8h ou après 21h Eastern — ordre du patron, non négociable
-  const hour = getQuebecHour();
-  if (hour < 8 || hour >= 21) {
-    console.log(`[SMS] BLOQUE — heures calmes (${hour}h ET) — SMS non envoye a ${to}`);
-    return false;
+  if (!skipQuietHours) {
+    const hour = getQuebecHour();
+    if (hour < 8 || hour >= 21) {
+      console.log(`[SMS] BLOQUE — heures calmes (${hour}h ET) — SMS non envoye a ${to}`);
+      return false;
+    }
   }
 
   const sid = TWILIO_SID();

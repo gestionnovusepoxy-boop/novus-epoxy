@@ -32,6 +32,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Whitelist allowed toolkits
+  const ALLOWED_TOOLKITS = ['GOOGLESHEETS', 'GMAIL', 'GOOGLECALENDAR', 'SLACK', 'GOOGLEDRIVE'];
+  if (!ALLOWED_TOOLKITS.includes(toolkit.toUpperCase())) {
+    return NextResponse.json({ error: 'Toolkit non autorisé' }, { status: 400 });
+  }
+
   // Generate connect URL for a toolkit
   const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.srv1478812.hstgr.cloud';
   try {

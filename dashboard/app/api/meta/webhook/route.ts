@@ -299,8 +299,8 @@ async function handleLeadgen(change: Record<string, unknown>) {
       const smsMsg = `🔥 LEAD FB - Contacte ASAP! ${nom} - ${telephone ?? 'N/A'} - ${email}`;
       const adminPhone = process.env.ADMIN_PHONE;
       const jasonPhone = process.env.JASON_PHONE;
-      if (adminPhone) sendSMS(adminPhone, smsMsg).catch(() => {});
-      if (jasonPhone) sendSMS(jasonPhone, smsMsg).catch(() => {});
+      if (adminPhone) sendSMS(adminPhone, smsMsg, undefined, true).catch(() => {});
+      if (jasonPhone) sendSMS(jasonPhone, smsMsg, undefined, true).catch(() => {});
 
       // NOTE: Aria auto-contact DISABLED — Luca/Jason contactent les leads eux-mêmes
     }
