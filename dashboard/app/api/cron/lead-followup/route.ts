@@ -36,13 +36,15 @@ export async function GET(req: NextRequest) {
   if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
   // 1. Find leads ready for follow-up
+  // Include leads where last_agent_reply_at IS NULL (never auto-replied) but created >4 days ago
   const leads = await query(
     `SELECT id, nom, email, service, superficie
      FROM crm_leads
      WHERE statut = 'contacte'
        AND email IS NOT NULL
        AND TRIM(email) != ''
-       AND last_agent_reply_at < NOW() - INTERVAL '4 days'
+       AND (last_agent_reply_at IS NULL OR last_agent_reply_at < NOW() - INTERVAL '4 days')
+       AND created_at < NOW() - INTERVAL '4 days'
        AND COALESCE(followup_count, 0) < 2`
   );
 

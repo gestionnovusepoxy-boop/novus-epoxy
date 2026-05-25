@@ -164,7 +164,12 @@ IMPORTANT pour les clients:
 
   // Extract JSON from response (handle markdown code blocks)
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  return JSON.parse(jsonMatch?.[0] ?? '{}');
+  try {
+    return JSON.parse(jsonMatch?.[0] ?? '{}');
+  } catch {
+    console.error('[email-scan] Claude returned invalid JSON:', text.slice(0, 200));
+    return { type: 'autre', summary: 'Analyse échouée', needs_attention: false };
+  }
 }
 
 function brandedEmailHtml(bodyHtml: string, showQuoteButton = true): string {

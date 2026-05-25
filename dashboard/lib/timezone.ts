@@ -1,22 +1,22 @@
 // Quebec timezone utilities — always use these instead of manual calculations
 export function getQuebecNow(): Date {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Toronto' }));
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Montreal' }));
 }
 
 export function getQuebecHour(): number {
-  return parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Toronto', hour: 'numeric', hour12: false }));
+  return parseInt(new Date().toLocaleString('en-US', { timeZone: 'America/Montreal', hour: 'numeric', hour12: false }));
 }
 
 export function getQuebecDate(): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Toronto' });
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Montreal' });
 }
 
 export function getQuebecDay(): number {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Toronto' })).getDay();
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Montreal' })).getDay();
 }
 
 export function getQuebecDayOfMonth(): number {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Toronto' })).getDate();
+  return new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Montreal' })).getDate();
 }
 
 export function isBusinessHours(): boolean {
@@ -25,9 +25,9 @@ export function isBusinessHours(): boolean {
 }
 
 export function formatQuebecDate(date: Date | string): string {
-  return new Date(date).toLocaleDateString('fr-CA', { timeZone: 'America/Toronto', year: 'numeric', month: 'long', day: 'numeric' });
+  return new Date(date).toLocaleDateString('fr-CA', { timeZone: 'America/Montreal', year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 export function formatQuebecTime(date: Date | string): string {
-  return new Date(date).toLocaleTimeString('fr-CA', { timeZone: 'America/Toronto', hour: '2-digit', minute: '2-digit' });
+  return new Date(date).toLocaleTimeString('fr-CA', { timeZone: 'America/Montreal', hour: '2-digit', minute: '2-digit' });
 }
