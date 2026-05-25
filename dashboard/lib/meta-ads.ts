@@ -539,7 +539,10 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
   if (!rows.length) return { error: 'Draft not found' };
   const d = rows[0] as Record<string, unknown>;
   const dailyBudgetCents = Math.round(Number(d.daily_budget_usd ?? 50) * 100);
-  const targeting = d.target_audience ?? DEFAULT_TARGETING;
+  // Always use fresh DEFAULT_TARGETING — DB-stored target_audience may contain
+  // stale interest/behavior IDs from earlier code. Override draft schema later
+  // when we let user customize targeting via UI.
+  const targeting = DEFAULT_TARGETING;
 
   try {
     // 1) Create campaign (PAUSED) — Meta requires is_adset_budget_sharing_enabled
