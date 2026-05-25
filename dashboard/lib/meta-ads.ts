@@ -550,7 +550,8 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
   const targeting = d.target_audience ?? DEFAULT_TARGETING;
 
   try {
-    // 1) Create campaign (PAUSED) — OUTCOME_LEADS needs special_ad_categories array
+    // 1) Create campaign (PAUSED) — Meta requires is_adset_budget_sharing_enabled
+    //    when budget is at adset level (not campaign level)
     const campRes = await fetch(`https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/campaigns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -558,8 +559,9 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
         name: `Novus ${String(d.service)} — ${new Date().toISOString().slice(0,10)}`,
         objective: 'OUTCOME_LEADS',
         status: 'PAUSED',
-        special_ad_categories: ['NONE'],
+        special_ad_categories: [],
         buying_type: 'AUCTION',
+        is_adset_budget_sharing_enabled: false,
         access_token: token,
       }),
     });
