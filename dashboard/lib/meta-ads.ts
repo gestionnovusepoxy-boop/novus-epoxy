@@ -12,6 +12,8 @@ import { query } from '@/lib/db';
 
 const META_API_VERSION = 'v25.0';
 const NOVUS_PAGE_ID = '636757822863288';
+// Default Lead Ad form (already active, wired to /api/meta/webhook)
+const DEFAULT_LEAD_FORM_ID = '1645385520039445';
 
 export interface AdDraftInput {
   service: 'flake' | 'metallique' | 'quartz' | 'couleur_unie' | 'antiderapant' | 'commercial' | 'meulage' | 'vinyl_click';
@@ -45,16 +47,25 @@ const SERVICE_LABELS: Record<string, string> = {
   vinyl_click: 'Vinyl click',
 };
 
-// Default targeting: Quebec province, age 25-65, home/renovation interest
+// Default targeting: 55km radius around Quebec City, age 30-65, homeowner +
+// renovation interest. MTL exclu. Broad audience pour Advantage+ optimization
+// sur le LEAD event. (user 2026-05-25: 55km only, no MTL)
 const DEFAULT_TARGETING = {
-  geo_locations: { regions: [{ key: '524', name: 'Quebec' }] },
-  age_min: 25,
+  geo_locations: {
+    custom_locations: [
+      { latitude: 46.8139, longitude: -71.2080, radius: 55, distance_unit: 'kilometer', name: 'Quebec City' },
+    ],
+  },
+  age_min: 30,
   age_max: 65,
   flexible_spec: [{
     interests: [
       { id: '6003020834693', name: 'Home improvement' },
       { id: '6003107902433', name: 'Renovation' },
       { id: '6003277229095', name: 'Garage' },
+    ],
+    behaviors: [
+      { id: '6002714895372', name: 'Homeowners' },
     ],
   }],
   locales: [6, 24], // French (Canada), French
@@ -339,7 +350,7 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
     }
     const campaignId = campData.id;
 
-    // 2) Create ad set (PAUSED)
+    // 2) Create ad set (PAUSED) — destination_type ON_AD routes to Lead Form on the ad
     const adsetRes = await fetch(`https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/adsets`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -349,6 +360,8 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
         daily_budget: dailyBudgetCents,
         billing_event: 'IMPRESSIONS',
         optimization_goal: 'LEAD_GENERATION',
+        destination_type: 'ON_AD',
+        promoted_object: { page_id: NOVUS_PAGE_ID },
         bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
         targeting,
         status: 'PAUSED',
@@ -374,20 +387,26 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
     }
     const imageHash = Object.values(imageData.images)[0] as { hash: string };
 
-    // 4) Create ad creative
+    // 4) Create ad creative — Lead Ad linked to existing form
+    // Form ID overridable via META_LEAD_FORM_ID env; defaults to wired form 1645385520039445
+    const leadFormId = (process.env.META_LEAD_FORM_ID ?? DEFAULT_LEAD_FORM_ID).trim();
     const creativeRes = await fetch(`https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/adcreatives`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        name: `${String(d.service)} creative`,
+        name: `${String(d.service)} creative — Lead Ad`,
         object_story_spec: {
           page_id: NOVUS_PAGE_ID,
           link_data: {
             image_hash: imageHash.hash,
-            link: 'https://novusepoxy.ca/#contact',
+            // Lead Ads: link points to the form's facebook URL (Meta hands form natively)
+            link: `https://fb.me/${leadFormId}`,
             message: String(d.primary_text),
             name: String(d.headline),
-            call_to_action: { type: String(d.cta) },
+            call_to_action: {
+              type: 'SIGN_UP', // CTA shown on the ad — opens form on click
+              value: { lead_gen_form_id: leadFormId },
+            },
           },
         },
         access_token: token,
