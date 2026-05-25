@@ -136,9 +136,17 @@ export async function GET(req: NextRequest) {
   const tokenCheck = await fetch(`https://graph.facebook.com/v25.0/me?access_token=${accessToken}`);
   const tokenData = await tokenCheck.json();
   if (tokenData.error) {
+    // Rate-limit the token expiry alert to once per 4h (prevents 288 alerts/day from 5-min cron)
+    const alertKey = 'meta_token_expired_alert';
+    const lastAlert = await query(`SELECT value FROM kv_store WHERE key = $1`, [alertKey]).catch(() => []);
+    const lastAlertTime = lastAlert[0]?.value ? new Date(String(lastAlert[0].value)) : null;
+    const shouldAlert = !lastAlertTime || (Date.now() - lastAlertTime.getTime()) > 4 * 60 * 60 * 1000;
+    if (shouldAlert) {
+      await query(`INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`, [alertKey, new Date().toISOString()]).catch(() => {});
+    }
     const botToken = process.env.TELEGRAM_BOT_TOKEN;
     const chatIds = getAdminChatIds();
-    if (botToken && chatIds.length) {
+    if (shouldAlert && botToken && chatIds.length) {
       const msg = [
         `🚨 <b>LEADS FACEBOOK BLOQUÉS — TOKEN EXPIRÉ!</b>`,
         ``,
@@ -260,10 +268,8 @@ export async function GET(req: NextRequest) {
               [existingLead.telephone]
             ).catch(() => []);
             if (!hasQuote?.length) {
-              const quoteId = await tryCreateDraftQuote(existingLead.id as number, existingLead.nom as string, existingLead.email as string | null, existingLead.telephone as string | null, existingLead.adresse as string | null, service, superficie);
-              if (quoteId) {
-                await notifyTelegram(existingLead.nom as string, existingLead.email as string ?? '', existingLead.telephone as string | null, { service: service ?? undefined, espace: espace ?? undefined, superficie: superficie ?? undefined, adresse: adresse ?? undefined, quoteId });
-              }
+              // Note: no Telegram notification here — lead was already notified via webhook
+              await tryCreateDraftQuote(existingLead.id as number, existingLead.nom as string, existingLead.email as string | null, existingLead.telephone as string | null, existingLead.adresse as string | null, service, superficie);
             }
           }
         }

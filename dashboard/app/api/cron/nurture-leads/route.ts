@@ -22,13 +22,15 @@ function isBlacklisted(email?: string | null, phone?: string | null): boolean {
 
 async function sendTelegram(text: string) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
-  const chatId = getAdminChatIds()[0];
-  if (!token || !chatId) return;
-  await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
-  }).catch(() => {});
+  const chatIds = getAdminChatIds();
+  if (!token || !chatIds.length) return;
+  await Promise.all(chatIds.map(id =>
+    fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: id.trim(), text, parse_mode: 'HTML' }),
+    }).catch(() => {})
+  ));
 }
 
 function getPrenom(nom: string): string {
