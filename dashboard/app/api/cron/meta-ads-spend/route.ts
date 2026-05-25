@@ -60,14 +60,17 @@ export async function GET(req: NextRequest) {
   );
   const totalLeads = Number((leadRows[0] as Record<string, unknown>).n ?? 0);
 
-  // 4) Upsert per-campaign spend
-  let totalSpendUsd = 0;
+  // 4) Upsert per-campaign spend.
+  // Meta returns spend in the AD ACCOUNT'S currency. Quebec ad account 250180039560083
+  // is in CAD → spend value IS already CAD. If account were USD, set USD_CAD_RATE env
+  // to convert. Default is 1.0 (treat-as-CAD).
+  let totalSpendNative = 0;
   for (const item of items) {
-    const spendUsd = Number(item.spend ?? 0);
-    totalSpendUsd += spendUsd;
-    // Meta returns USD by default; approximate CAD with 1.36 if no currency conversion configured
-    const fxRate = Number(process.env.USD_CAD_RATE ?? '1.36');
-    const spendCad = spendUsd * fxRate;
+    const spendNative = Number(item.spend ?? 0);
+    totalSpendNative += spendNative;
+    const fxRate = Number(process.env.USD_CAD_RATE ?? '1.0');
+    const spendCad = spendNative * fxRate;
+    const spendUsd = spendNative; // kept in legacy column name; value is account currency (CAD here)
     await query(
       `INSERT INTO meta_ads_spend (date_day, ad_account_id, campaign_id, campaign_name, spend_usd, spend_cad, impressions, clicks, raw_data)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb)
@@ -84,8 +87,8 @@ export async function GET(req: NextRequest) {
   }
 
   // 5) Set leads_count + cpl_cad at account level (sum row) — write a synthetic 'TOTAL' row
-  const fxRate = Number(process.env.USD_CAD_RATE ?? '1.36');
-  const totalSpendCad = totalSpendUsd * fxRate;
+  const fxRate = Number(process.env.USD_CAD_RATE ?? '1.0');
+  const totalSpendCad = totalSpendNative * fxRate;
   const cplCad = totalLeads > 0 ? totalSpendCad / totalLeads : null;
   await query(
     `INSERT INTO meta_ads_spend (date_day, ad_account_id, campaign_id, campaign_name, spend_usd, spend_cad, leads_count, cpl_cad)
@@ -96,7 +99,7 @@ export async function GET(req: NextRequest) {
        leads_count = EXCLUDED.leads_count,
        cpl_cad = EXCLUDED.cpl_cad,
        synced_at = NOW()`,
-    [dateStr, adAccountId, totalSpendUsd, totalSpendCad, totalLeads, cplCad]
+    [dateStr, adAccountId, totalSpendNative, totalSpendCad, totalLeads, cplCad]
   );
 
   return NextResponse.json({
@@ -104,7 +107,7 @@ export async function GET(req: NextRequest) {
     date: dateStr,
     ad_account: adAccountId,
     campaigns: items.length,
-    spend_usd: totalSpendUsd,
+    spend_native: totalSpendNative,
     spend_cad: Number(totalSpendCad.toFixed(2)),
     leads: totalLeads,
     cpl_cad: cplCad ? Number(cplCad.toFixed(2)) : null,

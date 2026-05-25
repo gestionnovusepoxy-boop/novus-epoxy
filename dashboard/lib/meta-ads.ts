@@ -286,12 +286,14 @@ export async function sendDraftToTelegram(draft: AdDraft, chatId: string): Promi
   if (!token) return false;
 
   const serviceLabel = SERVICE_LABELS[draft.service] ?? draft.service;
-  const totalBudget = draft.daily_budget_usd * draft.duration_days;
+  // Compte pub en CAD (Quebec) — daily_budget_usd column kept for legacy schema name
+  // but values stored/displayed are CAD.
+  const totalBudgetCad = draft.daily_budget_usd * draft.duration_days;
   const endDate = new Date(Date.now() + draft.duration_days * 86400_000).toLocaleDateString('fr-CA', { day: 'numeric', month: 'long' });
   const formId = (process.env.META_LEAD_FORM_ID ?? '1645385520039445').trim();
   // CPL benchmark for home-services Quebec ~$25-50 CAD
-  const estLeadsLow = Math.floor(totalBudget * 1.36 / 50);
-  const estLeadsHigh = Math.floor(totalBudget * 1.36 / 25);
+  const estLeadsLow = Math.floor(totalBudgetCad / 50);
+  const estLeadsHigh = Math.floor(totalBudgetCad / 25);
 
   // STEP 1 — Photo with hero caption (1024 char max)
   const heroCaption = [
@@ -331,9 +333,8 @@ export async function sendDraftToTelegram(draft: AdDraft, chatId: string): Promi
     `${serviceLabel}`,
     ``,
     `<b>💰 BUDGET & DURÉE</b>`,
-    `$${draft.daily_budget_usd}/jour × ${draft.duration_days} jours = <b>$${totalBudget} USD</b> total`,
+    `$${draft.daily_budget_usd} CAD/jour × ${draft.duration_days} jours = <b>$${totalBudgetCad} CAD</b> total`,
     `Se termine: <b>${endDate}</b>`,
-    `Conversion CAD ≈ <b>$${(totalBudget * 1.36).toFixed(0)} CAD</b>`,
     ``,
     `<b>🎯 TARGETING</b>`,
     `📍 Rayon <b>55 km</b> autour de Québec ville (Lévis, Beauport, Charlesbourg, Sainte-Foy inclus)`,
@@ -509,10 +510,34 @@ export async function pauseAllActiveCampaigns(): Promise<{ paused: string[]; fai
 }
 
 /**
+ * Build a deep-link to Ads Manager pre-filled with draft data.
+ * Used as fallback when API campaign creation fails (e.g. token has
+ * pages_manage_ads but not ads_management).
+ */
+export async function buildAdsManagerPrefillUrl(draftId: number): Promise<string> {
+  const adAccountId = (process.env.META_AD_ACCOUNT_ID ?? '').replace(/^act_/, '');
+  const rows = await query(`SELECT * FROM meta_ads_drafts WHERE id = $1`, [draftId]);
+  if (!rows.length) return `https://business.facebook.com/adsmanager/manage/campaigns?act=${adAccountId}`;
+  const d = rows[0] as Record<string, unknown>;
+  const formId = (process.env.META_LEAD_FORM_ID ?? '1645385520039445').trim();
+  // Ads Manager wizard: pre-select campaign type + lead form + ad account
+  const params = new URLSearchParams({
+    act: adAccountId,
+    business_id: '',
+    objective: 'OUTCOME_LEADS',
+    optimization_goal: 'LEAD_GENERATION',
+    daily_budget: String(Math.round(Number(d.daily_budget_usd ?? 30) * 100)),
+    lead_form_id: formId,
+    name: `Novus ${String(d.service)} ${new Date().toISOString().slice(0,10)}`,
+  });
+  return `https://business.facebook.com/adsmanager/creation?${params.toString()}`;
+}
+
+/**
  * Create the actual Meta ad campaign in PAUSED state.
  * Requires AD_ACCOUNT_ID env. Returns Meta IDs.
  */
-export async function createMetaCampaignPaused(draftId: number): Promise<{ campaignId?: string; adsetId?: string; adId?: string; error?: string }> {
+export async function createMetaCampaignPaused(draftId: number): Promise<{ campaignId?: string; adsetId?: string; adId?: string; error?: string; needsAdsManagement?: boolean }> {
   const token = (process.env.META_PAGE_TOKEN ?? '').trim();
   const adAccountId = (process.env.META_AD_ACCOUNT_ID ?? '').trim().replace(/^act_/, '');
   if (!token) return { error: 'META_PAGE_TOKEN missing' };
@@ -539,7 +564,9 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
     });
     const campData = await campRes.json();
     if (!campRes.ok || !campData.id) {
-      return { error: `Campaign creation failed: ${campData.error?.message ?? JSON.stringify(campData)}` };
+      const msg = String(campData.error?.message ?? JSON.stringify(campData));
+      const isPermError = msg.includes('cannot be loaded') || msg.includes('missing permission') || campData.error?.code === 100;
+      return { error: `Campaign creation failed: ${msg}`, needsAdsManagement: isPermError };
     }
     const campaignId = campData.id;
 

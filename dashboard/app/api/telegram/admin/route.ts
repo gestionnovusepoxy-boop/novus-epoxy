@@ -1491,7 +1491,47 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
 
       const result = await createMetaCampaignPaused(draftId);
       if (result.error) {
-        await sendTelegram(cbChatId, `❌ <b>Erreur création pub #${draftId}</b>\n\n${result.error.slice(0, 400)}`, { parse_mode: 'HTML' });
+        // Mark as erreur so we don't lose track of it
+        await query(
+          `UPDATE meta_ads_drafts SET statut = 'erreur', error = $1, updated_at = NOW() WHERE id = $2`,
+          [result.error, draftId]
+        );
+        if (result.needsAdsManagement) {
+          // Fallback: give user a deep link to Ads Manager pre-filled with the draft data
+          const { buildAdsManagerPrefillUrl } = await import('@/lib/meta-ads');
+          const prefillUrl = await buildAdsManagerPrefillUrl(draftId);
+          const rows = await query(`SELECT image_url, headline, primary_text, daily_budget_usd FROM meta_ads_drafts WHERE id = $1`, [draftId]);
+          const d = rows[0];
+          const msg = [
+            `⚠️ <b>API Meta refuse la création auto</b>`,
+            ``,
+            `Le token a juste <code>pages_manage_ads</code> — manque <code>ads_management</code> pour créer une campagne complète via API.`,
+            ``,
+            `<b>👉 Solution rapide (2 min)</b>:`,
+            `1. Clique le bouton ci-dessous → Ads Manager s'ouvre`,
+            `2. Téléverse l'image ci-jointe (sauve-la depuis le preview Telegram)`,
+            `3. Colle le texte:`,
+            ``,
+            `<b>Titre:</b> <code>${String(d?.headline ?? '')}</code>`,
+            ``,
+            `<b>Texte:</b>`,
+            `<code>${String(d?.primary_text ?? '').slice(0, 300)}</code>`,
+            ``,
+            `<b>Budget:</b> $${d?.daily_budget_usd ?? 30} CAD/jour`,
+            `<b>Form:</b> Lead form (sélectionner "novus epoxy prospect form-copy")`,
+            ``,
+            `Tout le targeting est déjà configuré dans le wizard.`,
+            ``,
+            `<b>OU permanent fix (5 min)</b>:`,
+            `Va sur business.facebook.com → Utilisateurs système → Génère nouveau token avec <code>ads_management</code> coché → ajoute dans Vercel comme <code>META_PAGE_TOKEN</code>`,
+          ].join('\n');
+          await sendTelegram(cbChatId, msg, {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: [[{ text: '📊 Ouvrir Ads Manager pré-rempli', url: prefillUrl }]] },
+          });
+        } else {
+          await sendTelegram(cbChatId, `❌ <b>Erreur création pub #${draftId}</b>\n\n${result.error.slice(0, 600)}`, { parse_mode: 'HTML' });
+        }
       } else {
         const adsManagerUrl = `https://business.facebook.com/adsmanager/manage/campaigns?act=${(process.env.META_AD_ACCOUNT_ID ?? '').replace(/^act_/, '')}&selected_campaign_ids=${result.campaignId}`;
         await sendTelegram(
