@@ -33,7 +33,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Whitelist allowed toolkits
-  const ALLOWED_TOOLKITS = ['GOOGLESHEETS', 'GMAIL', 'GOOGLECALENDAR', 'SLACK', 'GOOGLEDRIVE'];
+  const ALLOWED_TOOLKITS = ['GOOGLESHEETS', 'GMAIL', 'GOOGLECALENDAR', 'SLACK', 'GOOGLEDRIVE', 'FACEBOOK', 'META_ADS', 'FACEBOOK_LEAD_ADS', 'INSTAGRAM'];
   if (!ALLOWED_TOOLKITS.includes(toolkit.toUpperCase())) {
     return NextResponse.json({ error: 'Toolkit non autorisé' }, { status: 400 });
   }
