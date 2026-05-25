@@ -39,12 +39,20 @@ async function sendTelegram(chatId: string, text: string) {
   }
 }
 
-function getGmailClient() {
+async function getGmailClient() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
 
-  if (!clientId || !clientSecret || !refreshToken) return null;
+  if (!clientId || !clientSecret) return null;
+
+  // Check DB first (renewed via OAuth flow), then fall back to env var
+  let refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  try {
+    const rows = await query(`SELECT value FROM kv_store WHERE key = 'google_refresh_token'`);
+    if (rows?.[0]?.value) refreshToken = rows[0].value as string;
+  } catch { /* ignore — use env var */ }
+
+  if (!refreshToken) return null;
 
   const oauth2 = new google.auth.OAuth2(clientId, clientSecret);
   oauth2.setCredentials({ refresh_token: refreshToken });
@@ -513,7 +521,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const gmail = getGmailClient();
+  const gmail = await getGmailClient();
   if (!gmail) {
     await alertAdmins('🚨 <b>Email Scan — Gmail non configure</b>\n\nVariables manquantes: GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET ou GOOGLE_REFRESH_TOKEN\n\nVerifie les env vars sur Vercel.');
     return NextResponse.json({ error: 'Gmail non configure' }, { status: 500 });

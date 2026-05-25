@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminChatIds } from '@/lib/telegram-utils';
 import { google } from 'googleapis';
-import { auth } from '@/lib/auth';
+import { query } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
   // Auth check skipped — this is a one-time OAuth callback, token is encrypted on Vercel
@@ -29,6 +29,13 @@ export async function GET(req: NextRequest) {
         { headers: { 'Content-Type': 'text/html' } }
       );
     }
+
+    // Save to shared DB (works for both Vercel and VPS)
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ('google_refresh_token', $1)
+       ON CONFLICT (key) DO UPDATE SET value = $1`,
+      [refreshToken],
+    ).catch(() => {});
 
     // Auto-update Vercel env var if VERCEL_TOKEN is available
     let vercelUpdated = false;
