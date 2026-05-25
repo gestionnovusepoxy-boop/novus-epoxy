@@ -47,7 +47,7 @@ export async function callLLM({
 }): Promise<string> {
   if (isOpenRouter()) {
     const model = OR_MODELS[tier];
-    const apiMessages: Array<{ role: string; content: string }> = [];
+    const apiMessages: Array<{ role: string; content: MessageContent }> = [];
     if (system) apiMessages.push({ role: 'system', content: system });
     apiMessages.push(...messages);
 
