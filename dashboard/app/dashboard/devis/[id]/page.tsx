@@ -786,10 +786,10 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       )}
 
       {/* Confirm deposit */}
-      {quote.statut === 'contrat_signe' && (
+      {['envoye', 'contrat_signe'].includes(quote.statut) && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6">
           <h3 className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-4">Depot</h3>
-          <p className="text-slate-300 text-sm mb-4">Le contrat est signe. Confirmez la reception du depot pour bloquer les dates.</p>
+          <p className="text-slate-300 text-sm mb-4">{quote.statut === 'contrat_signe' ? 'Le contrat est signe.' : 'Devis envoye.'} Confirmez la reception du depot pour bloquer les dates.</p>
           <button
             onClick={handleConfirmDeposit}
             disabled={!!action}

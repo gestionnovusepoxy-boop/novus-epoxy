@@ -1236,6 +1236,7 @@ export async function POST(req: NextRequest) {
       const parts = cbData.match(/^approve_quote_(\d+)_via_(email|sms|both)$/);
       if (!parts) return NextResponse.json({ ok: true });
       const quoteId = parseInt(parts[1]);
+      const BASE = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app';
       const method = parts[2]; // email, sms, or both
       try {
         const rows = await query('SELECT * FROM quotes WHERE id = $1', [quoteId]);
@@ -1277,13 +1278,13 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
 <p style="margin:4px 0 0;color:#64748b;font-size:13px;">Solde (70%) a la fin des travaux : ${solde70}</p>
 </div>
 <div style="text-align:center;margin:12px 0;">
-<a href="https://novus-epoxy.vercel.app/reservation/${q.id}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Choisir vos dates</a>
+<a href="${BASE}/reservation/${q.id}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Choisir vos dates</a>
 </div>
 <div style="text-align:center;margin:12px 0;">
-<a href="https://novus-epoxy.vercel.app/contrat/${q.id}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Signer le contrat</a>
+<a href="${BASE}/contrat/${q.id}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#0f172a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Signer le contrat</a>
 </div>
 <div style="text-align:center;margin:12px 0;">
-<a href="https://novus-epoxy.vercel.app/paiement/${q.id}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Payer le depot (30%)</a>
+<a href="${BASE}/paiement/${q.id}?token=${encodeURIComponent(secretToken)}" style="display:inline-block;background:#16a34a;color:#ffffff;padding:14px 32px;border-radius:8px;text-decoration:none;font-weight:700;font-size:16px;">Payer le depot (30%)</a>
 </div>
 <p style="color:#475569;font-size:12px;">Questions? 581-307-2678 (Jason) ou 581-307-5983 (Luca)</p>
 </div></body></html>`;
@@ -1309,7 +1310,7 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
         let smsSent = false;
         if (sendViaSms && q.client_tel) {
           const rabaisLine = Number(q.rabais_pct) > 0 ? `\nRabais ${q.rabais_pct}%: -${formatMoney(Number(q.rabais_montant))}` : '';
-          const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${service?.label ?? q.type_service}\n${q.superficie} pi² x ${formatMoney(Number(q.prix_pied_carre))}/pi²${rabaisLine}\nSous-total: ${formatMoney(Number(q.sous_total))}\nTPS+TVQ: ${formatMoney(Number(q.tps) + Number(q.tvq))}\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nDetails: https://novus-epoxy.vercel.app/paiement/${q.id}?token=${encodeURIComponent(secretToken)}\n\nQuestions? 581-307-2678`;
+          const smsMsg = `Bonjour ${q.client_nom}!\nVoici votre soumission Novus Epoxy #${q.id}:\n\n${service?.label ?? q.type_service}\n${q.superficie} pi² x ${formatMoney(Number(q.prix_pied_carre))}/pi²${rabaisLine}\nSous-total: ${formatMoney(Number(q.sous_total))}\nTPS+TVQ: ${formatMoney(Number(q.tps) + Number(q.tvq))}\nTotal: ${formatMoney(Number(q.total))}\nDepot (30%): ${formatMoney(Number(q.depot_requis))}\n\nDetails: ${BASE}/paiement/${q.id}?token=${encodeURIComponent(secretToken)}\n\nQuestions? 581-307-2678`;
           try {
             await sendSMS(q.client_tel as string, smsMsg);
             smsSent = true;

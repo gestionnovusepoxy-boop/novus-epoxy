@@ -60,7 +60,7 @@ async function notifyTelegram(nom: string, email: string, telephone: string | nu
     ? [[
         { text: '✅ Approuver & envoyer', callback_data: `approve_quote_${extra.quoteId}` },
       ], [
-        { text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' },
+        { text: '📋 Voir CRM', url: `${process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app'}/dashboard/crm` },
       ]]
     : [[{ text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' }]];
 

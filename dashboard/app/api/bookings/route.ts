@@ -161,12 +161,12 @@ export async function POST(req: NextRequest) {
     `SELECT id FROM bookings
      WHERE statut = 'confirme'
      AND (
-       (jour1_date = $1 AND jour1_slot = 'matin')
+       (jour1_date = $1 AND jour1_slot = $4)
        OR (jour2_date = $2 AND jour2_slot = $3)
        OR (jour1_date = $2 AND jour1_slot = $3)
-       OR (jour2_date = $1 AND jour2_slot = 'matin')
+       OR (jour2_date = $1 AND jour2_slot = $4)
      )`,
-    [jour1Date, jour2Date, jour2Slot]
+    [jour1Date, jour2Date, jour2Slot, 'matin']
   );
 
   if (conflicts.length > 0) {
@@ -269,7 +269,7 @@ export async function POST(req: NextRequest) {
 
   // SMS to admins (both Luca + Jason) with dashboard link
   const adminPhones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];
-  const smsText = `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} AM, Jour 2: ${jour2Date} ${jour2Slot === 'matin' ? 'AM' : 'PM'}. Devis #${quoteId}\nhttps://novus-epoxy.vercel.app/dashboard/devis`;
+  const smsText = `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} AM, Jour 2: ${jour2Date} ${jour2Slot === 'matin' ? 'AM' : 'PM'}. Devis #${quoteId}\n${process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app'}/dashboard/devis`;
   await Promise.all(adminPhones.map(phone => sendSMS(phone, smsText).catch(() => {})));
 
   // Telegram to admins

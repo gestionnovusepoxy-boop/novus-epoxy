@@ -618,7 +618,7 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
   const [showSync, setShowSync] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const feedUrl = calendarToken ? `https://novus-epoxy.vercel.app/api/calendar/feed?token=${calendarToken}` : '';
+  const feedUrl = calendarToken ? `${process.env.NEXT_PUBLIC_API_BASE_URL ?? ''}/api/calendar/feed?token=${calendarToken}` : '';
 
   // Load events from API
   const loadEvents = useCallback(async () => {
@@ -768,14 +768,19 @@ export default function CalendrierClient({ bookings, calendarToken }: { bookings
   // Save new event
   const handleSaveEvent = useCallback(async (data: { title: string; description: string; start: string; end: string; allDay: boolean; color: string; event_type: string }) => {
     try {
-      await fetch('/api/calendar/events', {
+      const res = await fetch('/api/calendar/events', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert('Erreur: ' + (err.error || res.status));
+        return;
+      }
       setShowCreate(null);
       loadEvents();
-    } catch { /* ignore */ }
+    } catch { alert('Erreur réseau'); }
   }, [loadEvents]);
 
   // Delete event
