@@ -95,6 +95,10 @@
     {
       "path": "/api/cron/soustraitants-paie",
       "schedule": "0 13 * * 6"
+    },
+    {
+      "path": "/api/cron/monthly-accounting",
+      "schedule": "0 13 1 * *"
     }
   ],
   "headers": [
