@@ -60,6 +60,7 @@ const SECTIONS: NavSection[] = [
     title: 'Outils',
     links: [
       { href: '/dashboard/automatisation', label: 'Automatisation', icon: '\u{2699}\u{FE0F}' },
+      { href: '/dashboard/integrations', label: 'Intégrations', icon: '\u{1F517}' },
       { href: '/dashboard/campagnes', label: 'Campagnes', icon: '\u{1F4E2}' },
       { href: '/dashboard/stats',  label: 'Statistiques', icon: '\u{1F4C8}' },
       { href: '/dashboard/portfolio', label: 'Portfolio', icon: '\u{1F4F8}' },

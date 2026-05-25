@@ -1779,6 +1779,35 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       return NextResponse.json({ ok: true });
     }
 
+    // If message starts with "Aria rapport" — generate Google Sheets report via Composio
+    const rapportMatch = text.match(/^aria[\s,!?:]+rapport\s*(crm|revenue|revenus?|heures?)?/i);
+    if (rapportMatch) {
+      const reportType = /revenue|revenu/i.test(rapportMatch[1] ?? '') ? 'revenue' : 'crm';
+      await sendTelegram(chatId, `🤖 <b>Aria:</b> Je génère le rapport ${reportType.toUpperCase()} dans Google Sheets, une seconde...`);
+      try {
+        const base = process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.srv1478812.hstgr.cloud';
+        const adminKey = process.env.ADMIN_API_KEY ?? '';
+        const res = await fetch(`${base}/api/composio/sheets-report`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Cookie': '' },
+          body: JSON.stringify({ type: reportType }),
+        });
+        if (res.ok) {
+          const data = await res.json() as { url?: string; title?: string; error?: string };
+          if (data.url) {
+            await sendTelegram(chatId, `✅ <b>Rapport prêt!</b>\n\n📊 ${data.title}\n\n🔗 <a href="${data.url}">Ouvrir dans Google Sheets</a>`);
+          } else {
+            await sendTelegram(chatId, `❌ Rapport échoué: ${data.error ?? 'erreur inconnue'} — connecte Google Sheets dans le dashboard`);
+          }
+        } else {
+          await sendTelegram(chatId, `❌ Rapport échoué — connecte Google Sheets via /dashboard/settings d'abord`);
+        }
+      } catch (err) {
+        await sendTelegram(chatId, `❌ Erreur rapport: ${err instanceof Error ? err.message : 'erreur inconnue'}`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     // If message starts with "Aria" — respond as Aria in the group
     const startsWithAria = /^aria[\s,!?:]/i.test(text);
     if (startsWithAria) {
