@@ -22,3 +22,4 @@ dashboard/gmail-cleanup.js
 dashboard/tmp/
 dashboard/.claude-flow/
 .env*.local
+.env.vps

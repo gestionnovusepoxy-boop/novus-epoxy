@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - NODE_ENV=production
+      - NEXT_TELEMETRY_DISABLED=1
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.novus.rule=Host(`novus-epoxy.srv1478812.hstgr.cloud`)"
+      - "traefik.http.routers.novus.entrypoints=websecure"
+      - "traefik.http.routers.novus.tls.certresolver=letsencrypt"
+      - "traefik.http.services.novus.loadbalancer.server.port=3000"
+    networks:
+      - web
+
+networks:
+  web:
+    external: true
