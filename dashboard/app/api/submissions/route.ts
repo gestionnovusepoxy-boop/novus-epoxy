@@ -4,6 +4,7 @@ import { auth } from '@/lib/auth';
 import { query as db } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { isQuietHours } from '@/lib/telegram-utils';
+import { callLLM } from '@/lib/llm';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -137,18 +138,13 @@ async function analyzeLeadWithClaude(submission: {
       submission.type_projet ? `Type projet: ${submission.type_projet}` : '',
     ].filter(Boolean).join('\n');
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 200,
-        messages: [{ role: 'user', content: `Lead pour entreprise epoxy Quebec:\n\n${details}\n\nReponds en JSON strict:\n{"temperature":"chaud|tiede|froid","urgence":"urgent|normal|pas_presse","action":"appeler_maintenant|envoyer_devis|attendre_infos|relancer_semaine","raison":"1 phrase max"}` }],
-      }),
+    const text = await callLLM({
+      messages: [{ role: 'user', content: `Lead pour entreprise epoxy Quebec:\n\n${details}\n\nReponds en JSON strict:\n{"temperature":"chaud|tiede|froid","urgence":"urgent|normal|pas_presse","action":"appeler_maintenant|envoyer_devis|attendre_infos|relancer_semaine","raison":"1 phrase max"}` }],
+      maxTokens: 200,
+      tier: 'fast',
+      jsonMode: true,
     });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const parsed = JSON.parse((data.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
+    const parsed = JSON.parse(text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
     const emojiMap: Record<string, string> = { chaud: '🔥', tiede: '🟡', froid: '🔵' };
     const actionLabel: Record<string, string> = { appeler_maintenant: 'Appeler maintenant', envoyer_devis: 'Envoyer devis', attendre_infos: 'Attendre infos', relancer_semaine: 'Relancer dans 1 sem' };
     return { ...parsed, emoji: emojiMap[parsed.temperature] ?? '📋', action: actionLabel[parsed.action] ?? parsed.action };

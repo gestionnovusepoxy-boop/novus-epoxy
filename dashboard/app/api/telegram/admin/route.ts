@@ -8,6 +8,7 @@ import { google } from 'googleapis';
 import { sendEmail } from '@/lib/send-email';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
 import { autoHeal } from '@/lib/auto-heal';
+import { callLLM } from '@/lib/llm';
 
 export const maxDuration = 60; // Allow up to 60s for CSV imports + AI processing
 
@@ -584,20 +585,14 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
       const allLeads: ParsedLead[] = [];
 
       const parseChunk = async (chunk: string): Promise<ParsedLead[]> => {
-        const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'x-api-key': apiKeyBulk, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001',
-            max_tokens: 4000,
+        try {
+          const raw = (await callLLM({
             messages: [{ role: 'user', content: `Parse cette liste de leads pour une entreprise de planchers epoxy au Quebec. Extrait chaque personne.\n\nLISTE:\n${chunk}\n\nReponds UNIQUEMENT avec un JSON array (pas de texte avant ou apres):\n[{"nom":"Prenom Nom","telephone":"10 chiffres ou vide","email":"email ou vide","service":"flake|metallique|commercial|quartz|couleur_unie ou vide","superficie":"nombre ou vide","ville":"ville ou vide","notes":"autres infos ou vide"}]` }],
-          }),
-        });
-        if (!parseRes.ok) return [];
-        const data = await parseRes.json();
-        const raw = (data.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-        try { const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : []; }
-        catch { return []; }
+            maxTokens: 4000,
+            tier: 'fast',
+          })).replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const arr = JSON.parse(raw); return Array.isArray(arr) ? arr : [];
+        } catch { return []; }
       };
 
       // Process chunks in batches of 3
@@ -1798,21 +1793,15 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
 
           const context = `CRM: ${leadCount[0]?.c || 0} leads total, ${todayImported[0]?.c || 0} importes aujourd'hui, ${pendingProspect[0]?.c || 0} offres envoyees en attente, ${hotLeads[0]?.c || 0} leads chauds actifs.`;
 
-          const ariaRes = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: 'claude-haiku-4-5-20251001',
-              max_tokens: 500,
-              messages: [{ role: 'user', content: text.replace(/^aria[\s,!?:]*/i, '').trim() }],
+          try {
+            const reply = await callLLM({
               system: `Tu es Aria, l'assistante IA de Novus Epoxy (planchers epoxy, Quebec). Tu reponds dans un groupe Telegram avec Luca (patron), Jason (chantier), et le bot de Jason. Sois concise, utile, en francais quebecois. Tu geres le CRM, les offres de service, les relances. Voici le contexte actuel:\n${context}\n\nReponds en 2-3 phrases max. Pas de markdown complexe, juste du texte simple.`,
-            }),
-          });
-          if (ariaRes.ok) {
-            const ariaData = await ariaRes.json();
-            const reply = ariaData.content?.[0]?.text ?? '';
+              messages: [{ role: 'user', content: text.replace(/^aria[\s,!?:]*/i, '').trim() }],
+              maxTokens: 500,
+              tier: 'fast',
+            });
             if (reply) await sendTelegram(chatId, `🤖 <b>Aria:</b> ${reply}`);
-          }
+          } catch { /* ignore errors */ }
         } catch { /* ignore errors */ }
       }
       return NextResponse.json({ ok: true });
@@ -1927,26 +1916,17 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
     const looksLikeLeads = hasMultiplePhones && hasMultipleLines;
 
     if (looksLikeLeads) {
-      // Parse leads with Claude Haiku
-      const apiKey = process.env.ANTHROPIC_API_KEY;
-      if (apiKey) {
-        try {
-          const parseRes = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: 'claude-haiku-4-5-20251001',
-              max_tokens: 4000,
-              messages: [{ role: 'user', content: `Parse cette liste de leads pour une entreprise de planchers epoxy au Quebec. Extrait chaque personne.\n\nLISTE:\n${text.slice(0, 8000)}\n\nSi ce n'est PAS une liste de leads/contacts (c'est une conversation normale, une question, etc.), reponds juste: []\n\nSinon reponds UNIQUEMENT avec un JSON array:\n[{"nom":"Prenom Nom","telephone":"10 chiffres ou vide","email":"email ou vide","service":"flake|metallique|commercial|quartz ou vide","superficie":"nombre ou vide","ville":"ville ou vide","notes":"autres infos ou vide"}]` }],
-            }),
-          });
-
-          if (parseRes.ok) {
-            const data = await parseRes.json();
-            const raw = (data.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-            type ParsedLead = { nom: string; telephone: string; email: string; service: string; superficie: string; ville: string; notes: string };
-            let leads: ParsedLead[] = [];
-            try { const arr = JSON.parse(raw); leads = Array.isArray(arr) ? arr : []; } catch { /* not leads */ }
+      // Parse leads with LLM
+      try {
+        {
+          const raw = (await callLLM({
+            messages: [{ role: 'user', content: `Parse cette liste de leads pour une entreprise de planchers epoxy au Quebec. Extrait chaque personne.\n\nLISTE:\n${text.slice(0, 8000)}\n\nSi ce n'est PAS une liste de leads/contacts (c'est une conversation normale, une question, etc.), reponds juste: []\n\nSinon reponds UNIQUEMENT avec un JSON array:\n[{"nom":"Prenom Nom","telephone":"10 chiffres ou vide","email":"email ou vide","service":"flake|metallique|commercial|quartz ou vide","superficie":"nombre ou vide","ville":"ville ou vide","notes":"autres infos ou vide"}]` }],
+            maxTokens: 4000,
+            tier: 'fast',
+          })).replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          type ParsedLead = { nom: string; telephone: string; email: string; service: string; superficie: string; ville: string; notes: string };
+          let leads: ParsedLead[] = [];
+          try { const arr = JSON.parse(raw); leads = Array.isArray(arr) ? arr : []; } catch { /* not leads */ }
 
             if (leads.length > 0) {
               // Score temperature
@@ -2041,9 +2021,8 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
               await sendTelegram(chatId, lines.filter(Boolean).join('\n'));
             }
           }
-        } catch (err) {
-          console.error('[Telegram Group] Lead import error:', err);
-        }
+      } catch (err) {
+        console.error('[Telegram Group] Lead import error:', err);
       }
     }
     return NextResponse.json({ ok: true });

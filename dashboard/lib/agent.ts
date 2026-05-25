@@ -4,6 +4,7 @@ import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/p
 import { getColorCatalogText } from '@/lib/torginol';
 import { notifyAdminSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
+import { callLLM } from '@/lib/llm';
 
 // Send notification to Telegram admins when bot needs human help
 async function notifyTelegramHandoff(conversationId: number, visitorName: string, reason: string) {
@@ -536,29 +537,16 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
     .replace('{{PROMO_OBJECTION_PENSER}}', promosText.objectionPenser)
     + clientContext;
 
-  const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 300,
-      system: systemPrompt,
-      messages: claudeMessages,
-    }),
-  });
-
-  if (!claudeRes.ok) {
+  const assistantText = await callLLM({
+    system: systemPrompt,
+    messages: claudeMessages,
+    maxTokens: 300,
+    tier: 'smart',
+  }).catch(async () => {
     const fallback = 'Desolee, je rencontre un probleme technique! Tu peux nous joindre directement a gestionnovusepoxy@gmail.com ou au 581-307-2678!';
     await saveMessage(conversationId, 'assistant', fallback);
     return fallback;
-  }
-
-  const claudeData = await claudeRes.json();
-  const assistantText = claudeData.content?.[0]?.text ?? '';
+  });
 
   // Check for handoff request
   const handoffMatch = assistantText.match(/<HANDOFF>([\s\S]*?)<\/HANDOFF>/);

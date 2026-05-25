@@ -4,7 +4,7 @@ import { query as db } from '@/lib/db';
 import { put, del } from '@vercel/blob';
 import { google } from 'googleapis';
 import { generateText } from 'ai';
-import { anthropic } from '@ai-sdk/anthropic';
+import { getStreamingModel } from '@/lib/llm';
 
 export const maxDuration = 300; // 5 min max on Vercel Pro
 
@@ -47,7 +47,7 @@ async function classifyMedia(imageUrl: string, fileName: string, isVideo: boolea
     : `C'est une PHOTO. Juge la qualité de l'image ET du projet montré.`;
 
   const { text } = await generateText({
-    model: anthropic('claude-sonnet-4-6'),
+    model: getStreamingModel('smart'),
     messages: [
       {
         role: 'user',

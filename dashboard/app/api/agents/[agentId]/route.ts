@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { streamText, tool } from 'ai';
-import { anthropic } from '@ai-sdk/anthropic';
+import { getStreamingModel, callLLM } from '@/lib/llm';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { getAdminChatIds } from '@/lib/telegram-utils';
@@ -887,12 +887,8 @@ function buildTools(agentId: AgentId) {
 
         // Anthropic
         try {
-          const res = await fetch('https://api.anthropic.com/v1/messages', {
-            method: 'POST',
-            headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY ?? '', 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-            body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 5, messages: [{ role: 'user', content: 'ping' }] }),
-          });
-          results.anthropic = { ok: res.ok, detail: res.ok ? 'API fonctionnelle' : `Erreur ${res.status}` };
+          await callLLM({ messages: [{ role: 'user', content: 'ping' }], maxTokens: 5, tier: 'fast' });
+          results.anthropic = { ok: true, detail: 'API fonctionnelle (OpenRouter)' };
         } catch { results.anthropic = { ok: false, detail: 'Connection echouee' }; }
 
         // Telegram
@@ -1222,7 +1218,7 @@ export async function POST(
   const userContent = `[${authorName}]: ${lastUserMsg.content}`;
 
   const result = streamText({
-    model: anthropic('claude-sonnet-4-6'),
+    model: getStreamingModel('smart'),
     system: getSystemPrompt(agentId),
     messages: [
       ...historyMsgs,

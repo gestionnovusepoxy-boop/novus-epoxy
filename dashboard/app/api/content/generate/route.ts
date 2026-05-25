@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { callLLM } from '@/lib/llm';
 
 const CONTENT_PROMPT = `Tu es le gestionnaire marketing de Novus Epoxy, specialiste en planchers epoxy haut de gamme au Quebec.
 
@@ -33,9 +34,6 @@ export async function POST(req: NextRequest) {
   const contentType = body?.type ?? 'conseil';
   const details = body?.details ?? '';
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY manquant' }, { status: 500 });
-
   // Get recent completed projects for context
   const recentProjects = await query(
     `SELECT type_service, superficie, couleur_flake, client_adresse
@@ -52,25 +50,13 @@ export async function POST(req: NextRequest) {
 
   const userPrompt = `Genere un post de type "${contentType}".${details ? `\nDetails: ${details}` : ''}${projectContext}\n\nReponds en JSON uniquement.`;
 
-  const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 500,
-      system: CONTENT_PROMPT,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-  });
-
-  if (!claudeRes.ok) return NextResponse.json({ error: 'Erreur API Claude' }, { status: 500 });
-
-  const claudeData = await claudeRes.json();
-  const text = claudeData.content?.[0]?.text ?? '';
+  const text = await callLLM({
+    system: CONTENT_PROMPT,
+    messages: [{ role: 'user', content: userPrompt }],
+    maxTokens: 500,
+    tier: 'smart',
+    jsonMode: true,
+  }).catch(() => '');
 
   try {
     const jsonMatch = text.match(/\{[\s\S]*\}/);

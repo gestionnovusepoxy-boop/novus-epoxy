@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { callLLM } from '@/lib/llm';
 
 const SYSTEM_PROMPT = `Tu es l'agent Lead Hunter de Novus Epoxy, une entreprise de planchers époxy haut de gamme au Québec.
 
@@ -53,48 +54,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return NextResponse.json(
-      { error: 'Clé API Anthropic non configurée' },
-      { status: 500 },
-    );
-  }
-
-  const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+  let result: string;
+  try {
+    result = await callLLM({
       system: SYSTEM_PROMPT,
-      messages: [
-        {
-          role: 'user',
-          content: `${actionPrompt}\n\nDétails:\n${details}`,
-        },
-      ],
-    }),
-  });
-
-  if (!anthropicRes.ok) {
-    const err = await anthropicRes.text();
-    console.error('Anthropic API error:', anthropicRes.status, err);
-    return NextResponse.json(
-      { error: 'Erreur lors de la génération AI' },
-      { status: 502 },
-    );
+      messages: [{ role: 'user', content: `${actionPrompt}\n\nDétails:\n${details}` }],
+      maxTokens: 2048,
+      tier: 'smart',
+    });
+  } catch (err) {
+    console.error('LLM error:', err);
+    return NextResponse.json({ error: 'Erreur lors de la génération AI' }, { status: 502 });
   }
-
-  const data = await anthropicRes.json();
-  const result =
-    data.content?.[0]?.type === 'text'
-      ? data.content[0].text
-      : 'Aucune réponse générée';
 
   // Save to database
   await query(

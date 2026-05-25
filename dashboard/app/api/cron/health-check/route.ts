@@ -3,6 +3,7 @@ import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { google } from 'googleapis';
 import { isQuietHours } from '@/lib/telegram-utils';
+import { callLLM } from '@/lib/llm';
 
 export const maxDuration = 90;
 
@@ -67,16 +68,13 @@ export async function GET(req: NextRequest) {
     checks.push({ name: 'Base de donnees', ok: false, detail: String(err), severity: 'critical' });
   }
 
-  // 1b. Anthropic API
+  // 1b. LLM API (OpenRouter or Anthropic)
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'x-api-key': process.env.ANTHROPIC_API_KEY ?? '', 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: 'claude-haiku-4-5-20251001', max_tokens: 5, messages: [{ role: 'user', content: 'ping' }] }),
-    });
-    checks.push({ name: 'Anthropic API', ok: res.ok, detail: res.ok ? 'claude-haiku OK' : `Erreur ${res.status}`, severity: 'critical' });
+    await callLLM({ messages: [{ role: 'user', content: 'ping' }], maxTokens: 5, tier: 'fast' });
+    const provider = process.env.OPENROUTER_API_KEY ? 'OpenRouter' : 'Anthropic';
+    checks.push({ name: 'LLM API', ok: true, detail: `${provider} OK`, severity: 'critical' });
   } catch (err) {
-    checks.push({ name: 'Anthropic API', ok: false, detail: String(err), severity: 'critical' });
+    checks.push({ name: 'LLM API', ok: false, detail: String(err), severity: 'critical' });
   }
 
   // 1c. Telegram bot
@@ -179,10 +177,14 @@ export async function GET(req: NextRequest) {
 
   // 1h. Env vars
   const requiredVars = [
-    'DATABASE_URL', 'ANTHROPIC_API_KEY', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_ADMIN_CHAT_IDS',
+    'DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_ADMIN_CHAT_IDS',
     'TELEGRAM_WEBHOOK_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN',
     'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'AUTH_SECRET', 'ADMIN_API_KEY', 'CRON_SECRET',
   ];
+  // At least one LLM key must be set
+  if (!process.env.OPENROUTER_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    requiredVars.push('OPENROUTER_API_KEY');
+  }
   const missingVars = requiredVars.filter(v => !process.env[v]);
   checks.push({
     name: 'Variables env',

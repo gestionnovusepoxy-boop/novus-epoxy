@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { callLLM } from '@/lib/llm';
 
 export const maxDuration = 60;
 
@@ -81,29 +82,16 @@ async function parseWithClaude(rawText: string): Promise<ParsedLead[]> {
   const allLeads: ParsedLead[] = [];
 
   for (const chunk of chunks) {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
+    try {
+      const rawJson = await callLLM({
         messages: [{
           role: 'user',
           content: `Parse cette liste de leads pour une entreprise de planchers epoxy au Quebec. Extrait chaque personne.\n\nLISTE:\n${chunk}\n\nReponds UNIQUEMENT avec un JSON array (pas de texte avant ou apres):\n[{"nom":"Prenom Nom","telephone":"10 chiffres ou vide","email":"email ou vide","service":"flake|metallique|commercial|quartz|couleur_unie ou vide","superficie":"nombre ou vide","ville":"ville ou vide","notes":"autres infos ou vide"}]`,
         }],
-      }),
-    });
-
-    if (!res.ok) continue;
-    const data = await res.json();
-    const rawJson = (data.content?.[0]?.text ?? '')
-      .replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    try {
-      const parsed = JSON.parse(rawJson);
+        maxTokens: 4000,
+        tier: 'fast',
+      });
+      const parsed = JSON.parse(rawJson.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim());
       if (Array.isArray(parsed)) allLeads.push(...parsed);
     } catch { /* skip bad chunk */ }
   }

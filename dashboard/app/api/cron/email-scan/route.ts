@@ -4,11 +4,11 @@ import { google } from 'googleapis';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
 import { sendEmail } from '@/lib/send-email';
+import { callLLM } from '@/lib/llm';
 
 export const maxDuration = 60; // Allow up to 60s for large CSV imports
 
 const CRON_SECRET = () => process.env.CRON_SECRET ?? '';
-const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
 const ADMIN_CHAT_IDS = () => {
   const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
@@ -205,14 +205,10 @@ async function handleLeadFollowUp(
     ? conv.exchanges.map(e => `[${e.role === 'lead' ? 'CLIENT' : 'NOVUS EPOXY'}]: ${e.content}`).join('\n\n')
     : 'Aucun historique — premier contact.';
 
-  // 4. Call Claude Sonnet 4.6 as closer agent
-  const apiKey = ANTHROPIC_KEY();
-  const closerRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1200,
+  // 4. Call closer agent via OpenRouter
+  let rawText: string;
+  try {
+    rawText = await callLLM({
       system: `Tu es l'agent commercial senior de Novus Epoxy (planchers epoxy premium, Quebec). Tu reponds au nom de l'equipe Novus Epoxy.
 
 MISSION: Analyser l'email, identifier l'intention, generer une reponse qui maximise la conversion. Tu es un CLOSER — pas un robot.
@@ -290,16 +286,15 @@ Reponds en JSON strict (sans markdown):
   "info_complete": true/false
 }`,
       }],
-    }),
-  });
-
-  if (!closerRes.ok) {
+      maxTokens: 1200,
+      tier: 'smart',
+    });
+  } catch {
     await query(`UPDATE email_logs SET statut = 'error' WHERE resend_id = $1`, [`lead-${msgId}`]);
     return;
   }
 
-  const closerData = await closerRes.json();
-  const rawText = (closerData.content?.[0]?.text ?? '').replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+  rawText = rawText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   let parsed: {
     type: string;
     intent: string;

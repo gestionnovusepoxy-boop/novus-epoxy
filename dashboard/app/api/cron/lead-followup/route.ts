@@ -3,8 +3,8 @@ import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { sendEmail } from '@/lib/send-email';
 import { isQuietHours } from '@/lib/telegram-utils';
+import { callLLM } from '@/lib/llm';
 
-const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
 const ADMIN_CHAT_IDS = () =>
   getAdminChatIds();
@@ -51,28 +51,18 @@ export async function GET(req: NextRequest) {
 
   for (const lead of leads as Array<{ id: number; nom: string; email: string; service: string | null; superficie: string | null }>) {
     try {
-      // 2. Generate warm follow-up email with Claude Haiku
-      const haikuRes = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': ANTHROPIC_KEY(),
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'claude-haiku-4-5-20251001',
-          max_tokens: 400,
+      // 2. Generate warm follow-up email via OpenRouter
+      let followupText: string;
+      try {
+        followupText = (await callLLM({
           messages: [{
             role: 'user',
             content: `Génère un email de suivi chaleureux en français (max 120 mots) pour un lead qui n'a pas répondu depuis 4 jours. Nom: ${lead.nom}. Service d'intérêt: ${lead.service || 'plancher époxy'}. Rappelle qu'on est disponibles pour un estimé gratuit. Offre: formulaire novusepoxy.ca/#contact, appeler Luca 581-307-5983 ou Jason 581-307-2678. Signe: L'équipe Novus Epoxy. Réponds avec juste le texte de l'email, pas de JSON.`,
           }],
-        }),
-      });
-
-      if (!haikuRes.ok) continue;
-
-      const haikuData = await haikuRes.json();
-      const followupText = (haikuData.content?.[0]?.text ?? '').trim();
+          maxTokens: 400,
+          tier: 'fast',
+        })).trim();
+      } catch { continue; }
       if (!followupText) continue;
 
       // 3. Send via Gmail

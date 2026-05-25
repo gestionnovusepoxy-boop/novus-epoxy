@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server';
 import { streamText, tool } from 'ai';
-import { anthropic } from '@ai-sdk/anthropic';
+import { getStreamingModel } from '@/lib/llm';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
@@ -73,7 +73,7 @@ IMPORTANT:
 Date: ${new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`;
 
   const result = streamText({
-    model: anthropic('claude-opus-4-6'),
+    model: getStreamingModel('top'),
     system: systemPrompt,
     messages: [
       ...historyMsgs,

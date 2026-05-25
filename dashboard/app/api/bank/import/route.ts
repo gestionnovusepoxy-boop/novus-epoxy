@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { callLLM } from '@/lib/llm';
 
 /* ------------------------------------------------------------------ */
 /*  CSV Parsing — supports Desjardins, TD, RBC, BMO Quebec formats    */
@@ -164,46 +165,29 @@ async function fuzzyMatchWithClaude(
   txDescription: string,
   candidates: { id: number; description: string; fournisseur?: string }[],
 ): Promise<number | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey || candidates.length === 0) return null;
+  if (candidates.length === 0) return null;
 
   const candidateList = candidates
     .map((c) => `ID ${c.id}: "${c.fournisseur ? c.fournisseur + ' - ' : ''}${c.description ?? ''}"`)
     .join('\n');
 
   try {
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 100,
-        messages: [
-          {
-            role: 'user',
-            content: `Bank transaction description: "${txDescription}"
+    const text = await callLLM({
+      messages: [{
+        role: 'user',
+        content: `Bank transaction description: "${txDescription}"
 
 Which of these candidates is the most likely match? Only respond with the ID number if you are confident (>80% sure), otherwise respond with "NONE".
 
 Candidates:
 ${candidateList}`,
-          },
-        ],
-      }),
+      }],
+      maxTokens: 100,
+      tier: 'fast',
     });
-
-    if (!res.ok) return null;
-
-    const data = await res.json();
-    const text = data?.content?.[0]?.text ?? '';
     const match = text.match(/\b(\d+)\b/);
     if (match && text.toUpperCase() !== 'NONE') {
       const matchedId = parseInt(match[1]);
-      // Verify the ID is actually in our candidates
       if (candidates.some((c) => c.id === matchedId)) return matchedId;
     }
     return null;
