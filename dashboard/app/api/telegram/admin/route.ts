@@ -40,16 +40,25 @@ function safeCompare(a: string, b: string): boolean {
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
 const ADMIN_CHAT_IDS = () => getAdminChatIds();
 
-async function sendTelegram(chatId: string, text: string) {
+async function sendTelegram(chatId: string, text: string, options?: { parse_mode?: string; reply_markup?: unknown }) {
   const token = BOT_TOKEN();
   if (!token) return;
   // Telegram max message length is 4096
   const chunks = text.match(/[\s\S]{1,4000}/g) ?? [text];
-  for (const chunk of chunks) {
+  for (let i = 0; i < chunks.length; i++) {
+    const chunk = chunks[i];
+    // Only attach reply_markup to the last chunk
+    const isLast = i === chunks.length - 1;
+    const payload: Record<string, unknown> = {
+      chat_id: chatId,
+      text: chunk,
+      parse_mode: options?.parse_mode ?? 'HTML',
+    };
+    if (isLast && options?.reply_markup) payload.reply_markup = options.reply_markup;
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: chunk, parse_mode: 'HTML' }),
+      body: JSON.stringify(payload),
     });
   }
 }
@@ -1444,6 +1453,62 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       const quoteId = parseInt(cbData.replace('reject_quote_', ''));
       await query(`UPDATE quotes SET statut = 'refuse' WHERE id = $1`, [quoteId]);
       await sendTelegram(cbChatId, `Devis #${quoteId} rejete.`);
+      return NextResponse.json({ ok: true });
+    }
+
+    // approve_ad_123 — Approve FB ad draft, create campaign in PAUSED state
+    if (cbData.startsWith('approve_ad_')) {
+      const draftId = parseInt(cbData.replace('approve_ad_', ''));
+      const { createMetaCampaignPaused } = await import('@/lib/meta-ads');
+      await query(
+        `UPDATE meta_ads_drafts SET statut = 'approve', approved_at = NOW(), approved_by = $1 WHERE id = $2 AND statut = 'brouillon'`,
+        [cbChatId, draftId]
+      );
+      await sendTelegram(cbChatId, `⏳ Création de la pub Meta en cours pour #${draftId}...`);
+      const result = await createMetaCampaignPaused(draftId);
+      if (result.error) {
+        await sendTelegram(cbChatId, `❌ <b>Erreur création pub #${draftId}</b>\n\n${result.error.slice(0, 400)}`, { parse_mode: 'HTML' });
+      } else {
+        const adsManagerUrl = `https://business.facebook.com/adsmanager/manage/campaigns?act=${(process.env.META_AD_ACCOUNT_ID ?? '').replace(/^act_/, '')}&selected_campaign_ids=${result.campaignId}`;
+        await sendTelegram(
+          cbChatId,
+          `✅ <b>Pub #${draftId} créée dans Meta (PAUSED)</b>\n\nCampaign: <code>${result.campaignId}</code>\nAd: <code>${result.adId}</code>\n\n<b>Status: PAUSED</b> — active-la dans Ads Manager quand prête.`,
+          {
+            parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: [[{ text: '📊 Ouvrir Ads Manager', url: adsManagerUrl }]] },
+          }
+        );
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // reject_ad_123
+    if (cbData.startsWith('reject_ad_')) {
+      const draftId = parseInt(cbData.replace('reject_ad_', ''));
+      await query(`UPDATE meta_ads_drafts SET statut = 'rejete', updated_at = NOW() WHERE id = $1`, [draftId]);
+      await sendTelegram(cbChatId, `❌ Pub #${draftId} rejetée — aucune campagne créée.`);
+      return NextResponse.json({ ok: true });
+    }
+
+    // regen_ad_123 — Regenerate copy + image for same service
+    if (cbData.startsWith('regen_ad_')) {
+      const draftId = parseInt(cbData.replace('regen_ad_', ''));
+      const rows = await query(`SELECT service FROM meta_ads_drafts WHERE id = $1`, [draftId]);
+      if (!rows.length) {
+        await sendTelegram(cbChatId, `Pub #${draftId} introuvable.`);
+        return NextResponse.json({ ok: true });
+      }
+      const service = String(rows[0].service);
+      await sendTelegram(cbChatId, `🔁 Régénération en cours pour ${service}...`);
+      try {
+        const { buildAdDraft, sendDraftToTelegram } = await import('@/lib/meta-ads');
+        const draft = await buildAdDraft({ service: service as 'flake' });
+        if (process.env.TELEGRAM_GROUP_CHAT_ID) {
+          await sendDraftToTelegram(draft, process.env.TELEGRAM_GROUP_CHAT_ID);
+        }
+      } catch (err) {
+        await sendTelegram(cbChatId, `❌ Régen échoue: ${(err as Error).message.slice(0, 200)}`);
+      }
       return NextResponse.json({ ok: true });
     }
 
