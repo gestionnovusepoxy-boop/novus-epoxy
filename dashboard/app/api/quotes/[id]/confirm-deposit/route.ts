@@ -204,5 +204,5 @@ ${calendarHtml}` : ''}
     console.error('[Iris] Auto-invoice/payment creation failed:', err);
   }
 
-  return NextResponse.json({ success: true, confirmed: true });
+  return NextResponse.json({ success: true, confirmed: true, booking_confirmed: !!booking });
 }

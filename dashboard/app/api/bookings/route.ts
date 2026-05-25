@@ -98,13 +98,26 @@ export async function PATCH(req: NextRequest) {
   if (existing.length === 0) {
     // Create new booking
     await query(
-      `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut) VALUES ($1, $2, $3, $4, $5, 'en_attente')`,
+      `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut) VALUES ($1, $2, $3, $4, $5, 'confirme')`,
       [quote_id, jour1_date, jour1_slot || 'matin', jour2_date || null, jour2_slot || 'apres-midi']
     );
+    // Link booking to quote and advance status to planifie if depot_paye
+    const booking = await query(`SELECT id FROM bookings WHERE quote_id = $1 ORDER BY id DESC LIMIT 1`, [quote_id]);
+    if (booking.length > 0) {
+      await query(
+        `UPDATE quotes SET booking_id = $1, statut = CASE WHEN statut = 'depot_paye' THEN 'planifie' ELSE statut END WHERE id = $2`,
+        [booking[0].id, quote_id]
+      );
+    }
   } else {
     await query(
-      `UPDATE bookings SET jour1_date = $1, jour1_slot = $2, jour2_date = $3, jour2_slot = $4, updated_at = NOW() WHERE quote_id = $5`,
+      `UPDATE bookings SET jour1_date = $1, jour1_slot = $2, jour2_date = $3, jour2_slot = $4, statut = 'confirme', updated_at = NOW() WHERE quote_id = $5`,
       [jour1_date, jour1_slot || 'matin', jour2_date || null, jour2_slot || 'apres-midi', quote_id]
+    );
+    // Advance status to planifie if depot_paye
+    await query(
+      `UPDATE quotes SET statut = CASE WHEN statut = 'depot_paye' THEN 'planifie' ELSE statut END WHERE id = $1`,
+      [quote_id]
     );
   }
 

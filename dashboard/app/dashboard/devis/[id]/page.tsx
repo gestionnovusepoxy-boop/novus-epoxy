@@ -71,8 +71,14 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       });
       const data = await res.json();
       if (data.ok) {
-        setBooking({ ...booking!, jour1_date: newJ1, jour1_slot: 'matin', jour2_date: newJ2, jour2_slot: newJ2Slot });
+        // Refresh booking from server
+        const br = await fetch(`/api/bookings?quote_id=${id}`).then(r => r.json());
+        if (br.booking) setBooking(br.booking);
+        else setBooking({ id: 0, jour1_date: newJ1, jour1_slot: 'matin', jour2_date: newJ2, jour2_slot: newJ2Slot, statut: 'en_attente' });
         setEditingDates(false);
+        // Also update quote status to planifie if depot_paye
+        const updated = await fetchQuote(parseInt(id));
+        setQuote(updated);
       } else {
         setError(data.error || 'Erreur lors de la mise a jour des dates');
       }
@@ -221,7 +227,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
     }
     setAction('');
   }
-  const [depositResult, setDepositResult] = useState<{ conflict?: boolean; available_dates?: { date: string; jour2_date: string; jour2_slot: string }[]; confirmed?: boolean } | null>(null);
+  const [depositResult, setDepositResult] = useState<{ conflict?: boolean; available_dates?: { date: string; jour2_date: string; jour2_slot: string }[]; confirmed?: boolean; booking_confirmed?: boolean } | null>(null);
   const [linkedInvoice, setLinkedInvoice] = useState<{ id: number; numero: string } | null>(null);
 
   // Booking state
@@ -244,7 +250,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       });
       const data = await res.json();
       if (data.success) {
-        setDepositResult({ confirmed: true });
+        setDepositResult({ confirmed: true, booking_confirmed: data.booking_confirmed });
         const updated = await fetchQuote(quote.id);
         setQuote(updated);
       } else if (data.conflict) {
@@ -785,11 +791,45 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
+      {/* Planifier les dates — shown when no booking yet and statut is advanced enough */}
+      {!booking && ['depot_paye', 'planifie', 'contrat_signe', 'envoye'].includes(quote.statut) && (
+        <div className="bg-slate-800 border border-amber-500/30 rounded-xl p-6">
+          <h3 className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-3">Planifier les travaux</h3>
+          <p className="text-slate-400 text-xs mb-4">Aucune date de travaux planifiée. Choisissez les dates ci-dessous.</p>
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-slate-400 text-xs block mb-1">Jour 1 — Préparation</label>
+                <input type="date" value={newJ1} onChange={e => setNewJ1(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500" />
+              </div>
+              <div>
+                <label className="text-slate-400 text-xs block mb-1">Jour 2 — Finition</label>
+                <input type="date" value={newJ2} onChange={e => setNewJ2(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500" />
+              </div>
+            </div>
+            <div>
+              <label className="text-slate-400 text-xs block mb-1">Slot Jour 2</label>
+              <select value={newJ2Slot} onChange={e => setNewJ2Slot(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+                <option value="matin">Matin (8h-12h)</option>
+                <option value="apres-midi">Après-midi (12h-16h)</option>
+              </select>
+            </div>
+            <button
+              onClick={handleSaveDates}
+              disabled={savingDates || !newJ1 || !newJ2}
+              className="bg-amber-500 hover:bg-amber-400 disabled:opacity-40 text-black font-semibold rounded-lg px-5 py-2 text-sm transition"
+            >
+              {savingDates ? 'Sauvegarde...' : 'Confirmer les dates'}
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Confirm deposit */}
       {['envoye', 'contrat_signe'].includes(quote.statut) && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-6">
           <h3 className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-4">Depot</h3>
-          <p className="text-slate-300 text-sm mb-4">{quote.statut === 'contrat_signe' ? 'Le contrat est signe.' : 'Devis envoye.'} Confirmez la reception du depot pour bloquer les dates.</p>
+          <p className="text-slate-300 text-sm mb-4">{quote.statut === 'contrat_signe' ? 'Le contrat est signe.' : 'Devis envoye.'} Confirmez la reception du depot.</p>
           <button
             onClick={handleConfirmDeposit}
             disabled={!!action}
@@ -803,7 +843,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       {/* Deposit result */}
       {depositResult?.confirmed && (
         <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-4 py-3">
-          <p className="text-emerald-400 text-sm font-semibold">Depot confirme! Les dates sont maintenant bloquees et le client a ete notifie.</p>
+          <p className="text-emerald-400 text-sm font-semibold">✅ Depot confirme! Le devis est maintenant a statut &quot;depot_paye&quot;{depositResult.booking_confirmed ? ' et les dates de travaux sont bloquees dans le calendrier' : ''}. Le client a ete notifie par SMS.</p>
         </div>
       )}
 
