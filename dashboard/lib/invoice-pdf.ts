@@ -200,8 +200,8 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
   .warranty { margin-top: 24px; background: #ecfdf5; border-left: 4px solid #16a34a; border-radius: 0 8px 8px 0; padding: 16px 20px; }
   .warranty h3 { font-size: 12px; text-transform: uppercase; color: #166534; font-weight: 700; letter-spacing: 0.5px; margin-bottom: 6px; }
   .warranty p { font-size: 13px; color: #334155; }
-  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 12px; text-align: center; }
-  .footer .tax-numbers { margin-top: 6px; font-size: 11px; }
+  .footer { margin-top: 40px; padding-top: 20px; border-top: 1px solid #e2e8f0; color: #475569; font-size: 12px; text-align: center; }
+  .footer .tax-numbers { margin-top: 8px; font-size: 13px; font-weight: 600; color: #0f172a; }
   .notes { margin-top: 24px; padding: 16px; background: #fffbeb; border-left: 4px solid #f59e0b; border-radius: 0 8px 8px 0; }
   .notes h4 { font-size: 12px; text-transform: uppercase; color: #92400e; margin-bottom: 4px; }
   @media print {
@@ -215,9 +215,10 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
     <div class="company">
       <h1>Novus Epoxy</h1>
       <p>Planchers époxy haut de gamme</p>
-      <p>Québec, Canada</p>
+      <p>44 rue de la Polyvalente, Québec G2N 1G8</p>
       <p>581-307-5983 (Luca) · 581-307-2678 (Jason)</p>
       <p>gestionnovusepoxy@gmail.com</p>
+      <p style="margin-top:6px;font-weight:600;color:#f59e0b;">RBQ : 5861-8471-01</p>
     </div>
     <div class="invoice-info">
       <h2>Facture</h2>
