@@ -26,17 +26,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const inv = rows[0];
 
-  // Pull quote_items + quote_extras for itemized display
-  const [itemRows, extraRows] = inv.quote_id ? await Promise.all([
-    query(
+  // Pull quote_items + quote_extras + ALL payments for full invoice display
+  const [itemRows, extraRows, paymentRows] = await Promise.all([
+    inv.quote_id ? query(
       `SELECT type_service, superficie, prix_pied_carre, sous_total, description FROM quote_items WHERE quote_id = $1 ORDER BY sort_order, id`,
       [inv.quote_id]
-    ).catch(() => []),
-    query(
+    ).catch(() => []) : Promise.resolve([]),
+    inv.quote_id ? query(
       `SELECT description, quantite, prix_unitaire, sous_total FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order, id`,
       [inv.quote_id]
+    ).catch(() => []) : Promise.resolve([]),
+    query(
+      `SELECT type, montant, methode, paid_at, notes FROM payments WHERE invoice_id = $1 ORDER BY paid_at`,
+      [parseInt(id)]
     ).catch(() => []),
-  ]) : [[], []];
+  ]);
   const formatDateStr = (d: unknown): string | null => {
     if (!d) return null;
     if (d instanceof Date) return d.toISOString().split('T')[0];

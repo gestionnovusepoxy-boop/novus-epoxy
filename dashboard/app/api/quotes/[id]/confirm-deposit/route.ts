@@ -81,6 +81,12 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     [quoteId]
   );
 
+  // Auto-create invoice + record deposit payment (no email to client yet — Luca controls send)
+  try {
+    const { ensureInvoiceForQuote } = await import('@/lib/ensure-invoice');
+    await ensureInvoiceForQuote(quoteId);
+  } catch (e) { console.error('ensureInvoiceForQuote failed:', e); }
+
   // Format dates for notifications (only relevant if booking exists)
   const fmt = (d: unknown) => {
     const date = d instanceof Date ? d : new Date(String(d));

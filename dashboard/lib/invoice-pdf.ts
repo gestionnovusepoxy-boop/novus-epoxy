@@ -30,6 +30,8 @@ interface InvoiceData {
   // Line items + extras from linked quote (multi-item or forfait)
   items?: Array<{ type_service: string; superficie: number; prix_pied_carre: number; sous_total: number; description?: string | null }>;
   extras?: Array<{ description: string; quantite: number; prix_unitaire: number; sous_total: number }>;
+  // All payments received (depot/partiel/final) — for multi-payment display
+  payments?: Array<{ type: string; montant: number; methode: string | null; paid_at: string; notes?: string | null }>;
 }
 
 interface ClientData {
@@ -341,23 +343,46 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
     </div>
   </div>
 
-  <div class="payments">
-    <h3>Modalités de paiement</h3>
-    <div class="payment-row">
-      <span class="label">Dépôt (30%)</span>
-      <span class="amount ${invoice.depot_paye ? 'paid' : 'unpaid'}">
-        ${formatMoney(Number(invoice.depot_montant))}
-        ${invoice.depot_paye ? ' ✓ Payé' + (invoice.depot_paye_at ? ' le ' + formatDate(invoice.depot_paye_at) : '') : ' — À payer'}
-      </span>
-    </div>
-    <div class="payment-row">
-      <span class="label">Solde (70%) — à la fin des travaux</span>
-      <span class="amount ${invoice.final_paye ? 'paid' : 'unpaid'}">
-        ${formatMoney(Number(invoice.final_montant))}
-        ${invoice.final_paye ? ' ✓ Payé' + (invoice.final_paye_at ? ' le ' + formatDate(invoice.final_paye_at) : '') : ' — À payer'}
-      </span>
-    </div>
-  </div>
+  ${(() => {
+    const payments = invoice.payments ?? [];
+    const totalPaid = payments.reduce((s, p) => s + Number(p.montant), 0);
+    const remaining = Number(invoice.total) - totalPaid;
+    const labelByType: Record<string, string> = { depot: 'Dépôt', partiel: 'Paiement partiel', final: 'Solde final' };
+
+    if (payments.length === 0) {
+      // Fallback: aucun paiement enregistré → afficher modèle classique dépôt/solde
+      return `<div class="payments">
+        <h3>Modalités de paiement</h3>
+        <div class="payment-row">
+          <span class="label">Dépôt (30%)</span>
+          <span class="amount unpaid">${formatMoney(Number(invoice.depot_montant))} — À payer</span>
+        </div>
+        <div class="payment-row">
+          <span class="label">Solde (70%) — à la fin des travaux</span>
+          <span class="amount unpaid">${formatMoney(Number(invoice.final_montant) || (Number(invoice.total) - Number(invoice.depot_montant)))} — À payer</span>
+        </div>
+      </div>`;
+    }
+
+    return `<div class="payments">
+      <h3>Paiements reçus</h3>
+      ${payments.map(p => `<div class="payment-row">
+        <span class="label">${labelByType[p.type] ?? p.type} ${p.methode ? `<span style="color:#94a3b8;font-size:12px;">— ${escapeHtml(p.methode)}</span>` : ''} <span style="color:#94a3b8;font-size:12px;">le ${formatDate(p.paid_at)}</span></span>
+        <span class="amount paid">✓ ${formatMoney(Number(p.montant))}</span>
+      </div>`).join('')}
+      <div class="payment-row" style="border-top:2px solid #0f172a;padding-top:10px;margin-top:8px;">
+        <span class="label" style="font-weight:700;">Total payé</span>
+        <span class="amount paid" style="font-weight:700;">${formatMoney(totalPaid)}</span>
+      </div>
+      ${remaining > 0.01 ? `<div class="payment-row" style="background:#fef3c7;padding:10px;border-radius:6px;margin-top:8px;">
+        <span class="label" style="font-weight:700;color:#92400e;">RESTE À PAYER</span>
+        <span class="amount" style="font-weight:700;color:#92400e;">${formatMoney(remaining)}</span>
+      </div>` : `<div class="payment-row" style="background:#dcfce7;padding:10px;border-radius:6px;margin-top:8px;">
+        <span class="label" style="font-weight:700;color:#166534;">✓ Facture complètement payée</span>
+        <span class="amount paid" style="font-weight:700;">$0,00</span>
+      </div>`}
+    </div>`;
+  })()}
 
   <div class="accepted-methods">
     <h3>Modes de paiement acceptés</h3>

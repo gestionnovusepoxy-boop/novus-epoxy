@@ -15,8 +15,10 @@ export async function GET(req: NextRequest) {
   const search = searchParams.get('search') ?? '';
   const offset = (page - 1) * limit;
 
-  const showAll = searchParams.get('all') === 'true';
-  let where = showAll ? 'WHERE 1=1' : `WHERE statut NOT IN ('depot_paye', 'planifie', 'complete')`;
+  // Par défaut: TOUS les devis visibles. Filtre 'actifs=true' pour cacher les complétés/planifiés.
+  // (avant: hidden by default → bug entrepreneur ne voit pas ses devis 'depot_paye')
+  const onlyActifs = searchParams.get('actifs') === 'true';
+  let where = onlyActifs ? `WHERE statut NOT IN ('depot_paye', 'planifie', 'complete')` : 'WHERE 1=1';
   const params: unknown[] = [];
   let i = 1;
 
