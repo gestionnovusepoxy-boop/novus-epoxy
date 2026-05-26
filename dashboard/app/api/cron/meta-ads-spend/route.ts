@@ -86,6 +86,20 @@ export async function GET(req: NextRequest) {
       [dateStr, adAccountId, item.campaign_id ?? null, item.campaign_name ?? null,
        spendUsd, spendCad, Number(item.impressions ?? 0), Number(item.clicks ?? 0), JSON.stringify(item)]
     );
+
+    // Back-fill matching meta_ads_drafts row so dashboard sees spend per draft.
+    // Per ULTRAPLAN-V2 P0-2.
+    if (item.campaign_id) {
+      await query(
+        `UPDATE meta_ads_drafts
+            SET spend_usd = $1,
+                impressions = $2,
+                clicks = $3,
+                updated_at = NOW()
+          WHERE meta_campaign_id = $4`,
+        [spendUsd, Number(item.impressions ?? 0), Number(item.clicks ?? 0), item.campaign_id]
+      ).catch(() => {});
+    }
   }
 
   // 5) Set leads_count + cpl_cad at account level (sum row) — write a synthetic 'TOTAL' row

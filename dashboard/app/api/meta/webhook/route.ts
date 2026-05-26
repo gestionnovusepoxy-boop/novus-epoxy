@@ -256,9 +256,11 @@ async function handleLeadgen(change: Record<string, unknown>) {
     ].filter(Boolean).join(' — ');
 
     // 1. Keep submission insert (backwards compat + quote generation)
-    await query(
+    // Capture submission_id so we can propagate to quotes.submission_id below (P1-7)
+    const submissionRows = await query(
       `INSERT INTO submissions (nom, email, telephone, service, message, statut)
-       VALUES ($1, $2, $3, $4, $5, 'nouveau')`,
+       VALUES ($1, $2, $3, $4, $5, 'nouveau')
+       RETURNING id`,
       [
         nom.slice(0, 120),
         email.slice(0, 255) || 'no-email@facebook.lead',
@@ -267,6 +269,7 @@ async function handleLeadgen(change: Record<string, unknown>) {
         noteParts,
       ],
     );
+    const submissionId = submissionRows?.[0]?.id ?? null;
 
     // 2. Auto-score temperature (chaud/tiède/froid) — never blanket 'chaud'
     const scoring = scoreLead({ nom, email, telephone, service, superficie, espace, adresse, source: 'facebook-leadad' });
@@ -323,11 +326,11 @@ async function handleLeadgen(change: Record<string, unknown>) {
             const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
             const inserted = await query(
               `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie,
-                prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis, statut, secret_token, notes)
-               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'brouillon',$15,$16) RETURNING id`,
+                prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis, statut, secret_token, notes, submission_id)
+               VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'brouillon',$15,$16,$17) RETURNING id`,
               [nom.slice(0, 120), email.slice(0, 255) || null, telephone, adresse, service, superficieNum,
                calc.prix_pied_carre, calc.rabais_pct, calc.rabais_montant, calc.sous_total, calc.tps, calc.tvq,
-               calc.total, calc.depot_requis, token, `Lead Facebook Ad #${leadgenId} — auto-devis`]
+               calc.total, calc.depot_requis, token, `Lead Facebook Ad #${leadgenId} — auto-devis`, submissionId]
             ).catch(() => []);
             if (inserted?.[0]?.id) {
               quoteId = inserted[0].id as number;

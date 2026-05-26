@@ -96,12 +96,21 @@ export async function sendSMS(to: string, body: string, fromOverride?: string, s
       return false;
     }
 
-    // Log SMS to database
+    // Log SMS to database with lead_id lookup by phone number (ULTRAPLAN-V2 P1-5)
     try {
       const { query: dbQuery } = await import('@/lib/db');
+      // Lookup crm_leads.id by phone (last 10 digits match)
+      const cleanPhone = String(phone).replace(/\D/g, '').slice(-10);
+      const leadRows = cleanPhone.length === 10
+        ? await dbQuery(
+            `SELECT id FROM crm_leads WHERE telephone = $1 OR RIGHT(REGEXP_REPLACE(telephone, '\\D', '', 'g'), 10) = $1 ORDER BY created_at DESC LIMIT 1`,
+            [cleanPhone]
+          ).catch(() => [])
+        : [];
+      const leadId = leadRows[0]?.id ?? null;
       await dbQuery(
-        `INSERT INTO sms_logs (direction, from_number, to_number, message, statut) VALUES ('outbound', $1, $2, $3, 'sent')`,
-        [from, phone, body]
+        `INSERT INTO sms_logs (direction, from_number, to_number, message, statut, lead_id) VALUES ('outbound', $1, $2, $3, 'sent', $4)`,
+        [from, phone, body, leadId]
       );
     } catch { /* log failed — don't block send */ }
 
