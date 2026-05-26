@@ -12,7 +12,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const rows = await query(
     `SELECT inv.*,
             c.nom AS client_nom, c.email AS client_email, c.telephone AS client_tel, c.adresse AS client_adresse,
-            q.client_adresse AS work_address, q.couleur AS couleur,
+            q.client_adresse AS work_address, q.couleur_flake AS couleur, q.description_travaux AS quote_description,
             b.jour1_date, b.jour1_slot, b.jour2_date, b.jour2_slot
        FROM invoices inv
        JOIN clients c ON c.id = inv.client_id
