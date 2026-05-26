@@ -8,15 +8,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
   const { id } = await params;
+  // Pull invoice + client + linked quote (work address, color) + booking (dates if scheduled)
   const rows = await query(
-    `SELECT inv.*, c.nom AS client_nom, c.email AS client_email, c.telephone AS client_tel, c.adresse AS client_adresse
-     FROM invoices inv JOIN clients c ON c.id = inv.client_id WHERE inv.id = $1`,
+    `SELECT inv.*,
+            c.nom AS client_nom, c.email AS client_email, c.telephone AS client_tel, c.adresse AS client_adresse,
+            q.client_adresse AS work_address, q.couleur AS couleur,
+            b.jour1_date, b.jour1_slot, b.jour2_date, b.jour2_slot
+       FROM invoices inv
+       JOIN clients c ON c.id = inv.client_id
+       LEFT JOIN quotes q ON q.id = inv.quote_id
+       LEFT JOIN bookings b ON b.quote_id = inv.quote_id
+      WHERE inv.id = $1`,
     [parseInt(id)],
   );
 
   if (!rows[0]) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 });
 
   const inv = rows[0];
+  const formatDateStr = (d: unknown): string | null => {
+    if (!d) return null;
+    if (d instanceof Date) return d.toISOString().split('T')[0];
+    return String(d).split('T')[0];
+  };
+
   const html = generateInvoiceHtml(
     {
       numero: inv.numero as string,
@@ -37,6 +51,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       final_paye_at: inv.final_paye_at as string | null,
       notes: inv.notes as string | null,
       statut: inv.statut as string,
+      work_address: (inv.work_address as string | null) ?? null,
+      couleur: (inv.couleur as string | null) ?? null,
+      jour1_date: formatDateStr(inv.jour1_date),
+      jour1_slot: (inv.jour1_slot as string | null) ?? null,
+      jour2_date: formatDateStr(inv.jour2_date),
+      jour2_slot: (inv.jour2_slot as string | null) ?? null,
     },
     {
       nom: inv.client_nom as string,
