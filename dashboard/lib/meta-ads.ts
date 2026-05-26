@@ -430,17 +430,23 @@ export async function sendDraftToTelegram(draft: AdDraft, chatId: string): Promi
 }
 
 /**
- * Pause all previously launched Novus ads (statut='lance') in Meta.
- * Called automatically when a new ad is approved → keeps total active ads = 1.
+ * Pause previously launched Novus ads of the SAME service (statut='lance').
+ * Called when approving a new draft → replaces same-service ad, lets other services
+ * coexist (e.g. flake + métallique tournent en parallèle).
  * Returns array of paused campaign IDs.
  */
-export async function pausePreviousLaunchedAds(): Promise<{ paused: string[]; failed: Array<{ id: string; error: string }> }> {
+export async function pausePreviousLaunchedAds(service?: string): Promise<{ paused: string[]; failed: Array<{ id: string; error: string }> }> {
   const token = (process.env.META_PAGE_TOKEN ?? '').trim();
   if (!token) return { paused: [], failed: [] };
 
-  const rows = await query(
-    `SELECT id, meta_campaign_id FROM meta_ads_drafts WHERE statut = 'lance' AND meta_campaign_id IS NOT NULL`
-  ).catch(() => []);
+  const rows = service
+    ? await query(
+        `SELECT id, meta_campaign_id FROM meta_ads_drafts WHERE statut = 'lance' AND meta_campaign_id IS NOT NULL AND service = $1`,
+        [service]
+      ).catch(() => [])
+    : await query(
+        `SELECT id, meta_campaign_id FROM meta_ads_drafts WHERE statut = 'lance' AND meta_campaign_id IS NOT NULL`
+      ).catch(() => []);
   if (!rows.length) return { paused: [], failed: [] };
 
   const paused: string[] = [];

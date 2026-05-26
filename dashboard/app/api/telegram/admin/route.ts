@@ -1456,37 +1456,25 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       return NextResponse.json({ ok: true });
     }
 
-    // approve_ad_123 — Approve FB ad draft: pause ALL active ads, then create new one PAUSED
+    // approve_ad_123 — Approve FB ad draft, create campaign ACTIVE in Meta
     if (cbData.startsWith('approve_ad_')) {
       const draftId = parseInt(cbData.replace('approve_ad_', ''));
-      const { createMetaCampaignPaused, pausePreviousLaunchedAds, pauseAllActiveCampaigns } = await import('@/lib/meta-ads');
+      const { createMetaCampaignPaused, pausePreviousLaunchedAds } = await import('@/lib/meta-ads');
+
+      // Get service so we only pause SAME-service old ads (flake + métallique can coexist)
+      const draftRow = await query(`SELECT service FROM meta_ads_drafts WHERE id = $1`, [draftId]).catch(() => []);
+      const service = draftRow[0] ? String(draftRow[0].service) : undefined;
+
       await query(
         `UPDATE meta_ads_drafts SET statut = 'approve', approved_at = NOW(), approved_by = $1 WHERE id = $2 AND statut = 'brouillon'`,
         [cbChatId, draftId]
       );
       await sendTelegram(cbChatId, `⏳ Création de la pub Meta en cours pour #${draftId}...`);
 
-      // Auto-pause previously launched Novus ads (tracked in our DB)
-      const novusPause = await pausePreviousLaunchedAds();
-
-      // Auto-pause ALL OTHER active ads in the account (B option — user 2026-05-25)
-      const allPause = await pauseAllActiveCampaigns();
-
-      const totalPaused = new Set([...novusPause.paused, ...allPause.paused]);
-      if (totalPaused.size > 0) {
-        await sendTelegram(cbChatId, `⏸️ <b>${totalPaused.size} pub(s) active(s) mise(s) en pause</b>\n\nCampaign IDs: ${[...totalPaused].map(c => `<code>${c}</code>`).join(', ')}`, { parse_mode: 'HTML' });
-      }
-      const allFailed = [...novusPause.failed, ...allPause.failed].filter(f => !totalPaused.has(f.id));
-      if (allFailed.length > 0 || allPause.listError) {
-        const lines = [`⚠️ <b>Impossible de pauser certaines pubs via API</b>`];
-        if (allPause.listError) lines.push(`Listing: ${allPause.listError.slice(0, 120)}`);
-        if (allFailed.length > 0) lines.push(...allFailed.slice(0, 5).map(f => `${f.id}: ${f.error.slice(0, 80)}`));
-        lines.push(``, `<b>👉 Pause-les manuellement dans Ads Manager:</b>`);
-        const adsManagerUrl = `https://business.facebook.com/adsmanager/manage/campaigns?act=${(process.env.META_AD_ACCOUNT_ID ?? '').replace(/^act_/, '')}`;
-        await sendTelegram(cbChatId, lines.join('\n'), {
-          parse_mode: 'HTML',
-          reply_markup: { inline_keyboard: [[{ text: '📊 Ouvrir Ads Manager', url: adsManagerUrl }]] },
-        });
+      // Pause ONLY previous Novus ads of the SAME service (let flake + métallique cohabiter)
+      const novusPause = await pausePreviousLaunchedAds(service);
+      if (novusPause.paused.length > 0) {
+        await sendTelegram(cbChatId, `⏸️ <b>${novusPause.paused.length} ancienne(s) pub <i>${service}</i> mise(s) en pause</b>\n\nCampaign IDs: ${novusPause.paused.map(c => `<code>${c}</code>`).join(', ')}\n\n<i>Pubs des autres services restent actives.</i>`, { parse_mode: 'HTML' });
       }
 
       const result = await createMetaCampaignPaused(draftId);
@@ -1592,6 +1580,47 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
   // GROUP MESSAGE: respond to "Aria ...", auto-detect leads, hours, or process CSV files
   // Photos and videos in group fall through to the shared handlers below
   if (isGroup) {
+    // Text command "pub <service> [budget]" — no photo → use Sage portfolio OR generate via LLM
+    if (isAdmin && !message.photo && !message.video && typeof message.text === 'string') {
+      const txt = String(message.text).toLowerCase().trim();
+      const cmd = txt.match(/^(?:pub|ad|annonce|nouvelle pub)\b/i);
+      if (cmd) {
+        // Detect service
+        let service = 'flake';
+        const svcKeywords: Array<[RegExp, string]> = [
+          [/m[eé]tallique?|metal\b/i, 'metallique'],
+          [/quartz/i, 'quartz'],
+          [/couleur[\s_]?unie?|uni\b/i, 'couleur_unie'],
+          [/antid[eé]rapant|anti[\s-]?d[eé]rapant/i, 'antiderapant'],
+          [/commercial|industriel/i, 'commercial'],
+          [/meulage|diamant|poli/i, 'meulage'],
+          [/vinyl|click|flottant/i, 'vinyl_click'],
+          [/flocon|flake/i, 'flake'],
+        ];
+        for (const [rx, svc] of svcKeywords) {
+          if (rx.test(txt)) { service = svc; break; }
+        }
+        const budgetMatch = txt.match(/\$?\s*(\d{2,3})\s*\$?(?:\s*\/?\s*j(?:our)?)?/i);
+        const budget = budgetMatch ? Math.min(parseInt(budgetMatch[1]), 50) : 30;
+
+        await sendTelegram(chatId, `🎨 <b>Nouvelle pub demandée — sans photo</b>\n\nService: <b>${service}</b>\nBudget: <b>$${budget}/jour</b>\n\n⏳ Je cherche une photo Sage portfolio. Si rien trouvé, je génère une avec Gemini 3 Pro Image (~10 sec)...`);
+
+        try {
+          const { buildAdDraft, sendDraftToTelegram } = await import('@/lib/meta-ads');
+          // No customImageUrl → buildAdDraft tries pickSageImage(), then generateAdImage()
+          const draft = await buildAdDraft({
+            service: service as 'flake',
+            dailyBudgetUsd: budget,
+            durationDays: 7,
+          });
+          await sendDraftToTelegram(draft, chatId);
+        } catch (err) {
+          await sendTelegram(chatId, `❌ Erreur: ${(err as Error).message.slice(0, 300)}`);
+        }
+        return NextResponse.json({ ok: true });
+      }
+    }
+
     // ANY photo dropped by admin in group → treat as ad creative
     // Caption flexible: looks for service keyword + optional budget; defaults flake/$30
     if (isAdmin && message.photo) {
