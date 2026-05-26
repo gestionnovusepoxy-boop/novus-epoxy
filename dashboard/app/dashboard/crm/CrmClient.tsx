@@ -303,6 +303,14 @@ function LeadRow({ lead, onUpdate, onProspect, prospecting, isSelected, onToggle
       <td className="px-2 sm:px-4 py-3 text-slate-500 text-xs whitespace-nowrap">{formatDate(lead.created_at)}</td>
       <td className="px-2 sm:px-4 py-3 whitespace-nowrap">
         <div className="flex gap-2">
+          <a
+            href={`/dashboard/crm/${lead.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-cyan-400 hover:text-cyan-300 transition text-xs font-medium"
+            title="Voir détail complet (devis, SMS, emails)"
+          >
+            Détail →
+          </a>
           {lead.email && (
             <button
               onClick={() => onProspect(lead.id)}
