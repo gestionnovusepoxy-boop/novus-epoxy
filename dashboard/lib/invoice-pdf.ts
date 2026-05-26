@@ -218,7 +218,7 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
       <p>44 rue de la Polyvalente, Québec G2N 1G8</p>
       <p>581-307-5983 (Luca) · 581-307-2678 (Jason)</p>
       <p>gestionnovusepoxy@gmail.com</p>
-      <p style="margin-top:6px;font-weight:600;color:#f59e0b;">RBQ : 5861-8471-01</p>
+      <p>RBQ : 5861-8471-01</p>
     </div>
     <div class="invoice-info">
       <h2>Facture</h2>
