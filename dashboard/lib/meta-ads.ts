@@ -88,27 +88,102 @@ export async function pickSageImage(service: string): Promise<string | null> {
   return url;
 }
 
-/** Generate a hyperrealistic ad image via OpenRouter image model. */
+/** Generate ad via fal.ai Recraft V3 — best in class for ad creative with text.
+ *  $0.04 per image, returns clean PNG with sharp legible text. */
+async function generateViaFal(prompt: string): Promise<string | null> {
+  const falKey = process.env.FAL_KEY;
+  if (!falKey) return null;
+  try {
+    // Recraft V3 — designed specifically for ad creatives, brand assets, flyers with text
+    const res = await fetch('https://fal.run/fal-ai/recraft-v3', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Key ${falKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        prompt,
+        image_size: 'portrait_4_3', // FB feed ratio
+        style: 'realistic_image/studio_portrait',
+        colors: [
+          { r: 245, g: 158, b: 11 },  // gold #f59e0b
+          { r: 15, g: 23, b: 42 },    // dark slate #0f172a
+          { r: 168, g: 85, b: 247 },  // purple neon #a855f7
+        ],
+      }),
+    });
+    if (!res.ok) {
+      console.error('fal.ai Recraft V3 failed:', res.status, await res.text().catch(() => ''));
+      return null;
+    }
+    const data = await res.json();
+    const imageUrl = data.images?.[0]?.url ?? data.image?.url ?? data.url;
+    if (!imageUrl) return null;
+    // Mirror to Vercel Blob for permanence (fal.ai URLs may expire)
+    const fetched = await fetch(imageUrl);
+    if (!fetched.ok) return imageUrl;
+    const buffer = Buffer.from(await fetched.arrayBuffer());
+    const blob = await put(`ads/${Date.now()}-fal-${Math.random().toString(36).slice(2,8)}.png`, buffer, {
+      access: 'public', addRandomSuffix: false, contentType: 'image/png',
+    });
+    return blob.url;
+  } catch (err) {
+    console.error('fal.ai error:', err);
+    return null;
+  }
+}
+
+/** Generate a designed FB ad creative (flyer style).
+ *  Priority: fal.ai Recraft V3 (best text) → OpenRouter GPT-5 Image (fallback). */
 export async function generateAdImage(service: string): Promise<{ url: string; prompt: string } | null> {
   const label = SERVICE_LABELS[service] ?? service;
-  const promptByService: Record<string, string> = {
-    flake: `Stunning professional photograph of a finished epoxy flake floor in a luxury Quebec garage. Multi-color flecks (blue, gray, white) over deep gray base, ultra-glossy mirror finish reflecting recessed LED lighting. Sleek modern garage with red Ferrari partially visible, white walls, polished concrete walls. Magazine-quality shot, wide-angle, HDR, professional architectural photography, ultra-realistic, 8k.`,
-    metallique: `Stunning professional photograph of a finished metallic epoxy floor in an upscale Quebec basement. Liquid-metal copper-bronze swirls with depth like molten gold, mirror-glossy reflective finish. Modern home theater room with leather sectional and big screen TV partially visible, ambient warm LED lighting. Magazine-quality interior photography, ultra-realistic, 8k, HDR.`,
-    quartz: `Stunning professional photograph of a finished quartz epoxy floor in a commercial Quebec kitchen. Cream-beige base with sparkling quartz flecks, satin-matte finish, ultra-clean. Industrial stainless steel kitchen partially visible. Magazine quality, ultra-realistic, 8k.`,
-    couleur_unie: `Stunning professional photograph of a finished solid-color epoxy floor in a modern Quebec basement. Deep charcoal gray, glass-smooth glossy finish, mirror reflections of modern furniture. Magazine quality, ultra-realistic, 8k, HDR.`,
-    antiderapant: `Stunning professional photograph of a finished anti-slip epoxy floor on a Quebec balcony. Light beige textured grip surface, weather-resistant, natural daylight. Outdoor wood patio chairs partially visible. Magazine quality, ultra-realistic, 8k.`,
-    commercial: `Stunning professional photograph of a finished commercial epoxy floor in a large Quebec warehouse. Clean light gray, mirror-glossy industrial finish, perfect line markings, racks partially visible. Magazine quality, ultra-realistic, 8k, HDR.`,
-    meulage: `Stunning professional photograph of a polished concrete floor in a Quebec retail showroom. Diamond-ground exposed aggregate, high-gloss polished concrete finish, mirror reflections. Magazine quality, ultra-realistic, 8k.`,
-    vinyl_click: `Stunning professional photograph of a luxury vinyl click floor in a modern Quebec basement family room. Realistic oak wood-look planks, warm tones, large sectional sofa, fireplace. Magazine quality, ultra-realistic, 8k.`,
+  // Service-specific hero scene
+  const heroByService: Record<string, string> = {
+    flake: `luxury Quebec garage with red Ferrari, multi-color flake epoxy floor with blue/gray/white flecks over deep gray base, ultra-glossy mirror finish, hexagon LED lighting, dark walls with neon purple accent`,
+    metallique: `upscale Quebec basement home theater, metallic epoxy floor with liquid copper-bronze swirls like molten gold, mirror reflections, leather sectional, warm ambient LED`,
+    quartz: `commercial Quebec kitchen, quartz epoxy floor cream-beige with sparkling flecks, satin finish, stainless steel`,
+    couleur_unie: `modern Quebec basement, solid charcoal epoxy floor glass-smooth glossy, mirror reflections, minimalist furniture`,
+    antiderapant: `Quebec balcony with anti-slip epoxy, light beige textured grip, natural daylight, outdoor patio chairs`,
+    commercial: `large Quebec warehouse, light gray commercial epoxy floor mirror-glossy, perfect line markings, racks`,
+    meulage: `Quebec retail showroom, polished concrete diamond-ground exposed aggregate, high-gloss`,
+    vinyl_click: `Quebec basement family room, luxury vinyl click oak wood-look planks, warm tones, fireplace`,
   };
-  const prompt = promptByService[service] ?? `Stunning professional photograph of a finished ${label} epoxy floor, ultra-realistic, 8k, magazine quality.`;
+  const hero = heroByService[service] ?? `Quebec garage with premium ${label} epoxy floor`;
 
-  // Use OpenRouter image generation (Gemini 3 Pro Image)
-  // OpenRouter passes through to provider; image gen uses chat completions with image output
+  // Designed flyer-style prompt with text overlay + Novus branding
+  const prompt = `Professional Facebook ad creative flyer for "NOVUS EPOXY" — Quebec premium epoxy flooring company.
+
+VISUAL SCENE: ${hero}. Magazine-quality 8k photography, dramatic lighting.
+
+OVERLAY DESIGN (vertical 4:5 portrait ratio for FB feed):
+TOP-LEFT: Large title text "PLANCHER ÉPOXY ${label.toUpperCase()}" — gold brushstroke font #f59e0b with white outline.
+TOP-RIGHT: Bold price badge in dark purple/black box "7,25\$/pi²" and below it "15% DE RABAIS" in big gold letters.
+MIDDLE-LEFT: Banner ribbon "SPÉCIAL PRINTEMPS — MAI SEULEMENT" in white on dark background.
+RIGHT-CENTER: Quote arrow "TRANSFORMEZ VOTRE GARAGE EN UN ESPACE PREMIUM" with PREMIUM in gold italic.
+BOTTOM-LEFT: 4 small icon features stacked vertically with gold diamond/shield/sparkle/timer icons:
+  - "FINITION HAUT DE GAMME"
+  - "RÉSISTANT AUX CHOCS"
+  - "FACILE D'ENTRETIEN"
+  - "INSTALLATION RAPIDE"
+BOTTOM-CENTER: Round gold "NOVUS EPOXY" logo with crown/gas-mask emblem, subtitle "COMPAGNIE D'ÉPOXY QUÉBEC".
+BOTTOM-LEFT corner: Hexagon phone icon "📞 581-307-5983 — APPELEZ MAINTENANT" in gold on dark.
+BOTTOM strip: "RÉSIDENTIEL ET COMMERCIAL · GARANTIE ÉCRITE · SATISFACTION GARANTIE" small caps gold.
+
+STYLE: dark luxurious aesthetic, gold #f59e0b accents, purple #a855f7 neon highlights, hexagon honeycomb pattern subtle. Inspired by premium auto detailing flyers. Brand colors: black, dark slate, gold, hot purple neon. NO blurry text, all text must be SHARP and LEGIBLE in French Quebec.
+
+IMPORTANT: All text must be perfectly readable, in FRENCH (Quebec), no English words. Logo "NOVUS EPOXY" must be prominent.`;
+
+  // PRIORITÉ 1: fal.ai Recraft V3 (best in class pour ad creative avec texte)
+  const falUrl = await generateViaFal(prompt);
+  if (falUrl) return { url: falUrl, prompt };
+
+  // FALLBACK: OpenRouter image gen (GPT-5 Image)
   try {
     const apiKey = process.env.OPENROUTER_API_KEY;
     if (!apiKey) return null;
-    const model = process.env.OR_MODEL_IMAGE ?? 'google/gemini-3-pro-image-preview';
+    // GPT-5 Image renders text in images far better than Gemini for designed ad creatives.
+    // Override via OR_MODEL_IMAGE env if you prefer Gemini/Flux/etc.
+    const model = process.env.OR_MODEL_IMAGE ?? 'openai/gpt-5-image';
     const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -265,23 +340,31 @@ export async function buildAdDraft(input: AdDraftInput): Promise<AdDraft> {
     if (p[0]) promoPct = Number(p[0].rabais_pct);
   } catch { /* no promo */ }
 
-  // Step 1: image — Sage portfolio first, LLM fallback
+  // Step 1: image — priorité custom upload, sinon LLM design (skip Sage = photo brute).
+  // Sage portfolio = photos client réelles, OK pour réf interne mais pas design publicitaire.
+  // Si pas de photo custom, force generation via GPT-5 Image avec branding Novus.
   let imageUrl: string | null = input.customImageUrl ?? null;
-  let imageSource: 'sage' | 'llm' = 'sage';
+  let imageSource: 'sage' | 'llm' = 'llm';
   let imagePrompt: string | undefined;
-  if (!imageUrl) {
-    imageUrl = await pickSageImage(service);
-  }
-  if (!imageUrl) {
+  if (imageUrl) {
+    // Si user a uploadé via Telegram, label image_source='sage' pour la DB (legacy)
+    // mais en vrai c'est une photo qu'il a fourni
+    imageSource = 'sage';
+  } else {
+    // Force LLM gen — design un flyer avec branding au lieu de prendre photo Sage brute
     const generated = await generateAdImage(service);
     if (generated) {
       imageUrl = generated.url;
       imageSource = 'llm';
       imagePrompt = generated.prompt;
+    } else {
+      // Dernier recours: Sage portfolio si LLM gen échoue
+      imageUrl = await pickSageImage(service);
+      imageSource = 'sage';
     }
   }
   if (!imageUrl) {
-    throw new Error(`No image available (no Sage portfolio for ${service} and LLM generation failed)`);
+    throw new Error(`No image available (LLM gen failed AND no Sage portfolio for ${service})`);
   }
 
   // Step 2: copy
