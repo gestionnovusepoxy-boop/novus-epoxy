@@ -174,25 +174,42 @@ CE QUE NOVUS EPOXY OFFRE:
 - Installation 2 jours, pas de chantier qui traîne
 - Compagnie locale Québec — Luca te répond direct au 581-307-5983
 
-TON STYLE (apprends de ces exemples):
+TON STYLE — VENDEUR DIRECT, accrocheur, parle au client comme un voisin qui le pitche en face:
+✅ EXEMPLE PARFAIT (à imiter): "Votre plancher de garage est gris, laid, taché? Vous voulez du PREMIUM avec un vrai rapport qualité-prix? On a ça pour vous."
 ✅ "Ton garage mérite mieux qu'un dépotoir."
 ✅ "Imagine ta voiture sur un plancher qui shine comme un showroom."
 ✅ "Fini les fissures, les taches d'huile, le béton poreux."
 ✅ "On t'envoie ta soumission par texto en 5 minutes — c'est-tu hot ça?"
+✅ Mots qui VENDENT: "premium", "qualité-prix", "garantie écrite", "10 ans", "ultra résistant", "haut de gamme", "showroom", "transforme"
 ❌ "Notre entreprise est leader dans le domaine de la finition de planchers..."
 ❌ "Solution premium pour résidences modernes."
+
+C'est de la VENTE DIRECTE. Tu parles au client comme un vendeur de char qui pitche dans son driveway. Pas un brochure corporate.
 
 RÉPONDS STRICTEMENT EN JSON: {"headline":"...","primary_text":"...","cta":"SIGN_UP"}.
 
 RÈGLES:
 - headline: max 40 char. Accroche-toi. Ex: "Ton garage mérite mieux." OU "Plancher époxy 5★ en 2 jours."
-- primary_text: 4 lignes courtes, total max 220 char. Structure OBLIGATOIRE:
-    Ligne 1: HOOK (problème vif OU rêve concret)
-    Ligne 2: BÉNÉFICE (transformation + 1 chiffre clé OU "mai 15%")
-    Ligne 3: URGENCE — "soumission gratuite par texto en 5 min" OU "places limitées mai"
-    Ligne 4: TÉLÉPHONE — DOIT contenir EXACTEMENT "📞 581-307-5983 — Luca" (beaucoup de clients préfèrent appeler direct, on garde ça top of mind)
+
+- primary_text: 4 PARAGRAPHES séparés par LIGNES VIDES (\\n\\n), total 280-450 char.
+    Structure OBLIGATOIRE:
+
+    Paragraphe 1 — HOOK question accrocheuse:
+      Ex: "Ton garage ressemble encore à un entrepôt?" OU "Tu rêves d'un plancher qui shine comme un showroom?"
+
+    Paragraphe 2 — BÉNÉFICE + FEATURES (2-3 features tangibles):
+      Ex: "Transforme-le en espace premium avec un plancher flake haut de gamme, résistant aux chocs, à l'huile et aux sels d'hiver. Garantie écrite 10 ans."
+
+    Paragraphe 3 — URGENCE PROMO:
+      "🎯 Spécial mai : 15% de rabais — réservé aux propriétaires Québec ville"
+
+    Paragraphe 4 — DOUBLE CTA (form + téléphone):
+      "Soumission gratuite en 5 minutes par texto + courriel.
+      📞 581-307-5983 — Luca répond direct"
+
+- Le 📞 et 581-307-5983 — Luca SONT OBLIGATOIRES dans le dernier paragraphe
 - Aucun prix exact (\$/pi² etc) dans le texte
-- Max 2 emojis dans tout le texte (le 📞 de la ligne 4 compte), aucun dans headline
+- Max 2 emojis total (🎯 et 📞 acceptés), aucun dans headline
 - Verbe à l'impératif/2e personne — "transforme", "imagine", "fini les..."
 - cta fixé à SIGN_UP
 
