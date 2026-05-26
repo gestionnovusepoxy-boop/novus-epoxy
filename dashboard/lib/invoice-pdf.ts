@@ -323,7 +323,6 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
   <div class="accepted-methods">
     <h3>Modes de paiement acceptés</h3>
     <div class="method"><span class="icon">🏦</span> <strong>Virement Interac e-Transfer</strong> — <em>recommandé, sans frais</em> · gestionnovusepoxy@gmail.com</div>
-    <div class="method"><span class="icon">📝</span> <strong>Chèque</strong> à l'ordre de <em>Novus Epoxy</em></div>
     <div class="method"><span class="icon">💵</span> <strong>Comptant</strong> — coordonner avec Luca au 581-307-5983</div>
   </div>
 
