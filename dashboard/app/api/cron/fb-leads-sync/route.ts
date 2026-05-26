@@ -177,11 +177,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'META_PAGE_TOKEN expired', detail: tokenData.error.message }, { status: 401 });
   }
 
-  // Fetch all active forms on the page, then sync leads from each
+  // System User tokens cannot list /leadgen_forms — Meta requires Page Access Token.
+  // Derive page access token from the system user token via /PAGE_ID?fields=access_token.
+  let pageToken = accessToken;
+  try {
+    const pageTokenRes = await fetch(`https://graph.facebook.com/v25.0/${pageId}?fields=access_token&access_token=${accessToken}`);
+    const pageTokenData = await pageTokenRes.json();
+    if (pageTokenData.access_token) pageToken = String(pageTokenData.access_token).trim();
+  } catch { /* fall through with system user token, will fail with clearer error */ }
+
+  // Fetch all active forms on the page, then sync leads from each (uses page token)
   const formsRes = await fetch(
-    `https://graph.facebook.com/v25.0/${pageId}/leadgen_forms?fields=id,status,leads_count&limit=50&access_token=${accessToken}`
+    `https://graph.facebook.com/v25.0/${pageId}/leadgen_forms?fields=id,status,leads_count&limit=50&access_token=${pageToken}`
   );
-  if (!formsRes.ok) return NextResponse.json({ error: 'Meta forms API error', status: formsRes.status });
+  if (!formsRes.ok) {
+    const errBody = await formsRes.text().catch(() => '');
+    return NextResponse.json({ error: 'Meta forms API error', status: formsRes.status, detail: errBody.slice(0, 300) });
+  }
   const formsData = await formsRes.json();
   // Include ACTIVE forms + forms with recent leads (in case form is archived but has new leads)
   const activeForms: Array<{ id: string; leads_count: number }> = (formsData.data ?? [])
@@ -193,7 +205,7 @@ export async function GET(req: NextRequest) {
 
   for (const form of activeForms) {
     const res = await fetch(
-      `https://graph.facebook.com/v25.0/${form.id}/leads?fields=id,created_time,field_data&limit=50&access_token=${accessToken}`
+      `https://graph.facebook.com/v25.0/${form.id}/leads?fields=id,created_time,field_data&limit=50&access_token=${pageToken}`
     );
     if (!res.ok) continue;
     const data = await res.json();
