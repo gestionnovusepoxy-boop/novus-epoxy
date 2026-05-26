@@ -241,6 +241,7 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
       <p class="name">Novus Epoxy</p>
       <p>Planchers époxy haut de gamme</p>
       <p>Québec, Canada</p>
+      <p>📞 581-307-5983 (Luca)</p>
       <p>gestionnovusepoxy@gmail.com</p>
     </div>
   </div>
