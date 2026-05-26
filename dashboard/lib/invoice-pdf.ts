@@ -341,7 +341,7 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
   <div class="footer">
     <p>Novus Epoxy — Planchers époxy haut de gamme — Québec</p>
     <p>Merci de votre confiance!</p>
-    <p class="tax-numbers">RBQ : 5861-8471-01  ·  No TPS : —  ·  No TVQ : —</p>
+    <p class="tax-numbers">RBQ : 5861-8471-01  ·  No TPS : 704712017 RT0001  ·  No TVQ : 1231257078 TQ0001</p>
   </div>
 
   <script>window.onload = function() { window.print(); }</script>
