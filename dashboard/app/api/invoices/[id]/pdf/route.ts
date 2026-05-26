@@ -25,6 +25,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!rows[0]) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 });
 
   const inv = rows[0];
+
+  // Pull quote_items + quote_extras for itemized display
+  const [itemRows, extraRows] = inv.quote_id ? await Promise.all([
+    query(
+      `SELECT type_service, superficie, prix_pied_carre, sous_total, description FROM quote_items WHERE quote_id = $1 ORDER BY sort_order, id`,
+      [inv.quote_id]
+    ).catch(() => []),
+    query(
+      `SELECT description, quantite, prix_unitaire, sous_total FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order, id`,
+      [inv.quote_id]
+    ).catch(() => []),
+  ]) : [[], []];
   const formatDateStr = (d: unknown): string | null => {
     if (!d) return null;
     if (d instanceof Date) return d.toISOString().split('T')[0];
@@ -57,6 +69,19 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       jour1_slot: (inv.jour1_slot as string | null) ?? null,
       jour2_date: formatDateStr(inv.jour2_date),
       jour2_slot: (inv.jour2_slot as string | null) ?? null,
+      items: itemRows.map(r => ({
+        type_service: String(r.type_service ?? ''),
+        superficie: Number(r.superficie ?? 0),
+        prix_pied_carre: Number(r.prix_pied_carre ?? 0),
+        sous_total: Number(r.sous_total ?? 0),
+        description: (r.description as string | null) ?? null,
+      })),
+      extras: extraRows.map(r => ({
+        description: String(r.description ?? ''),
+        quantite: Number(r.quantite ?? 0),
+        prix_unitaire: Number(r.prix_unitaire ?? 0),
+        sous_total: Number(r.sous_total ?? 0),
+      })),
     },
     {
       nom: inv.client_nom as string,

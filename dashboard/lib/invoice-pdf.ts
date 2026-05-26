@@ -27,6 +27,9 @@ interface InvoiceData {
   jour1_slot?: string | null;
   jour2_date?: string | null;
   jour2_slot?: string | null;
+  // Line items + extras from linked quote (multi-item or forfait)
+  items?: Array<{ type_service: string; superficie: number; prix_pied_carre: number; sous_total: number; description?: string | null }>;
+  extras?: Array<{ description: string; quantite: number; prix_unitaire: number; sous_total: number }>;
 }
 
 interface ClientData {
@@ -265,24 +268,59 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
   </div>
   ` : ''}
 
-  <table>
-    <thead>
-      <tr>
-        <th>Description</th>
-        <th>Quantité</th>
-        <th>Prix unitaire</th>
-        <th>Montant</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Plancher époxy — ${serviceName}<br><span style="font-size:11px;color:#64748b;">Matériaux haut de gamme + main d'œuvre 2 jours inclus</span></td>
-        <td>${invoice.superficie} pi²</td>
-        <td>${formatMoney(Number(invoice.prix_pied_carre))}/pi²</td>
-        <td>${formatMoney(Number(invoice.sous_total))}</td>
-      </tr>
-    </tbody>
-  </table>
+  ${(() => {
+    // Build table rows from items[] if provided, else fall back to invoice-level data.
+    // Each item shows description + quantité + prix unitaire + sous_total.
+    // If prix_pied_carre = 0 → show "Forfaitaire" instead of "0,00 $/pi²".
+    const items = invoice.items && invoice.items.length > 0 ? invoice.items : [{
+      type_service: invoice.type_service,
+      superficie: invoice.superficie,
+      prix_pied_carre: invoice.prix_pied_carre,
+      sous_total: invoice.sous_total,
+      description: null,
+    }];
+
+    const itemRows = items.map((it) => {
+      const svc = SERVICES[it.type_service as ServiceType];
+      const svcLabel = svc?.label ?? it.type_service;
+      const customDesc = (it.description ?? '').trim();
+      const descLine = customDesc
+        ? `${escapeHtml(customDesc)}<br><span style="font-size:11px;color:#64748b;">${escapeHtml(svcLabel)} — matériaux haut de gamme + main d'œuvre incluse</span>`
+        : `Plancher époxy — ${escapeHtml(svcLabel)}<br><span style="font-size:11px;color:#64748b;">Matériaux haut de gamme + main d'œuvre incluse</span>`;
+      const prixUnit = Number(it.prix_pied_carre) > 0
+        ? `${formatMoney(Number(it.prix_pied_carre))}/pi²`
+        : '<span style="color:#64748b;">Forfaitaire</span>';
+      const qty = Number(it.prix_pied_carre) > 0 ? `${it.superficie} pi²` : `${it.superficie} pi²`;
+      return `<tr>
+        <td>${descLine}</td>
+        <td>${qty}</td>
+        <td>${prixUnit}</td>
+        <td>${formatMoney(Number(it.sous_total))}</td>
+      </tr>`;
+    }).join('');
+
+    const extraRows = (invoice.extras ?? []).map((ex) => `<tr>
+        <td>${escapeHtml(ex.description)}<br><span style="font-size:11px;color:#64748b;">Extra / Supplément</span></td>
+        <td>${Number(ex.quantite).toLocaleString('fr-CA')}</td>
+        <td>${formatMoney(Number(ex.prix_unitaire))}</td>
+        <td>${formatMoney(Number(ex.sous_total))}</td>
+      </tr>`).join('');
+
+    return `<table>
+      <thead>
+        <tr>
+          <th>Description</th>
+          <th>Quantité</th>
+          <th>Prix unitaire</th>
+          <th>Montant</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${itemRows}
+        ${extraRows}
+      </tbody>
+    </table>`;
+  })()}
 
   <div class="totals">
     <div class="row subtotal">
