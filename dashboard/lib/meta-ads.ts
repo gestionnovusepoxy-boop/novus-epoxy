@@ -396,13 +396,11 @@ export async function sendDraftToTelegram(draft: AdDraft, chatId: string): Promi
     `Pipeline: lead → devis auto → close ~25% = <b>${Math.floor(estLeadsLow * 0.25)}-${Math.floor(estLeadsHigh * 0.25)} projets fermés</b>`,
     ``,
     `━━━━━━━━━━━━━━━━━━━━━━`,
-    `<b>⏸ MODE: PAUSED jusqu'à approbation</b>`,
-    ``,
-    `Si tu cliques <b>✅ Approuver</b>:`,
+    `<b>🚀 Si tu cliques ✅ Approuver:</b>`,
     `1. Pause auto des anciennes pubs Novus actives`,
-    `2. Crée campagne PAUSED dans Meta Ads Manager`,
-    `3. Te donne lien direct pour activer le toggle`,
-    `4. Leads commencent dès toggle ON`,
+    `2. Crée campagne <b>ACTIVE direct</b> dans Meta Ads Manager`,
+    `3. Te ping ici avec le lien Ads Manager`,
+    `4. Premiers leads attendus dans 1-4h`,
   ].join('\n');
 
   const detailsRes = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
@@ -582,16 +580,19 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
   // when we let user customize targeting via UI.
   const targeting = DEFAULT_TARGETING;
 
+  // All entities use same status — ACTIVE by default (user approved via Telegram),
+  // override via META_ADS_DEFAULT_STATUS=PAUSED for safety gate.
+  const entityStatus = (process.env.META_ADS_DEFAULT_STATUS ?? 'ACTIVE').toUpperCase();
+
   try {
-    // 1) Create campaign (PAUSED) — Meta requires is_adset_budget_sharing_enabled
-    //    when budget is at adset level (not campaign level)
+    // 1) Create campaign — ACTIVE by default
     const campRes = await fetch(`https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/campaigns`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         name: `Novus ${String(d.service)} — ${new Date().toISOString().slice(0,10)}`,
         objective: 'OUTCOME_LEADS',
-        status: 'PAUSED',
+        status: entityStatus,
         special_ad_categories: [],
         buying_type: 'AUCTION',
         is_adset_budget_sharing_enabled: false,
@@ -606,7 +607,7 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
     }
     const campaignId = campData.id;
 
-    // 2) Create ad set (PAUSED) — destination_type ON_AD routes to Lead Form on the ad
+    // 2) Create ad set — destination_type ON_AD routes to Lead Form on the ad
     const adsetRes = await fetch(`https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/adsets`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -620,7 +621,7 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
         promoted_object: { page_id: NOVUS_PAGE_ID },
         bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
         targeting,
-        status: 'PAUSED',
+        status: entityStatus,
         end_time: new Date(Date.now() + Number(d.duration_days ?? 7) * 86400_000).toISOString(),
         access_token: token,
       }),
@@ -663,7 +664,9 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
     }
     const creativeId = creativeData.id;
 
-    // 5) Create ad (PAUSED — Luca activates from Ads Manager OR via separate "Lancer LIVE" button)
+    // 5) Create ad — ACTIVE direct (user already approved via Telegram).
+    // Override via META_ADS_DEFAULT_STATUS env if you want PAUSED safety gate.
+    const adStatus = (process.env.META_ADS_DEFAULT_STATUS ?? 'ACTIVE').toUpperCase();
     const adRes = await fetch(`https://graph.facebook.com/${META_API_VERSION}/act_${adAccountId}/ads`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -671,7 +674,7 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
         name: `${String(d.service)} ad`,
         adset_id: adsetId,
         creative: { creative_id: creativeId },
-        status: 'PAUSED',
+        status: adStatus,
         access_token: token,
       }),
     });

@@ -1534,12 +1534,13 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
         }
       } else {
         const adsManagerUrl = `https://business.facebook.com/adsmanager/manage/campaigns?act=${(process.env.META_AD_ACCOUNT_ID ?? '').replace(/^act_/, '')}&selected_campaign_ids=${result.campaignId}`;
+        const isLive = (process.env.META_ADS_DEFAULT_STATUS ?? 'ACTIVE').toUpperCase() === 'ACTIVE';
         await sendTelegram(
           cbChatId,
-          `✅ <b>Pub #${draftId} créée dans Meta (PAUSED)</b>\n\nCampaign: <code>${result.campaignId}</code>\nAd: <code>${result.adId}</code>\n\n<b>Status: PAUSED</b> — active-la dans Ads Manager quand prête.`,
+          `${isLive ? '🚀' : '✅'} <b>Pub #${draftId} ${isLive ? 'EN LIGNE — LIVE!' : 'créée (PAUSED)'}</b>\n\nCampaign: <code>${result.campaignId}</code>\nAd: <code>${result.adId}</code>\n\n${isLive ? '<b>🟢 Status: ACTIVE</b> — Meta diffuse maintenant. Premiers leads attendus dans 1-4h.' : '<b>⚫ Status: PAUSED</b> — clique le bouton pour activer.'}`,
           {
             parse_mode: 'HTML',
-            reply_markup: { inline_keyboard: [[{ text: '📊 Ouvrir Ads Manager', url: adsManagerUrl }]] },
+            reply_markup: { inline_keyboard: [[{ text: '📊 Voir dans Ads Manager', url: adsManagerUrl }]] },
           }
         );
       }
