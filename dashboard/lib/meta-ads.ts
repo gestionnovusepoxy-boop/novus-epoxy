@@ -225,7 +225,7 @@ Génère LA pub la plus accrocheuse possible. Pense impact en 1 seconde de scrol
     const text = await callLLM({
       system,
       messages: [{ role: 'user', content: userPrompt }],
-      maxTokens: 500,
+      maxTokens: 1200, // 4 paragraphs need more room (was 500, got truncated)
       tier: 'smart', // Grok 4.20 — supporte json_object mode garanti
       jsonMode: true,
       agent: 'ads-generator',
