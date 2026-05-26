@@ -43,7 +43,9 @@ export async function GET(req: NextRequest) {
   }
 
   // 2) Pull spend by campaign for yesterday
-  const insightsUrl = `https://graph.facebook.com/v25.0/${adAccountId}/insights?level=campaign&fields=campaign_id,campaign_name,spend,impressions,clicks&time_range=${encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }))}&access_token=${token}`;
+  // Meta Marketing API requires act_ prefix on ad account ID for insights endpoint.
+  const accountWithPrefix = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
+  const insightsUrl = `https://graph.facebook.com/v25.0/${accountWithPrefix}/insights?level=campaign&fields=campaign_id,campaign_name,spend,impressions,clicks&time_range=${encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }))}&access_token=${token}`;
   const insRes = await fetch(insightsUrl);
   if (!insRes.ok) {
     const err = await insRes.json().catch(() => ({}));
