@@ -3,6 +3,7 @@ import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { isQuietHours } from '@/lib/telegram-utils';
+import { insertInvoiceWithRetry } from '@/lib/invoice-numero';
 
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
 const ADMIN_CHAT_IDS = () =>
@@ -69,20 +70,6 @@ export async function GET(req: NextRequest) {
       );
 
       if (invoiceRows.length === 0) {
-        // Generate invoice number
-        const year = new Date().getFullYear();
-        const prefix = `NE-${year}-`;
-        const lastNum = await query(
-          `SELECT numero FROM invoices WHERE numero LIKE $1 ORDER BY numero DESC LIMIT 1`,
-          [`${prefix}%`]
-        );
-        let nextNum = 1;
-        if (lastNum[0]) {
-          const parts = String(lastNum[0].numero).split('-');
-          nextNum = parseInt(parts[parts.length - 1] ?? '0') + 1;
-        }
-        const numero = `${prefix}${String(nextNum).padStart(4, '0')}`;
-
         // Get quote details for invoice — MUST include rabais_pct/rabais_montant
         // because the INSERT below references qd.rabais_pct and qd.rabais_montant.
         const quoteDetails = await query(
@@ -92,16 +79,18 @@ export async function GET(req: NextRequest) {
         );
         const qd = quoteDetails[0];
 
-        invoiceRows = await query(
-          `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, statut)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'en_cours')
-           RETURNING id`,
-          [
-            numero, quoteId, clientId,
-            qd.type_service, qd.superficie, qd.prix_pied_carre,
-            qd.rabais_pct ?? 0, qd.rabais_montant ?? 0,
-            qd.sous_total, qd.tps, qd.tvq, qd.total, qd.depot_requis,
-          ]
+        invoiceRows = await insertInvoiceWithRetry({ digits: 4 }, (numero) =>
+          query(
+            `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, statut)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'en_cours')
+             RETURNING id`,
+            [
+              numero, quoteId, clientId,
+              qd.type_service, qd.superficie, qd.prix_pied_carre,
+              qd.rabais_pct ?? 0, qd.rabais_montant ?? 0,
+              qd.sous_total, qd.tps, qd.tvq, qd.total, qd.depot_requis,
+            ]
+          )
         );
       }
 

@@ -6,6 +6,7 @@ import { escapeHtml } from '@/lib/utils';
 import { sendSMS } from '@/lib/sms';
 import { sendEmail } from '@/lib/send-email';
 import { calendarLinksHtml } from '@/lib/calendar-links';
+import { insertInvoiceWithRetry } from '@/lib/invoice-numero';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireAdmin(_req);
@@ -171,15 +172,12 @@ ${calendarHtml}` : ''}
     if (existingInv.length > 0) {
       invoiceId = existingInv[0].id as number;
     } else {
-      const yearStr = new Date().getFullYear().toString();
-      const lastInv = await query(`SELECT numero FROM invoices WHERE numero LIKE $1 ORDER BY numero DESC LIMIT 1`, [`NE-${yearStr}-%`]);
-      const nextNum = lastInv.length > 0 ? parseInt((lastInv[0].numero as string).split('-')[2]) + 1 : 1;
-      const numero = `NE-${yearStr}-${String(nextNum).padStart(3, '0')}`;
-
-      const invRows = await query(
-        `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant, statut, date_emission)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'depot_recu',CURRENT_DATE) RETURNING id, numero`,
-        [numero, quoteId, clientId, quote.type_service, quote.superficie, quote.prix_pied_carre, quote.rabais_pct ?? 0, quote.rabais_montant ?? 0, quote.sous_total, quote.tps, quote.tvq, quote.total, depotMontant, Number(quote.total) - depotMontant]
+      const invRows = await insertInvoiceWithRetry({ digits: 3 }, (numero) =>
+        query(
+          `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant, statut, date_emission)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'depot_recu',CURRENT_DATE) RETURNING id, numero`,
+          [numero, quoteId, clientId, quote.type_service, quote.superficie, quote.prix_pied_carre, quote.rabais_pct ?? 0, quote.rabais_montant ?? 0, quote.sous_total, quote.tps, quote.tvq, quote.total, depotMontant, Number(quote.total) - depotMontant]
+        )
       );
       invoiceId = invRows[0].id as number;
 
