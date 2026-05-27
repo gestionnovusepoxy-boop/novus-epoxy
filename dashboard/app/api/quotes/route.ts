@@ -153,6 +153,25 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Auto-generate description des travaux si pas déjà fournie.
+  // Détecte les extras (ardex/pro patch/tixo/etc.) et compose une description pro.
+  try {
+    const { generateAutoDescription } = await import('@/lib/auto-description');
+    const autoDesc = generateAutoDescription({
+      type_service: primaryService,
+      superficie: primarySuperficie,
+      couleur_flake: null,
+      etat_plancher: etat_plancher ?? null,
+      extras: typedExtras.map(e => ({
+        description: e.description,
+        sous_total: Math.round(e.quantite * e.prix_unitaire * 100) / 100,
+      })),
+    });
+    await query(`UPDATE quotes SET description_travaux = $1 WHERE id = $2 AND (description_travaux IS NULL OR description_travaux = '')`, [autoDesc, quoteId]);
+  } catch (err) {
+    console.error('auto-description on quote create failed:', err);
+  }
+
   // Copier les photos du lead CRM dans le devis si disponibles
   if (client_tel) {
     const last10 = client_tel.replace(/\D/g, '').slice(-10);

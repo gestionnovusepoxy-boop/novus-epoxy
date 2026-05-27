@@ -1,11 +1,8 @@
 name: Deploy PHP vers Hostinger
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'hostinger/**'
-      - 'database/**'
+  # Disabled — site vitrine novusepoxy.ca tourne ailleurs.
+  # Manual trigger only si on a besoin de redéployer le PHP legacy.
   workflow_dispatch:
 
 permissions:
