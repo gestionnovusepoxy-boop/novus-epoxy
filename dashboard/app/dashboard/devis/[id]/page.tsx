@@ -175,14 +175,10 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
     setError('');
     try {
       const isPrixFixe = Number(quote.prix_pied_carre) === 0 && Number(quote.sous_total) > 0;
-      const updated = await updateQuote(quote.id, {
-        ...editForm,
-        superficie: parseFloat(editForm.superficie) || quote.superficie,
-        rabais_pct: parseFloat(editForm.rabais_pct) || 0,
-        ...(isPrixFixe && editForm.prix_fixe_montant ? { sous_total: parseFloat(editForm.prix_fixe_montant) } : {}),
-      } as Record<string, unknown>);
 
-      // Save extras: delete all then re-insert
+      // STEP 1: write extras FIRST so the quote recalc reads the up-to-date list.
+      // The extras PUT triggers its own recalc internally — but we'll still PATCH after
+      // so that service / superficie / rabais changes apply.
       await fetch(`/api/quotes/${quote.id}/extras`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -196,7 +192,17 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         }))),
       }).catch(() => {});
 
-      setQuote(updated);
+      // STEP 2: PATCH the quote (service, superficie, rabais) — recalc reads the fresh extras.
+      await updateQuote(quote.id, {
+        ...editForm,
+        superficie: parseFloat(editForm.superficie) || quote.superficie,
+        rabais_pct: parseFloat(editForm.rabais_pct) || 0,
+        ...(isPrixFixe && editForm.prix_fixe_montant ? { sous_total: parseFloat(editForm.prix_fixe_montant) } : {}),
+      } as Record<string, unknown>);
+
+      // STEP 3: re-fetch to pick up the fully-recalculated quote
+      const fresh = await fetchQuote(quote.id);
+      setQuote(fresh);
       setEditing(false);
       setSendSuccess('Modifications sauvegardées!');
     } catch (e) {
