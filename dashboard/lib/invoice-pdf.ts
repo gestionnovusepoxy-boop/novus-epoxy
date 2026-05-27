@@ -301,12 +301,20 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
       </tr>`;
     }).join('');
 
-    const extraRows = (invoice.extras ?? []).map((ex) => `<tr>
-        <td>${escapeHtml(ex.description)}<br><span style="font-size:11px;color:#64748b;">Extra / Supplément</span></td>
+    const extraRows = (invoice.extras ?? []).map((ex) => {
+      const isIncluded = Number(ex.sous_total) === 0;
+      const subtype = isIncluded ? 'Travail inclus' : 'Extra / Supplément';
+      const rowStyle = isIncluded ? ' style="background:#ecfdf5;"' : '';
+      const amountCell = isIncluded
+        ? '<td style="color:#059669;font-weight:700;font-size:12px;">✓ INCLUS</td>'
+        : `<td>${formatMoney(Number(ex.sous_total))}</td>`;
+      return `<tr${rowStyle}>
+        <td>${escapeHtml(ex.description)}<br><span style="font-size:11px;color:#64748b;">${subtype}</span></td>
         <td>${Number(ex.quantite).toLocaleString('fr-CA')}</td>
-        <td>${formatMoney(Number(ex.prix_unitaire))}</td>
-        <td>${formatMoney(Number(ex.sous_total))}</td>
-      </tr>`).join('');
+        <td>${isIncluded ? '—' : formatMoney(Number(ex.prix_unitaire))}</td>
+        ${amountCell}
+      </tr>`;
+    }).join('');
 
     return `<table>
       <thead>

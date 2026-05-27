@@ -64,6 +64,33 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     await query(`UPDATE quote_items SET sous_total = $1 WHERE id = $2`, [calc.service_brut, items[0].id]).catch(() => {});
   }
 
+  // Propagate to linked invoice if not yet paid (depot_paye = false).
+  // Once depot is paid, the invoice is locked — we don't mutate it.
+  let invoiceSynced: { id: number; numero: string } | null = null;
+  let invoiceLocked: { id: number; numero: string; reason: string } | null = null;
+  const invoices = await query(
+    `SELECT id, numero, depot_paye, final_paye FROM invoices WHERE quote_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    [quoteId]
+  ).catch(() => []);
+  if (invoices[0]) {
+    const inv = invoices[0];
+    if (inv.depot_paye || inv.final_paye) {
+      invoiceLocked = { id: inv.id as number, numero: inv.numero as string, reason: inv.final_paye ? 'solde payé' : 'dépôt payé' };
+    } else {
+      const sousTotal = calc.sous_total;
+      const tps = calc.tps;
+      const tvq = calc.tvq;
+      const total = calc.total;
+      const depotMontant = Math.round(total * 0.30 * 100) / 100;
+      const finalMontant = Math.round((total - depotMontant) * 100) / 100;
+      await query(
+        `UPDATE invoices SET sous_total = $1, tps = $2, tvq = $3, total = $4, depot_montant = $5, final_montant = $6, updated_at = NOW() WHERE id = $7`,
+        [sousTotal, tps, tvq, total, depotMontant, finalMontant, inv.id]
+      ).catch(() => {});
+      invoiceSynced = { id: inv.id as number, numero: inv.numero as string };
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     service_brut: calc.service_brut,
@@ -75,5 +102,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     tvq: calc.tvq,
     total: calc.total,
     depot_requis: calc.depot_requis,
+    invoice_synced: invoiceSynced,
+    invoice_locked: invoiceLocked,
   });
 }

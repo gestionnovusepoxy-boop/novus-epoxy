@@ -449,6 +449,32 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             {action === 'recalc' ? 'Recalcul…' : '🔄 Recalculer prix (extras + rabais)'}
           </button>
         )}
+        {!editing && (
+          <button
+            onClick={async () => {
+              if (quote.description_travaux && !confirm('Une description existe déjà. La remplacer par une nouvelle auto-générée ?')) return;
+              setAction('autodesc'); setError('');
+              try {
+                const r = await fetch(`/api/quotes/${quote.id}/auto-description`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ save: true }),
+                });
+                const d = await r.json();
+                if (d.ok) {
+                  const updated = await fetchQuote(quote.id);
+                  setQuote(updated);
+                  setSendSuccess('Description des travaux générée automatiquement à partir du service + extras.');
+                } else { setError(d.error || 'Erreur auto-description'); }
+              } catch (e) { setError(`Erreur: ${e instanceof Error ? e.message : String(e)}`); }
+              setAction('');
+            }}
+            disabled={!!action}
+            className="bg-teal-600 hover:bg-teal-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-40"
+          >
+            {action === 'autodesc' ? 'Génération…' : '✨ Auto-générer description'}
+          </button>
+        )}
         {quote.sent_at && (
           <button onClick={handleResend} disabled={!!action} className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-40">
             {action === 'resend' ? 'Renvoi...' : '📤 Renvoyer au client'}
@@ -532,16 +558,27 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
                       type="number"
                       className="col-span-2 bg-slate-700 border border-slate-600 rounded-lg px-2 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500"
                     />
-                    <div className="col-span-2 text-amber-400 text-sm text-right pr-1">{formatMoney(parseFloat(ex.sous_total) || 0)}</div>
+                    <div className={`col-span-2 text-sm text-right pr-1 ${parseFloat(ex.sous_total) === 0 ? 'text-emerald-400 font-bold text-xs' : 'text-amber-400'}`}>
+                      {parseFloat(ex.sous_total) === 0 ? '✓ INCLUS' : formatMoney(parseFloat(ex.sous_total) || 0)}
+                    </div>
                     <button onClick={() => setEditExtras(prev => prev.filter((_, j) => j !== i))} className="col-span-1 text-red-400 hover:text-red-300 text-lg leading-none">×</button>
                   </div>
                 ))}
-                <button
-                  onClick={() => setEditExtras(prev => [...prev, { description: '', quantite: '1', prix_unitaire: '0', sous_total: '0' }])}
-                  className="text-amber-400 hover:text-amber-300 text-sm font-medium"
-                >
-                  + Ajouter une ligne
-                </button>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => setEditExtras(prev => [...prev, { description: '', quantite: '1', prix_unitaire: '0', sous_total: '0' }])}
+                    className="text-amber-400 hover:text-amber-300 text-sm font-medium"
+                  >
+                    + Ajouter une ligne payante
+                  </button>
+                  <button
+                    onClick={() => setEditExtras(prev => [...prev, { description: '', quantite: '1', prix_unitaire: '0', sous_total: '0' }])}
+                    className="text-emerald-400 hover:text-emerald-300 text-sm font-medium"
+                  >
+                    + Ajouter un travail inclus (gratuit)
+                  </button>
+                </div>
+                <p className="text-slate-500 text-xs italic">💡 Mets le prix à 0 pour afficher "✓ INCLUS" au client — montre tout le travail fait sans le facturer.</p>
               </div>
             </div>
             <div className="col-span-2">
@@ -623,13 +660,20 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           {/* Show extras if available */}
           {quote.extras && quote.extras.length > 0 && (
             <>
-              <p className="text-slate-500 text-xs uppercase mt-3">Extras</p>
-              {quote.extras.map((ex, idx) => (
-                <div key={idx} className="flex justify-between bg-slate-900/50 rounded-lg px-3 py-2">
-                  <span className="text-white">{ex.description} {Number(ex.quantite) > 1 ? `x${ex.quantite}` : ''}</span>
-                  <span className="text-slate-300">{formatMoney(Number(ex.sous_total))}</span>
-                </div>
-              ))}
+              <p className="text-slate-500 text-xs uppercase mt-3">Extras / Travaux inclus</p>
+              {quote.extras.map((ex, idx) => {
+                const isIncluded = Number(ex.sous_total) === 0;
+                return (
+                  <div key={idx} className={`flex justify-between rounded-lg px-3 py-2 ${isIncluded ? 'bg-emerald-500/10 border border-emerald-500/30' : 'bg-slate-900/50'}`}>
+                    <span className="text-white">{ex.description} {Number(ex.quantite) > 1 ? `x${ex.quantite}` : ''}</span>
+                    {isIncluded ? (
+                      <span className="text-emerald-400 font-bold text-xs">✓ INCLUS</span>
+                    ) : (
+                      <span className="text-slate-300">{formatMoney(Number(ex.sous_total))}</span>
+                    )}
+                  </div>
+                );
+              })}
             </>
           )}
 
@@ -711,12 +755,15 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           )}
 
           {/* Extras in price breakdown */}
-          {quote.extras && quote.extras.map((ex, idx) => (
-            <div key={idx} className="flex justify-between text-slate-300">
-              <span>{ex.description} {Number(ex.quantite) > 1 ? `x${ex.quantite}` : ''}</span>
-              <span>{formatMoney(Number(ex.sous_total))}</span>
-            </div>
-          ))}
+          {quote.extras && quote.extras.map((ex, idx) => {
+            const isIncluded = Number(ex.sous_total) === 0;
+            return (
+              <div key={idx} className={`flex justify-between ${isIncluded ? 'text-emerald-400' : 'text-slate-300'}`}>
+                <span>{ex.description} {Number(ex.quantite) > 1 ? `x${ex.quantite}` : ''}</span>
+                <span>{isIncluded ? '✓ INCLUS' : formatMoney(Number(ex.sous_total))}</span>
+              </div>
+            );
+          })}
 
           {Number(quote.rabais_pct) > 0 && (
             <div className="flex justify-between text-green-400 font-medium">

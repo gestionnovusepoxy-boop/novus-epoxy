@@ -137,6 +137,24 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
+  // Propagate price changes to the linked invoice if it exists and is NOT yet paid.
+  if (body.sous_total !== undefined || body.total !== undefined) {
+    const invs = await query(
+      `SELECT id, depot_paye, final_paye FROM invoices WHERE quote_id = $1 ORDER BY created_at DESC LIMIT 1`,
+      [parseInt(id)]
+    ).catch(() => []);
+    if (invs[0] && !invs[0].depot_paye && !invs[0].final_paye) {
+      const fresh = rows[0];
+      const total = Number(fresh.total);
+      const depotMontant = Math.round(total * 0.30 * 100) / 100;
+      const finalMontant = Math.round((total - depotMontant) * 100) / 100;
+      await query(
+        `UPDATE invoices SET sous_total = $1, tps = $2, tvq = $3, total = $4, depot_montant = $5, final_montant = $6, updated_at = NOW() WHERE id = $7`,
+        [fresh.sous_total, fresh.tps, fresh.tvq, total, depotMontant, finalMontant, invs[0].id]
+      ).catch(() => {});
+    }
+  }
+
   const items = await query('SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
   const extras = await query('SELECT * FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
 

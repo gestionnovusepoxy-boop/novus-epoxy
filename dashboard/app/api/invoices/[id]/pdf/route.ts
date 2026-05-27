@@ -101,7 +101,21 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     },
   );
 
+  // Cache-bust: hash of updated_at + last payment paid_at + extras hash
+  const lastPaymentAt = paymentRows.reduce<string>((max, p) => {
+    const t = p.paid_at instanceof Date ? p.paid_at.toISOString() : String(p.paid_at ?? '');
+    return t > max ? t : max;
+  }, '');
+  const invUpdated = inv.updated_at instanceof Date ? inv.updated_at.toISOString() : String(inv.updated_at ?? '');
+  const cacheKey = `${invUpdated}|${lastPaymentAt}|${extraRows.length}|${itemRows.length}`;
+  const etag = `"${Buffer.from(cacheKey).toString('base64').slice(0, 32)}"`;
+
   return new NextResponse(html, {
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      // Force regen on every change. Browser revalidates with ETag.
+      'Cache-Control': 'private, no-cache, must-revalidate',
+      'ETag': etag,
+    },
   });
 }
