@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAdminChatIds } from '@/lib/telegram-utils';
-import { query } from '@/lib/db';
+import { query, transaction } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { isQuietHours } from '@/lib/telegram-utils';
 import { insertInvoiceWithRetry } from '@/lib/invoice-numero';
@@ -96,18 +96,20 @@ export async function GET(req: NextRequest) {
 
       const invoiceId = invoiceRows[0].id as number;
 
-      // Create payment record
-      await query(
-        `INSERT INTO payments (invoice_id, type, montant, methode, notes, paid_at)
-         VALUES ($1, 'depot', $2, 'autre', 'Auto-detecte par deposit-watch', $3)`,
-        [invoiceId, depotMontant, q.deposit_paid_at]
-      );
-
-      // Update invoice deposit flags
-      await query(
-        `UPDATE invoices SET depot_paye = true, depot_paye_at = $1 WHERE id = $2`,
-        [q.deposit_paid_at, invoiceId]
-      );
+      // Payment insert + invoice flag update MUST be atomic — otherwise a payment
+      // can be recorded without the deposit flag flipping (or vice versa), leaving
+      // accounting out of sync. Wrap both in a transaction (P1-6).
+      await transaction(async (txq) => {
+        await txq(
+          `INSERT INTO payments (invoice_id, type, montant, methode, notes, paid_at)
+           VALUES ($1, 'depot', $2, 'autre', 'Auto-detecte par deposit-watch', $3)`,
+          [invoiceId, depotMontant, q.deposit_paid_at]
+        );
+        await txq(
+          `UPDATE invoices SET depot_paye = true, depot_paye_at = $1 WHERE id = $2`,
+          [q.deposit_paid_at, invoiceId]
+        );
+      });
 
       // Telegram notification
       const chatIds = ADMIN_CHAT_IDS();

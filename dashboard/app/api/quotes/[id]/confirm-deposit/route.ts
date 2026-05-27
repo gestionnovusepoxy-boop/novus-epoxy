@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { query, transaction } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
 import { sendSMS } from '@/lib/sms';
@@ -193,17 +193,21 @@ ${calendarHtml}` : ''}
       }
     }
 
-    // Create payment record if not exists
+    // Payment insert + invoice flag update MUST be atomic so accounting stays
+    // consistent if one of the writes fails (P1-6).
     const existingPay = await query(`SELECT id FROM payments WHERE invoice_id = $1 AND type = 'depot' LIMIT 1`, [invoiceId]);
-    if (existingPay.length === 0) {
-      await query(
-        `INSERT INTO payments (invoice_id, type, montant, methode, paid_at) VALUES ($1, 'depot', $2, 'virement', NOW())`,
-        [invoiceId, depotMontant]
+    await transaction(async (txq) => {
+      if (existingPay.length === 0) {
+        await txq(
+          `INSERT INTO payments (invoice_id, type, montant, methode, paid_at) VALUES ($1, 'depot', $2, 'virement', NOW())`,
+          [invoiceId, depotMontant]
+        );
+      }
+      await txq(
+        `UPDATE invoices SET depot_paye = true, depot_paye_at = NOW(), statut = 'depot_recu' WHERE id = $1`,
+        [invoiceId]
       );
-    }
-
-    // Update invoice deposit status
-    await query(`UPDATE invoices SET depot_paye = true, depot_paye_at = NOW(), statut = 'depot_recu' WHERE id = $1`, [invoiceId]);
+    });
   } catch (err) {
     console.error('[Iris] Auto-invoice/payment creation failed:', err);
   }
