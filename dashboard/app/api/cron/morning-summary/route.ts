@@ -118,6 +118,24 @@ export async function GET(req: NextRequest) {
     []
   ).catch(() => [{ count: 0 }]);
 
+  // Leads chauds non rappeles depuis 24h+ (P1-4) — top 10, sort by recency.
+  // crm_leads doesn't have score/last_contact_at columns — proxy "last contact" via
+  // prospect_sent_at OR updated_at when statut moved to 'contacte'.
+  const leadsChaudsNonRappeles = await query(
+    `SELECT id, nom, telephone, created_at,
+            COALESCE(prospect_sent_at, CASE WHEN statut IN ('contacte','offre_envoyee') THEN updated_at END) AS last_contact_at
+     FROM crm_leads
+     WHERE temperature = 'chaud'
+       AND statut NOT IN ('ferme', 'perdu', 'converti')
+       AND (
+         prospect_sent_at IS NULL
+         OR prospect_sent_at < NOW() - INTERVAL '24 hours'
+       )
+     ORDER BY created_at DESC
+     LIMIT 10`,
+    []
+  ).catch(() => []);
+
   // Recent emails summary (last 12h for morning, last 12h for evening)
   const recentEmailLogs = await query(
     `SELECT destinataire, sujet, statut, direction, created_at FROM email_logs
@@ -262,6 +280,19 @@ export async function GET(req: NextRequest) {
   if (reviewRequestsSent > 0) {
     lines.push('');
     lines.push(`⭐ ${reviewRequestsSent} demande${reviewRequestsSent !== 1 ? 's' : ''} d'avis Google envoyee${reviewRequestsSent !== 1 ? 's' : ''}`);
+  }
+
+  // Leads chauds non rappeles section (P1-4)
+  if (leadsChaudsNonRappeles.length > 0) {
+    lines.push('');
+    lines.push(`🔥 <b>Leads chauds non rappeles (${leadsChaudsNonRappeles.length}):</b>`);
+    for (const l of leadsChaudsNonRappeles) {
+      const tel = (l.telephone as string | null) ?? 'no tel';
+      const createdAt = l.created_at instanceof Date ? l.created_at : new Date(String(l.created_at));
+      const ageDays = Math.floor((Date.now() - createdAt.getTime()) / 86400000);
+      const ageLabel = ageDays === 0 ? "aujourd'hui" : ageDays === 1 ? 'hier' : `il y a ${ageDays}j`;
+      lines.push(`• ${l.nom} — ${tel} (cree ${ageLabel})`);
+    }
   }
 
   lines.push('');
