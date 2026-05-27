@@ -17,7 +17,8 @@ export interface BrandedEmailOptions {
 export function brandedEmailHtml(bodyHtml: string, opts: BrandedEmailOptions = {}): string {
   const showQuoteButton = opts.showQuoteButton !== false;
   const ctaLabel = opts.cta ?? 'Demander ma soumission gratuite';
-  const ctaUrl = opts.ctaUrl ?? 'https://novusepoxy.ca/#contact';
+  // CTA points to the Vercel form (live form). novusepoxy.ca/#contact has no form (P1-13).
+  const ctaUrl = opts.ctaUrl ?? 'https://novus-epoxy.vercel.app/#contact';
   return `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:0;">
     <div style="background:#0f172a;padding:16px 24px;border-radius:8px 8px 0 0;">
       <img src="https://novus-epoxy.vercel.app/logo.jpg" alt="Novus Epoxy" style="height:40px;" />

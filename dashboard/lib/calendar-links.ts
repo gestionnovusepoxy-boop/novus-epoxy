@@ -102,8 +102,8 @@ export function generateIcsContent(
   const { startHour: s1h, endHour: e1h } = slotTimes(jour1Slot);
   const { startHour: s2h, endHour: e2h } = slotTimes(jour2Slot);
 
-  const uid1 = `jour1-${jour1Date}-${Date.now()}@novusepoxy.ca`;
-  const uid2 = `jour2-${jour2Date}-${Date.now()}@novusepoxy.ca`;
+  const uid1 = `jour1-${jour1Date}-${Date.now()}@novus-epoxy.vercel.app`;
+  const uid2 = `jour2-${jour2Date}-${Date.now()}@novus-epoxy.vercel.app`;
 
   const lines = [
     'BEGIN:VCALENDAR',
