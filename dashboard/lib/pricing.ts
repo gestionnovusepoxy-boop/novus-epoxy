@@ -170,11 +170,24 @@ export function calculateQuoteWithExtras(opts: {
 }
 
 // Extras prédéfinis (le user peut aussi en créer des custom)
+// inclus = true : montré au client comme "✓ INCLUS" (prix 0, gratuit, valeur visible)
+// inclus = false : extra payant avec prix par défaut
 export const EXTRAS_PREDEFINIS = [
-  { key: 'masquage', label: 'Masquage complet', prix_defaut: 250 },
-  { key: 'protection', label: 'Protection de chantier', prix_defaut: 200 },
-  { key: 'echafaudage', label: 'Échafaudage', prix_defaut: 350 },
-  { key: 'reparation_marches', label: 'Réparation de marches de béton', prix_defaut: 500 },
+  // Payants — matériaux et prep majeure
+  { key: 'ardex_k60', label: 'Auto-nivelant Ardex K60 (par poche)', prix_defaut: 85, inclus: false },
+  { key: 'pro_patch', label: 'Resurfaçage Pro Patch (par sac)', prix_defaut: 65, inclus: false },
+  { key: 'tixo', label: 'Couche truelle epoxy tixo', prix_defaut: 1750, inclus: false },
+  { key: 'crack_fill', label: 'Réparation crack/fissure majeure', prix_defaut: 250, inclus: false },
+  { key: 'reparation_marches', label: 'Réparation de marches de béton', prix_defaut: 500, inclus: false },
+  { key: 'echafaudage', label: 'Échafaudage', prix_defaut: 350, inclus: false },
+  { key: 'mileage', label: 'Déplacement > 65 km', prix_defaut: 200, inclus: false },
+  // Inclus (gratuit, montre le travail au client)
+  { key: 'inspection', label: 'Inspection complète du plancher', prix_defaut: 0, inclus: true },
+  { key: 'meulage', label: 'Meulage diamant + aspiration HEPA (sans poussière)', prix_defaut: 0, inclus: true },
+  { key: 'masquage', label: 'Masquage complet (plinthes, murs, drains)', prix_defaut: 0, inclus: true },
+  { key: 'protection', label: 'Protection de chantier (papier, plastique)', prix_defaut: 0, inclus: true },
+  { key: 'nettoyage', label: 'Nettoyage chantier complet à la fin', prix_defaut: 0, inclus: true },
+  { key: 'garantie', label: 'Garantie écrite 10 ans', prix_defaut: 0, inclus: true },
 ] as const;
 
 export interface QuoteItem {

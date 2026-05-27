@@ -44,9 +44,9 @@ export default function NouveauDevisPage() {
 
   const [extras, setExtras] = useState<ExtraItem[]>([]);
 
-  // Calculate preview
+  // Calculate preview — keep extras à $0 (= "INCLUS", montre le travail au client)
   const validItems = items.filter(i => i.prix_fixe ? parseFloat(i.prix_fixe_montant) > 0 : parseFloat(i.superficie) > 0);
-  const validExtras = extras.filter(e => e.description && parseFloat(e.prix_unitaire) > 0);
+  const validExtras = extras.filter(e => e.description && e.description.trim().length > 0);
   const preview = validItems.length > 0 ? calculateMultiQuote(
     validItems.map(i => ({
       type_service: i.type_service,
@@ -235,59 +235,82 @@ export default function NouveauDevisPage() {
 
         {/* Extras */}
         <div className="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <h3 className="text-white font-semibold text-sm uppercase tracking-wider">Extras</h3>
-            <button type="button" onClick={() => addExtra()} className="text-amber-400 hover:text-amber-300 text-sm font-medium">+ Extra personnalise</button>
-          </div>
-
-          {/* Quick add presets */}
-          <div className="flex flex-wrap gap-2">
-            {EXTRAS_PREDEFINIS.map(preset => (
-              <button
-                key={preset.key} type="button"
-                onClick={() => addExtra(preset)}
-                className="bg-slate-700 hover:bg-slate-600 border border-slate-600 rounded-lg px-3 py-1.5 text-sm text-slate-300 transition"
-              >
-                + {preset.label}
-              </button>
-            ))}
-          </div>
-
-          {extras.map((ex, idx) => (
-            <div key={idx} className="flex items-end gap-3">
-              <div className="flex-1">
-                <label className="block text-sm text-slate-400 mb-1">Description</label>
-                <input
-                  value={ex.description} onChange={e => updateExtra(idx, 'description', e.target.value)}
-                  placeholder="Ex: Echafaudage, reparation..."
-                  className={inputClass}
-                />
-              </div>
-              <div className="w-20">
-                <label className="block text-sm text-slate-400 mb-1">Qte</label>
-                <input
-                  type="number" min="1" step="1"
-                  value={ex.quantite} onChange={e => updateExtra(idx, 'quantite', e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div className="w-28">
-                <label className="block text-sm text-slate-400 mb-1">Prix ($)</label>
-                <input
-                  type="number" min="0" step="0.01"
-                  value={ex.prix_unitaire} onChange={e => updateExtra(idx, 'prix_unitaire', e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div className="w-20 text-right text-sm text-slate-400 pb-2.5">
-                {parseFloat(ex.prix_unitaire) > 0 && formatMoney((parseFloat(ex.quantite) || 1) * parseFloat(ex.prix_unitaire))}
-              </div>
-              <button type="button" onClick={() => removeExtra(idx)} className="text-red-400 hover:text-red-300 pb-2.5 text-lg">✕</button>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h3 className="text-white font-semibold text-sm uppercase tracking-wider">Extras / Travaux inclus</h3>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => addExtra()} className="text-amber-400 hover:text-amber-300 text-sm font-medium border border-amber-500/30 rounded px-2 py-1">+ Payant</button>
+              <button type="button" onClick={() => setExtras(prev => [...prev, { description: '', quantite: '1', prix_unitaire: '0' }])} className="text-emerald-400 hover:text-emerald-300 text-sm font-medium border border-emerald-500/30 rounded px-2 py-1">+ Inclus (gratuit)</button>
             </div>
-          ))}
+          </div>
+
+          {/* Quick add presets — séparés payants / inclus */}
+          <div>
+            <p className="text-amber-400/80 text-xs font-bold uppercase mb-1">Matériaux & prep — PAYANT</p>
+            <div className="flex flex-wrap gap-2">
+              {EXTRAS_PREDEFINIS.filter(p => !p.inclus).map(preset => (
+                <button
+                  key={preset.key} type="button"
+                  onClick={() => addExtra(preset)}
+                  className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 rounded-lg px-3 py-1.5 text-sm text-amber-200 transition"
+                >
+                  + {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-emerald-400/80 text-xs font-bold uppercase mb-1">Travail inclus — montre la valeur au client (gratuit, ✓ INCLUS)</p>
+            <div className="flex flex-wrap gap-2">
+              {EXTRAS_PREDEFINIS.filter(p => p.inclus).map(preset => (
+                <button
+                  key={preset.key} type="button"
+                  onClick={() => addExtra(preset)}
+                  className="bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 rounded-lg px-3 py-1.5 text-sm text-emerald-200 transition"
+                >
+                  + {preset.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {extras.map((ex, idx) => {
+            const isIncluded = parseFloat(ex.prix_unitaire || '0') === 0;
+            return (
+              <div key={idx} className={`flex items-end gap-3 rounded-lg p-2 ${isIncluded ? 'bg-emerald-500/5 border border-emerald-500/20' : 'bg-slate-900/30'}`}>
+                <div className="flex-1">
+                  <label className="block text-xs text-slate-400 mb-1">Description {isIncluded && <span className="text-emerald-400 ml-1">✓ INCLUS au client</span>}</label>
+                  <input
+                    value={ex.description} onChange={e => updateExtra(idx, 'description', e.target.value)}
+                    placeholder="Ex: Auto-nivelant Ardex, Préparation HEPA..."
+                    className={inputClass}
+                  />
+                </div>
+                <div className="w-16">
+                  <label className="block text-xs text-slate-400 mb-1">Qté</label>
+                  <input
+                    type="number" min="1" step="1"
+                    value={ex.quantite} onChange={e => updateExtra(idx, 'quantite', e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="w-24">
+                  <label className="block text-xs text-slate-400 mb-1">Prix $ {isIncluded ? '(0 = inclus)' : ''}</label>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={ex.prix_unitaire} onChange={e => updateExtra(idx, 'prix_unitaire', e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div className={`w-24 text-right text-sm pb-2.5 ${isIncluded ? 'text-emerald-400 font-bold' : 'text-slate-400'}`}>
+                  {isIncluded ? '✓ INCLUS' : formatMoney((parseFloat(ex.quantite) || 1) * parseFloat(ex.prix_unitaire || '0'))}
+                </div>
+                <button type="button" onClick={() => removeExtra(idx)} className="text-red-400 hover:text-red-300 pb-2.5 text-lg">✕</button>
+              </div>
+            );
+          })}
 
           {extras.length === 0 && (
-            <p className="text-slate-500 text-sm">Aucun extra. Cliquez les boutons ci-dessus pour en ajouter.</p>
+            <p className="text-slate-500 text-sm">💡 Ajoute des extras payants OU des travaux gratuits (étiquetés "✓ INCLUS") pour montrer toute la valeur de ton service.</p>
           )}
         </div>
 
@@ -334,12 +357,15 @@ export default function NouveauDevisPage() {
               ))}
 
               {/* Extras */}
-              {preview.extras.map((ex, idx) => (
-                <div key={idx} className="flex justify-between text-slate-300">
-                  <span>{ex.description} {ex.quantite > 1 ? `x${ex.quantite}` : ''}</span>
-                  <span>{formatMoney(ex.sous_total)}</span>
-                </div>
-              ))}
+              {preview.extras.map((ex, idx) => {
+                const isIncluded = Number(ex.sous_total) === 0;
+                return (
+                  <div key={idx} className={`flex justify-between ${isIncluded ? 'text-emerald-400' : 'text-slate-300'}`}>
+                    <span>{ex.description} {ex.quantite > 1 ? `x${ex.quantite}` : ''}</span>
+                    <span>{isIncluded ? '✓ INCLUS' : formatMoney(ex.sous_total)}</span>
+                  </div>
+                );
+              })}
 
               {preview.rabais_pct > 0 && (
                 <div className="flex justify-between text-green-400 font-medium">
