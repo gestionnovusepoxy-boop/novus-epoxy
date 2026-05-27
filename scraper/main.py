@@ -33,7 +33,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-API_KEY = os.getenv("ADMIN_API_KEY", "65d5d80cca68d9b6161fe9b528465aba0a534be595434941")
+API_KEY = os.getenv("ADMIN_API_KEY")
+if not API_KEY:
+    raise RuntimeError("ADMIN_API_KEY env var required")
 DASHBOARD_URL = os.getenv("DASHBOARD_URL", "https://novus-epoxy.vercel.app")
 
 # --- Config ---

@@ -3,12 +3,14 @@
  * Generates Google Calendar URLs and .ics file content for both booking days.
  */
 
+export type Slot = 'matin' | 'apres-midi' | 'journee';
+
 export interface CalendarEvent {
   title: string;
   description: string;
   location: string;
   startDate: string; // YYYY-MM-DD
-  slot: 'matin' | 'apres-midi';
+  slot: Slot;
 }
 
 /** Format a date + time as an iCal DTSTART/DTEND value (Eastern time via UTC offset) */
@@ -43,15 +45,17 @@ function googleCalendarUrl(event: CalendarEvent): string {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-function slotTimes(slot: string): { startHour: number; endHour: number } {
-  if (slot === 'matin') {
-    return { startHour: 8, endHour: 12 };
-  }
+export function slotTimes(slot: string): { startHour: number; endHour: number } {
+  if (slot === 'matin') return { startHour: 8, endHour: 12 };
+  if (slot === 'journee') return { startHour: 8, endHour: 17 };
+  // default: apres-midi
   return { startHour: 13, endHour: 17 };
 }
 
-function slotLabel(slot: string): string {
-  return slot === 'matin' ? 'AM (8h-12h)' : 'PM (13h-17h)';
+export function slotLabel(slot: string): string {
+  if (slot === 'matin') return 'AM (8h-12h)';
+  if (slot === 'journee') return 'Journee (8h-17h)';
+  return 'PM (13h-17h)';
 }
 
 /** Generate Google Calendar links for both booking days */
@@ -69,7 +73,7 @@ export function generateGoogleCalendarLinks(
     description: `Jour 1 (preparation) — ${slotLabel(jour1Slot)}\n${description}`,
     location: address,
     startDate: jour1Date,
-    slot: jour1Slot as 'matin' | 'apres-midi',
+    slot: jour1Slot as Slot,
   });
 
   const jour2Url = googleCalendarUrl({
@@ -77,7 +81,7 @@ export function generateGoogleCalendarLinks(
     description: `Jour 2 (finition) — ${slotLabel(jour2Slot)}\n${description}`,
     location: address,
     startDate: jour2Date,
-    slot: jour2Slot as 'matin' | 'apres-midi',
+    slot: jour2Slot as Slot,
   });
 
   return { jour1Url, jour2Url };

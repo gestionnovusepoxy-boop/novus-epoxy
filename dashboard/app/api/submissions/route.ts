@@ -262,6 +262,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Champs requis manquants' }, { status: 400 });
   }
 
+  // Dedup window: 60 seconds. Prevents double-click SMS storm to admins.
+  // Returns the existing record without re-firing Claude + draft quote + Telegram + admin SMS.
+  const dedupEmail = String(body.email).toLowerCase().trim();
+  const dedupPhone = String(body.telephone ?? '').replace(/\D+/g, '');
+  const recent = await db(
+    `SELECT id FROM submissions
+     WHERE created_at > NOW() - INTERVAL '60 seconds'
+       AND (LOWER(email) = $1
+            OR ($2 != '' AND regexp_replace(COALESCE(telephone, ''), '[^0-9]', '', 'g') = $2))
+     ORDER BY created_at DESC LIMIT 1`,
+    [dedupEmail, dedupPhone]
+  );
+  if ((recent as Array<{ id: number }>)[0]) {
+    return NextResponse.json({ ok: true, id: (recent as Array<{ id: number }>)[0].id, duplicate: true });
+  }
+
   const ip     = req.headers.get('x-forwarded-for')?.split(',')[0] ?? '';
   const ua     = req.headers.get('user-agent') ?? '';
   const ipHash = await sha256(`${ip}${ua}${new Date().toISOString().slice(0, 10)}`);

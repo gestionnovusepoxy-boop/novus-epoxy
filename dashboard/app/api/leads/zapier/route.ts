@@ -42,9 +42,9 @@ function normalizeService(raw: string | null): string | null {
 //   leadgen_id? / lead_id? : string
 // }
 export async function POST(req: NextRequest) {
-  // --- Auth via API key ---
-  const apiKey = req.headers.get('x-api-key') ?? req.nextUrl.searchParams.get('api_key');
-  const expected = process.env.ZAPIER_API_KEY ?? process.env.ADMIN_API_KEY;
+  // --- Auth via API key (tolerant of trailing whitespace on either side) ---
+  const apiKey = (req.headers.get('x-api-key') ?? req.nextUrl.searchParams.get('api_key') ?? '').trim();
+  const expected = (process.env.ZAPIER_API_KEY ?? process.env.ADMIN_API_KEY ?? '').trim();
   if (!expected || apiKey !== expected) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -263,8 +263,8 @@ export async function POST(req: NextRequest) {
 
 // Healthcheck for Zapier "test connection"
 export async function GET(req: NextRequest) {
-  const apiKey = req.headers.get('x-api-key') ?? req.nextUrl.searchParams.get('api_key');
-  const expected = process.env.ZAPIER_API_KEY ?? process.env.ADMIN_API_KEY;
+  const apiKey = (req.headers.get('x-api-key') ?? req.nextUrl.searchParams.get('api_key') ?? '').trim();
+  const expected = (process.env.ZAPIER_API_KEY ?? process.env.ADMIN_API_KEY ?? '').trim();
   if (!expected || apiKey !== expected) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

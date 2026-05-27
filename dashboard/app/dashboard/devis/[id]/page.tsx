@@ -892,9 +892,20 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
                   </div>
                 );
               })()}
-              <button onClick={() => setEditingDates(true)} className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition">
-                Modifier les dates
-              </button>
+              <div className="flex gap-2 flex-wrap">
+                <button onClick={() => setEditingDates(true)} className="bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition">
+                  ✏️ Modifier les dates
+                </button>
+                <button
+                  onClick={() => {
+                    setNewExtraDays(prev => [...((booking.extra_days ?? []) as ExtraDay[]), { date: '', slot: 'matin' }]);
+                    setEditingDates(true);
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg transition"
+                >
+                  + Ajouter une journée (Jour {((booking.extra_days?.length ?? 0)) + 3})
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-3">
@@ -944,11 +955,11 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
               )}
               <button
                 onClick={() => setNewExtraDays(prev => [...prev, { date: '', slot: 'matin' }])}
-                className="text-cyan-400 hover:text-cyan-300 text-sm font-medium border border-cyan-500/30 rounded-lg px-3 py-1.5 hover:bg-cyan-500/10 transition"
+                className="bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-bold rounded-lg px-4 py-2.5 transition shadow-lg shadow-emerald-500/20"
               >
-                + Ajouter une journée
+                + Ajouter une journée (Jour {3 + newExtraDays.length})
               </button>
-              <p className="text-cyan-400/80 text-xs">📲 Synchronisé automatiquement avec ton agenda iPhone via l&apos;abonnement iCal.</p>
+              <p className="text-cyan-400/80 text-xs">📲 Synchronisé automatiquement avec ton agenda iPhone via l&apos;abonnement iCal · Tu peux ajouter autant de journées que nécessaire.</p>
               <div className="flex gap-2">
                 <button onClick={handleSaveDates} disabled={savingDates} className="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-40">
                   {savingDates ? 'Sauvegarde...' : 'Sauvegarder'}

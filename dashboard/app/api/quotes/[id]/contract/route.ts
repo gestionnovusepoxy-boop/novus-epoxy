@@ -14,7 +14,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const { id } = await params;
   const rows = await query(
-    `SELECT q.*, b.jour1_date AS booking_jour1_date, b.jour2_date AS booking_jour2_date, b.jour2_slot AS booking_jour2_slot
+    `SELECT q.*, b.jour1_date AS booking_jour1_date, b.jour1_slot AS booking_jour1_slot, b.jour2_date AS booking_jour2_date, b.jour2_slot AS booking_jour2_slot
      FROM quotes q LEFT JOIN bookings b ON b.id = q.booking_id
      WHERE q.id = $1`,
     [parseInt(id)]
@@ -45,6 +45,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     depot_requis: Number(quote.depot_requis),
     created_at: quote.created_at as string,
     booking_jour1_date: fmtBookingDate(quote.booking_jour1_date),
+    booking_jour1_slot: quote.booking_jour1_slot as string | null,
     booking_jour2_date: fmtBookingDate(quote.booking_jour2_date),
     booking_jour2_slot: quote.booking_jour2_slot as string | null,
   });

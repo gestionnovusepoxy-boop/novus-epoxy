@@ -34,6 +34,9 @@ export async function GET(req: NextRequest) {
 
   if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
+  // Wrap the whole handler so any uncaught error surfaces as diagnostic JSON
+  // instead of an empty 500 body (which is what was happening in prod).
+  try {
   let depositsCreated = 0;
   let balanceAlerts = 0;
 
@@ -79,9 +82,10 @@ export async function GET(req: NextRequest) {
         }
         const numero = `${prefix}${String(nextNum).padStart(4, '0')}`;
 
-        // Get quote details for invoice
+        // Get quote details for invoice — MUST include rabais_pct/rabais_montant
+        // because the INSERT below references qd.rabais_pct and qd.rabais_montant.
         const quoteDetails = await query(
-          `SELECT type_service, superficie, prix_pied_carre, sous_total, tps, tvq, total, depot_requis
+          `SELECT type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_requis
            FROM quotes WHERE id = $1`,
           [quoteId]
         );
@@ -180,6 +184,14 @@ export async function GET(req: NextRequest) {
     deposits_created: depositsCreated,
     balance_alerts: balanceAlerts,
   });
+  } catch (err) {
+    const e = err as Error;
+    console.error('deposit-watch fatal:', e);
+    return NextResponse.json(
+      { error: e?.message ?? 'unknown', stack: e?.stack ?? null },
+      { status: 500 }
+    );
+  }
 }
 
 export async function POST(req: NextRequest) {

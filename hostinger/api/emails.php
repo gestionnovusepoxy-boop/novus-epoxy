@@ -1,5 +1,7 @@
 <?php
 
+// LEGACY — not deployed. Kept as reference only. See CLAUDE.md.
+
 declare(strict_types=1);
 
 require_once __DIR__ . '/../includes/auth.php';

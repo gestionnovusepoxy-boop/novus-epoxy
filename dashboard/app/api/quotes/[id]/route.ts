@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { auth, requireAdmin } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { calculateQuoteWithExtras, type ServiceType, SERVICES } from '@/lib/pricing';
 
@@ -19,8 +19,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  const gate = await requireAdmin(req);
+  if (gate instanceof NextResponse) return gate;
 
   const { id } = await params;
   const body = await req.json();

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
+import { classify } from '@/lib/sms-classifier';
 
 // Blacklisted phones — never notify about our own numbers
 const BLACKLIST = ['5813075983', '5813072678'];
@@ -240,11 +241,14 @@ export async function POST(req: NextRequest) {
   const groupChatId = process.env.TELEGRAM_GROUP_CHAT_ID;
 
   if (botToken && groupChatId) {
+    // Phone embedded visibly in the message text so Luca can long-press to copy/dial.
+    // Telegram inline_keyboard rejects tel:/sms: URLs (returns 400 "Wrong port number")
+    // and silently swallowed the failure — see commit 983c899.
     const msg = [
       `🔥🔥 LEAD CHAUD — ${clientName} a répondu par SMS!`,
       ``,
       `*Message:* ${body}`,
-      `*Tél:* ${from}`,
+      `*Tél (long-press pour appeler):* ${from}`,
       clientEmail ? `*Email:* ${clientEmail}` : '',
       leadId ? `*Lead CRM:* #${leadId}` : '',
       quoteId ? `*Devis:* #${quoteId}` : '',
@@ -253,22 +257,30 @@ export async function POST(req: NextRequest) {
     const inlineKeyboard = {
       inline_keyboard: [
         [
-          { text: '📞 Appeler maintenant', url: `tel:${from}` },
+          { text: '📞 Marquer rappelé', callback_data: `call:${from}` },
           { text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' },
         ],
       ],
     };
 
-    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        chat_id: groupChatId,
-        text: msg,
-        parse_mode: 'Markdown',
-        reply_markup: inlineKeyboard,
-      }),
-    }).catch(() => {});
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: groupChatId,
+          text: msg,
+          parse_mode: 'Markdown',
+          reply_markup: inlineKeyboard,
+        }),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        console.error(`[sms/incoming] Telegram ${groupChatId} failed: ${r.status} ${err}`);
+      }
+    } catch (e) {
+      console.error(`[sms/incoming] Telegram ${groupChatId} exception:`, e);
+    }
   }
 
   // --- 3. SMS notifications to Luca + Jason (respect quiet hours) ---
@@ -291,7 +303,9 @@ export async function POST(req: NextRequest) {
   const hasQuestion = body.includes('?') || lower.includes('est-ce') || lower.includes('est ce') || lower.includes('comment') || lower.includes('quand') || lower.includes('disponible');
   const isPositive = lower.includes('oui') || lower.includes('ok') || lower.includes('interesse') || lower.includes('intéressé') || lower.includes('parfait') || lower.includes('super') || lower.includes("j'aimerais") || lower.includes('je veux') || lower.includes('je voudrais');
   const isNegative = lower.includes('pas interesse') || lower.includes('pas intéressé');
-  const isOptOut = lower === 'stop' || lower === 'arret' || lower === 'arreter' || lower === 'arrêter' || lower === 'desabonner' || lower === 'désabonner' || lower.includes('arretez') || lower.includes('arrêtez') || lower.includes('ne me contactez plus') || lower.includes('plus de message') || lower.includes('plus de texto') || lower.includes('laisser tranquille');
+  const smsClass = classify(body);
+  const isOptOut = smsClass === 'optout' || smsClass === 'complaint';
+  const isComplaint = smsClass === 'complaint';
 
   let autoReply: string;
   if (isOptOut) {
@@ -299,14 +313,42 @@ export async function POST(req: NextRequest) {
     const phone = from.startsWith('+') ? from : `+1${last10}`;
     await query(
       `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
-      [`sms_optout_${phone}`, JSON.stringify({ phone: from, date: new Date().toISOString(), message: body })]
+      [`sms_optout_${phone}`, JSON.stringify({ phone: from, date: new Date().toISOString(), message: body, complaint: isComplaint })]
     ).catch(() => {});
 
     // Also update lead status if exists
     if (leadId) {
+      const noteTag = isComplaint
+        ? `\n[PLAINTE SMS ${new Date().toLocaleDateString('fr-CA')}] ${body.slice(0, 200)}`
+        : `\n[OPT-OUT SMS ${new Date().toLocaleDateString('fr-CA')}] Client a demande de ne plus etre contacte.`;
       await query(`UPDATE crm_leads SET statut = 'ferme', notes = COALESCE(notes, '') || $1, updated_at = NOW() WHERE id = $2`,
-        [`\n[OPT-OUT SMS ${new Date().toLocaleDateString('fr-CA')}] Client a demande de ne plus etre contacte.`, leadId]
+        [noteTag, leadId]
       ).catch(() => {});
+    }
+
+    // Urgent Telegram ping on complaints (bypass quiet hours — legal risk)
+    if (isComplaint && botToken && groupChatId) {
+      const complaintMsg = [
+        `🚨 PLAINTE CLIENT — ${clientName} (${from})`,
+        ``,
+        `*Message:* ${body}`,
+        leadId ? `*Lead CRM:* #${leadId}` : '',
+        ``,
+        `Opt-out enregistré. Vérifier immédiatement.`,
+      ].filter(Boolean).join('\n');
+      try {
+        const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: groupChatId, text: complaintMsg, parse_mode: 'Markdown' }),
+        });
+        if (!r.ok) {
+          const err = await r.text();
+          console.error(`[sms/incoming] complaint Telegram failed: ${r.status} ${err}`);
+        }
+      } catch (e) {
+        console.error(`[sms/incoming] complaint Telegram exception:`, e);
+      }
     }
 
     autoReply = `Votre demande est respectee. Vous ne recevrez plus de messages de Novus Epoxy. Si vous changez d'avis, ecrivez-nous a gestionnovusepoxy@gmail.com. Bonne journee!`;

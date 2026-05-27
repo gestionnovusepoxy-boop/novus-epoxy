@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, formatMoney, getServiceDescriptionHtml } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  const apiKey = _req.headers.get('x-api-key') ?? '';
-  const validApiKey = process.env.ADMIN_API_KEY ?? '';
-  if (!session && (!validApiKey || apiKey !== validApiKey)) {
-    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-  }
+  const gate = await requireAdmin(_req);
+  if (gate instanceof NextResponse) return gate;
 
   const { id } = await params;
   let cc: string | undefined;

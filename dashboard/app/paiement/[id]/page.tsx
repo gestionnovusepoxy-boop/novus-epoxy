@@ -325,7 +325,7 @@ export default function ClientPortalPage() {
 
         {currentStep === 3 && (
           <div style={{ marginBottom: '16px' }}>
-            {/* INTERAC EN PREMIER — gros et visible */}
+            {/* INTERAC SEULEMENT — Stripe jamais utilise chez Novus Epoxy */}
             {!interacSent ? (
               <button onClick={handleInterac}
                 style={{
@@ -348,13 +348,13 @@ export default function ClientPortalPage() {
           </div>
         )}
 
-        {/* Step 4: Solde 70% — Interac en premier */}
+        {/* Step 4: Solde 70% — Interac seulement */}
         {currentStep === 4 && (
           <div style={{ marginBottom: '16px' }}>
             <div style={{ background: '#052e16', border: '1px solid #22c55e', borderRadius: '10px', padding: '14px', marginBottom: '12px', textAlign: 'center' }}>
               <p style={{ color: '#22c55e', fontWeight: 700, fontSize: '15px', margin: 0 }}>Depot de {formatMoney(depot)} recu &#10003;</p>
             </div>
-            {/* INTERAC EN PREMIER */}
+            {/* INTERAC SEULEMENT */}
             {!interacSent ? (
               <button onClick={handleInterac}
                 style={{

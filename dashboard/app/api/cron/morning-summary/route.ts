@@ -266,6 +266,28 @@ export async function GET(req: NextRequest) {
 
   lines.push('');
   lines.push(`💰 <b>Revenus ce mois:</b> ${formatMoney(monthDep + monthBal)}`);
+
+  // Twilio balance alert — flag when < $20 so SMS doesn't go dark
+  try {
+    const sid = process.env.TWILIO_ACCOUNT_SID;
+    const auth = process.env.TWILIO_AUTH_TOKEN;
+    if (sid && auth) {
+      const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Balance.json`, {
+        headers: { Authorization: `Basic ${Buffer.from(`${sid}:${auth}`).toString('base64')}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.ok) {
+        const j = await res.json() as { balance?: string; currency?: string };
+        const bal = parseFloat(j.balance ?? '0');
+        const cur = j.currency ?? 'USD';
+        if (Number.isFinite(bal) && bal < 20) {
+          lines.push('');
+          lines.push(`⚠️ <b>Twilio balance basse:</b> ${bal.toFixed(2)} ${cur} — top up bientot sinon SMS coupe.`);
+        }
+      }
+    }
+  } catch { /* never block the summary on Twilio check */ }
+
   lines.push('');
   lines.push(`<a href="https://novus-epoxy.vercel.app/dashboard">Ouvrir le dashboard</a>`);
 

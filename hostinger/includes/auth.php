@@ -1,5 +1,7 @@
 <?php
 
+// LEGACY — not deployed. Kept as reference only. See CLAUDE.md.
+
 declare(strict_types=1);
 
 function load_env(): void
@@ -29,7 +31,7 @@ function load_env(): void
 
 function cors_headers(): void
 {
-    $allowed = $_ENV['DASHBOARD_URL'] ?? getenv('DASHBOARD_URL') ?: 'https://dashboard.novusepoxy.ca';
+    $allowed = $_ENV['DASHBOARD_URL'] ?? getenv('DASHBOARD_URL') ?: 'https://novus-epoxy.vercel.app';
 
     header("Access-Control-Allow-Origin: {$allowed}");
     header('Access-Control-Allow-Methods: GET, POST, PATCH, OPTIONS');

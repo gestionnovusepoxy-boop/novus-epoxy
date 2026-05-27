@@ -18,8 +18,17 @@ interface QuoteData {
   depot_requis: number;
   created_at: string;
   booking_jour1_date?: string | null;
+  booking_jour1_slot?: string | null;
   booking_jour2_date?: string | null;
   booking_jour2_slot?: string | null;
+}
+
+/** Convert a booking slot to its French label for contracts/emails. */
+export function bookingSlotLabel(slot: string | null | undefined): string {
+  if (slot === 'matin') return 'AM (8h a 12h)';
+  if (slot === 'journee') return 'Journee (8h a 17h)';
+  // default = apres-midi (covers legacy null/undefined for jour2)
+  return 'PM (13h a 17h)';
 }
 
 interface CompanyInfo {
@@ -163,8 +172,8 @@ export function generateContractHtml(quote: QuoteData, companyInfo: CompanyInfo 
     ${quote.booking_jour1_date ? `
     <p><strong>Dates provisoires choisies par le client :</strong></p>
     <ul>
-      <li><strong>Jour 1 (preparation) :</strong> ${formatDate(quote.booking_jour1_date)} — AM (8h a 12h)</li>
-      ${quote.booking_jour2_date ? `<li><strong>Jour 2 (finition) :</strong> ${formatDate(quote.booking_jour2_date)} — ${quote.booking_jour2_slot === 'matin' ? 'AM (8h a 12h)' : 'PM (12h a 16h)'}</li>` : ''}
+      <li><strong>Jour 1 (preparation) :</strong> ${formatDate(quote.booking_jour1_date)} — ${bookingSlotLabel(quote.booking_jour1_slot)}</li>
+      ${quote.booking_jour2_date ? `<li><strong>Jour 2 (finition) :</strong> ${formatDate(quote.booking_jour2_date)} — ${bookingSlotLabel(quote.booking_jour2_slot)}</li>` : ''}
     </ul>
     <p>Ces dates sont provisoires et ne seront confirmees qu'a la reception du depot de 30%.</p>
     ` : `<p>Les dates des travaux seront convenues entre les parties apres la signature du present contrat et le paiement du depot.</p>`}

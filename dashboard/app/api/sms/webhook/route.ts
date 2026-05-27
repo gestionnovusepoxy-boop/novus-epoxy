@@ -3,12 +3,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { getOrCreateConversation, processMessage } from '@/lib/agent';
 import { isQuietHours } from '@/lib/telegram-utils';
+import { classify } from '@/lib/sms-classifier';
 
 // Twilio incoming SMS webhook — handles STOP/START opt-out + AI replies via Nova
 // Configure in Twilio console: Messaging > Phone Number > Webhook URL
 // POST https://novus-epoxy.vercel.app/api/sms/webhook
 
-const STOP_WORDS = ['stop', 'arret', 'arrêt', 'unsubscribe', 'desabonner', 'désabonner'];
 const START_WORDS = ['start', 'debut', 'début', 'subscribe', 'reabonner', 'réabonner'];
 
 // Anti-loop: never auto-reply to these patterns (carrier auto-replies, bounces, spam traps)
@@ -79,13 +79,28 @@ export async function POST(req: NextRequest) {
       return emptyTwiml();
     }
 
-    // --- STOP / Opt-out ---
-    if (STOP_WORDS.some(w => msgLower === w || msgLower.startsWith(w + ' '))) {
+    // --- STOP / Opt-out / Complaint ---
+    const smsClass = classify(body);
+    if (smsClass === 'optout' || smsClass === 'complaint') {
+      const isComplaint = smsClass === 'complaint';
       await query(
-        `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`,
-        ['sms_optout_' + phone, 'true']
-      );
-      console.log(`[SMS Webhook] Opt-out enregistre pour ${phone}`);
+        `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+        ['sms_optout_' + phone, JSON.stringify({ at: new Date().toISOString(), complaint: isComplaint, message: body.slice(0, 200) })]
+      ).catch(() => {});
+      console.log(`[SMS Webhook] ${isComplaint ? 'PLAINTE' : 'Opt-out'} enregistre pour ${phone}`);
+
+      // Log inbound + forward to Telegram (complaints bypass quiet hours)
+      await query(
+        `INSERT INTO sms_logs (direction, from_number, to_number, message, statut)
+         VALUES ('inbound', $1, $2, $3, $4)`,
+        [phone, process.env.TWILIO_PHONE_NUMBER ?? '+15817014055', body.slice(0, 1000), isComplaint ? 'complaint' : 'optout']
+      ).catch(() => {});
+
+      if (isComplaint) {
+        await forwardComplaintToTelegram(from, body, cleaned);
+      } else {
+        await forwardToTelegram(from, body, cleaned);
+      }
       return twiml('Vous avez ete desabonne des messages de Novus Epoxy. Pour vous reabonner, ecrivez START.');
     }
 
@@ -165,11 +180,65 @@ async function forwardToTelegram(from: string, body: string, cleaned: string) {
     `\u{1F4AC} ${body}`,
   ].join('\n');
 
-  await Promise.all(chatIds.map(chatId =>
-    fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML' }),
-    }).catch(() => {})
-  ));
+  await Promise.all(chatIds.map(async (chatId) => {
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML' }),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        console.error(`[sms/webhook] Telegram ${chatId} failed: ${r.status} ${err}`);
+      }
+    } catch (e) {
+      console.error(`[sms/webhook] Telegram ${chatId} exception:`, e);
+    }
+  }));
+}
+
+// Complaints bypass quiet hours — legal exposure (harassment, refund, lawsuit threats).
+async function forwardComplaintToTelegram(from: string, body: string, cleaned: string) {
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+  const adminIds = getAdminChatIds();
+  const chatIds = groupId ? [groupId] : adminIds;
+
+  if (!botToken || chatIds.length === 0) return;
+
+  const leads = await query(
+    `SELECT id, nom FROM crm_leads
+     WHERE REPLACE(REPLACE(REPLACE(telephone, '-', ''), ' ', ''), '+', '') LIKE '%' || $1
+     LIMIT 1`,
+    [cleaned.slice(-10)]
+  ).catch(() => [] as Record<string, unknown>[]);
+
+  const clientName = (leads[0]?.nom as string) ?? 'Inconnu';
+
+  const msg = [
+    `\u{1F6A8} <b>PLAINTE CLIENT</b>`,
+    ``,
+    `\u{1F464} ${clientName}`,
+    `\u{1F4DE} ${from} (long-press pour copier)`,
+    ``,
+    `\u{1F4AC} ${body}`,
+    ``,
+    `Opt-out enregistre. Verifier immediatement.`,
+  ].join('\n');
+
+  await Promise.all(chatIds.map(async (chatId) => {
+    try {
+      const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text: msg, parse_mode: 'HTML' }),
+      });
+      if (!r.ok) {
+        const err = await r.text();
+        console.error(`[sms/webhook] complaint Telegram ${chatId} failed: ${r.status} ${err}`);
+      }
+    } catch (e) {
+      console.error(`[sms/webhook] complaint Telegram ${chatId} exception:`, e);
+    }
+  }));
 }

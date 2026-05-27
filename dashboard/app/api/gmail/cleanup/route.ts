@@ -209,3 +209,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({ ok: true, total, details: results });
 }
+
+// Vercel cron sends GET — alias to POST handler so the schedule can fire.
+export const GET = POST;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { insertInvoiceWithRetry } from '@/lib/invoice-numero';
 
 export async function GET(req: NextRequest) {
   const session = await auth();
@@ -79,32 +80,27 @@ export async function POST(req: NextRequest) {
   }
   const clientId = clientRows[0].id as number;
 
-  // Generate invoice number
-  const year = new Date().getFullYear();
-  const prefix = `NE-${year}-`;
-  const lastRows = await query(
-    `SELECT numero FROM invoices WHERE numero LIKE $1 ORDER BY numero DESC LIMIT 1`,
-    [`${prefix}%`],
-  );
-  const lastSeq = lastRows[0] ? parseInt((lastRows[0].numero as string).split('-')[2]) : 0;
-  const numero = `${prefix}${String(lastSeq + 1).padStart(3, '0')}`;
-
   // Calculate deposit & final
   const total = Number(quote.total);
   const depot = Number(quote.depot_requis);
   const finalMontant = Math.round((total - depot) * 100) / 100;
 
-  const rows = await query(
-    `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
-    [
-      numero, quote_id, clientId,
-      quote.type_service, quote.superficie, quote.prix_pied_carre,
-      quote.rabais_pct ?? 0, quote.rabais_montant ?? 0,
-      quote.sous_total, quote.tps, quote.tvq, quote.total,
-      depot, finalMontant,
-    ],
-  );
+  // Race-safe invoice number generation. Pairs with UNIQUE(invoices.numero)
+  // added in migration-031. On 23505 (unique_violation) the helper re-mints
+  // and retries up to 5 times.
+  const rows = await insertInvoiceWithRetry({ digits: 3 }, async (numero) => {
+    return await query(
+      `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,
+      [
+        numero, quote_id, clientId,
+        quote.type_service, quote.superficie, quote.prix_pied_carre,
+        quote.rabais_pct ?? 0, quote.rabais_montant ?? 0,
+        quote.sous_total, quote.tps, quote.tvq, quote.total,
+        depot, finalMontant,
+      ],
+    );
+  });
 
   return NextResponse.json(rows[0], { status: 201 });
 }

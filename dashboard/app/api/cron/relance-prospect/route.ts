@@ -2,8 +2,11 @@ import { getQuebecHour } from '@/lib/timezone';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
+import pLimit from 'p-limit';
 
-export const maxDuration = 60;
+// Bumped from 60 → 300 to absorb sequential LLM/email calls on busy days.
+// Vercel Pro plan supports up to 300s; on Hobby this silently caps at 60s but never fails the deploy.
+export const maxDuration = 300;
 
 // Aria follow-up on Hunter prospect emails
 // Relance 1: 48h after prospect sent
@@ -55,7 +58,10 @@ export async function GET(req: NextRequest) {
 
   let sent1 = 0, sent2 = 0;
 
-  for (const lead of r1) {
+  // Concurrency cap = 5 so we don't hammer the LLM/email provider but still finish under maxDuration.
+  const limit = pLimit(5);
+
+  await Promise.all(r1.map((lead) => limit(async () => {
     const prenom = (lead.nom as string).split(' ')[0];
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f8fafc;">
 <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
@@ -91,9 +97,9 @@ export async function GET(req: NextRequest) {
     } catch (err) {
       console.error('Prospect relance 1 error:', err);
     }
-  }
+  })));
 
-  for (const lead of r2) {
+  await Promise.all(r2.map((lead) => limit(async () => {
     const prenom = (lead.nom as string).split(' ')[0];
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f8fafc;">
 <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
@@ -131,7 +137,7 @@ export async function GET(req: NextRequest) {
     } catch (err) {
       console.error('Prospect relance 2 error:', err);
     }
-  }
+  })));
 
   return NextResponse.json({ ok: true, relance_1: { found: r1.length, sent: sent1 }, relance_2: { found: r2.length, sent: sent2 } });
 }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { auth } from '@/lib/auth';
+import { requireAdmin } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { formatMoney } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
@@ -8,8 +8,8 @@ import { sendEmail } from '@/lib/send-email';
 import { calendarLinksHtml } from '@/lib/calendar-links';
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Non autorise' }, { status: 401 });
+  const gate = await requireAdmin(_req);
+  if (gate instanceof NextResponse) return gate;
 
   const { id } = await params;
   const quoteId = parseInt(id);

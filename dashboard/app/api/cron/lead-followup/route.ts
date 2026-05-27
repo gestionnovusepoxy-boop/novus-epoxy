@@ -36,9 +36,11 @@ export async function GET(req: NextRequest) {
   if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
   // 1. Find leads ready for follow-up
-  // Include leads where last_agent_reply_at IS NULL (never auto-replied) but created >4 days ago
+  // Include leads where last_agent_reply_at IS NULL (never auto-replied) but created >4 days ago.
+  // FB-leads-manual rule (feedback_fb_leads_manual.md): Aria does NOT auto-contact Facebook/Meta
+  // leads — Luca contacts them manually. Excluded via source filter.
   const leads = await query(
-    `SELECT id, nom, email, service, superficie
+    `SELECT id, nom, email, service, superficie, source
      FROM crm_leads
      WHERE statut = 'contacte'
        AND email IS NOT NULL
@@ -46,6 +48,7 @@ export async function GET(req: NextRequest) {
        AND (last_agent_reply_at IS NULL OR last_agent_reply_at < NOW() - INTERVAL '4 days')
        AND created_at < NOW() - INTERVAL '4 days'
        AND COALESCE(followup_count, 0) < 2
+       AND (source IS NULL OR source !~* '(facebook|meta|fb|zapier)')
        AND NOT EXISTS (
          SELECT 1 FROM email_logs
          WHERE destinataire = crm_leads.email

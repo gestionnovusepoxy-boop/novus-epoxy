@@ -85,10 +85,65 @@ async function logLLMCall(params: {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
       [params.agent, params.tier, params.model, inTok, outTok, params.totalTokens ?? (inTok + outTok), params.latencyMs, costUsd.toFixed(6), params.traceId ?? null, params.traceName ?? null, params.error ?? null]
     );
+    // Maintain rolling daily total in kv_store so the kill-switch knows when to trip.
+    const today = new Date().toISOString().slice(0, 10);
+    const usageKey = `llm_daily_usage_${today}`;
+    await query(
+      `INSERT INTO kv_store (key, value)
+       VALUES ($1, jsonb_build_object('spent_usd', $2::numeric, 'updated_at', NOW()::text))
+       ON CONFLICT (key) DO UPDATE
+         SET value = jsonb_build_object(
+           'spent_usd', COALESCE((kv_store.value->>'spent_usd')::numeric, 0) + $2::numeric,
+           'updated_at', NOW()::text
+         )`,
+      [usageKey, costUsd.toFixed(6)]
+    );
   } catch { /* never block on cost logging */ }
 }
 
 /** Raw LLM call — returns text. Works for all non-streaming cases. */
+/**
+ * Daily LLM cost cap (kill-switch).
+ * Reads cumulative spend for today from kv_store. If >= LLM_DAILY_CAP_USD (default 10),
+ * refuses further calls so a runaway loop cannot rack up unbounded spend.
+ * Fire-and-forget Telegram alert once per day on cap-hit (deduped via kv_store).
+ */
+async function assertWithinDailyBudget(): Promise<void> {
+  const { query: q } = await import('@/lib/db');
+  const today = new Date().toISOString().slice(0, 10);
+  const usageKey = `llm_daily_usage_${today}`;
+  const rows = (await q('SELECT value FROM kv_store WHERE key = $1', [usageKey])) as Array<{ value: unknown }>;
+  const v = rows[0]?.value as { spent_usd?: number } | undefined;
+  const spent = typeof v?.spent_usd === 'number' ? v.spent_usd : 0;
+  const cap = Number(process.env.LLM_DAILY_CAP_USD ?? '10');
+  if (spent >= cap) {
+    // Alert once per day to Telegram group, then throw to short-circuit
+    try {
+      const alertKey = `llm_cap_alerted_${today}`;
+      const alertedRows = (await q('SELECT 1 FROM kv_store WHERE key = $1', [alertKey])) as unknown[];
+      if (alertedRows.length === 0) {
+        const token = process.env.TELEGRAM_BOT_TOKEN;
+        const chat = process.env.TELEGRAM_GROUP_CHAT_ID;
+        if (token && chat) {
+          await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              chat_id: chat,
+              text: `🛑 LLM kill-switch: $${spent.toFixed(2)} >= $${cap.toFixed(2)} aujourd'hui. Tous les appels OpenRouter sont bloques jusqu'a demain. Augmente LLM_DAILY_CAP_USD ou investigue.`,
+            }),
+          }).catch(() => {});
+          await q(
+            `INSERT INTO kv_store (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO NOTHING`,
+            [alertKey, JSON.stringify({ at: new Date().toISOString(), spent_usd: spent })]
+          );
+        }
+      }
+    } catch { /* never block the kill-switch on alert delivery */ }
+    throw new Error(`LLM daily cap reached: $${spent.toFixed(2)} >= $${cap.toFixed(2)}`);
+  }
+}
+
 export async function callLLM({
   system,
   messages,
@@ -110,6 +165,8 @@ export async function callLLM({
 }): Promise<string> {
   const startTime = Date.now();
   let result = '';
+
+  await assertWithinDailyBudget();
 
   if (isOpenRouter()) {
     const model = OR_MODELS[tier];
