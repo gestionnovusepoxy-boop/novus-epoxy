@@ -86,6 +86,12 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
         prix_unitaire: Number(r.prix_unitaire ?? 0),
         sous_total: Number(r.sous_total ?? 0),
       })),
+      payments: paymentRows.map(r => ({
+        type: String(r.type ?? ''),
+        montant: Number(r.montant ?? 0),
+        methode: String(r.methode ?? ''),
+        paid_at: r.paid_at instanceof Date ? r.paid_at.toISOString() : String(r.paid_at ?? ''),
+      })),
     },
     {
       nom: inv.client_nom as string,

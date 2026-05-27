@@ -50,7 +50,7 @@ const WORK_DESCRIPTION: Record<string, string[]> = {
     "Application primer epoxy 100% solide (1ère couche d'accroche)",
     "Base coat epoxy pigmentée — couleur sélectionnée",
     "Saupoudrage de flocons (Flake) à plein refus",
-    "Topcoat polyaspartique haute brillance (2 couches)",
+    "Topcoat polyaspartique haute brillance",
     "Nettoyage chantier complet à la fin",
   ],
   metallique: [
@@ -59,7 +59,7 @@ const WORK_DESCRIPTION: Record<string, string[]> = {
     "Application primer epoxy 100% solide",
     "Base coat epoxy noire ou tintée selon couleur sélectionnée",
     "Application metallic pigment épandu et travaillé pour effet liquid-metal",
-    "Topcoat polyaspartique cristal-clair haute brillance (2 couches)",
+    "Topcoat polyaspartique cristal-clair haute brillance",
     "Nettoyage chantier complet à la fin",
   ],
   quartz: [

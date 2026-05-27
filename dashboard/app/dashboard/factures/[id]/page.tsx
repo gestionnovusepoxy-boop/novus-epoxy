@@ -108,6 +108,39 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
     setAction('');
   }
 
+  async function handleMarkFullyPaid() {
+    if (!inv) return;
+    if (!confirm(`Confirmer le paiement complet de ${formatMoney(Number(inv.total))} (depot + solde, methode: ${METHODE_LABEL[payMethode]}) ?`)) return;
+    setAction('paycomplete'); setError('');
+    try {
+      if (!inv.depot_paye) {
+        const r1 = await fetch(`/api/invoices/${id}/payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'depot', montant: inv.depot_montant, methode: payMethode, reference: payRef || null }),
+        });
+        if (!r1.ok) { setError((await r1.json()).error || 'Erreur dépôt'); setAction(''); return; }
+      }
+      if (!inv.final_paye) {
+        const r2 = await fetch(`/api/invoices/${id}/payment`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'final', montant: inv.final_montant, methode: payMethode, reference: payRef || null }),
+        });
+        if (!r2.ok) { setError((await r2.json()).error || 'Erreur solde'); setAction(''); return; }
+      }
+      // Force status completee
+      await fetch(`/api/invoices/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ statut: 'completee' }),
+      });
+      await reload();
+      showToast(`Facture marquée payée complet ✅ — ${formatMoney(Number(inv.total))}`);
+    } catch { setError('Erreur lors de la confirmation'); }
+    setAction('');
+  }
+
   async function handleStatusChange(statut: InvoiceStatut) {
     setAction('status');
     try {
@@ -148,6 +181,41 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
           <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+
+      {/* PAYÉ COMPLET — gros banner visible immédiatement */}
+      {inv.depot_paye && inv.final_paye && (
+        <div className="bg-gradient-to-r from-emerald-500/20 to-green-500/20 border-2 border-emerald-500/60 rounded-xl p-4 sm:p-5 flex items-center gap-4 shadow-lg shadow-emerald-500/10">
+          <div className="text-4xl sm:text-5xl">✅</div>
+          <div className="flex-1">
+            <p className="text-emerald-300 text-xs font-bold uppercase tracking-wider">Payé complet</p>
+            <p className="text-white text-lg sm:text-xl font-bold">{formatMoney(Number(inv.total))} encaissé</p>
+            <p className="text-emerald-400/80 text-xs mt-0.5">
+              Dépôt {inv.depot_paye_at ? formatDate(inv.depot_paye_at) : ''} · Solde {inv.final_paye_at ? formatDate(inv.final_paye_at) : ''}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Bouton rapide — marquer payé complet en 1 clic */}
+      {!(inv.depot_paye && inv.final_paye) && inv.statut !== 'annulee' && (
+        <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-xl p-4 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-emerald-300 text-xs font-bold uppercase tracking-wider">Tout est payé ?</p>
+            <p className="text-white text-sm">Un seul clic pour enregistrer dépôt + solde et passer en complétée.</p>
+          </div>
+          <select value={payMethode} onChange={e => setPayMethode(e.target.value)}
+            className="bg-slate-800 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-emerald-500">
+            {METHODES.map(m => <option key={m} value={m}>{METHODE_LABEL[m]}</option>)}
+          </select>
+          <button
+            onClick={handleMarkFullyPaid}
+            disabled={!!action}
+            className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-bold rounded-lg px-5 py-2.5 text-sm transition shadow-lg shadow-emerald-500/30"
+          >
+            {action === 'paycomplete' ? 'Enregistrement…' : `✅ Payé complet — ${formatMoney(Number(inv.total))}`}
+          </button>
         </div>
       )}
 
