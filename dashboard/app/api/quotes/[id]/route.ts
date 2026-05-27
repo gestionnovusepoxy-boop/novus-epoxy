@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
-import { calculateQuote, type ServiceType, SERVICES } from '@/lib/pricing';
+import { calculateQuoteWithExtras, type ServiceType, SERVICES } from '@/lib/pricing';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -30,47 +30,61 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const values: unknown[] = [];
   let i = 1;
 
-  // If type_service or superficie or rabais_pct changed, recalculate prices
-  // BUT skip recalc if this is a prix fixe quote (prix_pied_carre = 0)
-  const needsRecalc = body.type_service !== undefined || body.superficie !== undefined || body.rabais_pct !== undefined;
+  // Recalculer si service / superficie / rabais / prix_fixe change.
+  // ALWAYS include extras when computing sous_total/taxes (extras = prix fixe sans rabais).
+  const needsRecalc =
+    body.type_service !== undefined ||
+    body.superficie !== undefined ||
+    body.rabais_pct !== undefined ||
+    body.sous_total !== undefined;
+  let serviceNetForItem: number | null = null;
+
   if (needsRecalc) {
     const current = await query('SELECT * FROM quotes WHERE id = $1', [parseInt(id)]);
     if (!current[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
-    const isPrixFixe = Number(current[0].prix_pied_carre) === 0 && Number(current[0].sous_total) > 0;
+    const extrasRows = await query('SELECT sous_total FROM quote_extras WHERE quote_id = $1', [parseInt(id)]).catch(() => []);
+    const extrasTotal = extrasRows.reduce<number>((s, r) => s + Number(r.sous_total || 0), 0);
 
-    if (!isPrixFixe) {
-      const service = (body.type_service ?? current[0].type_service) as ServiceType;
-      const superficie = parseFloat(body.superficie ?? current[0].superficie);
-      const rabais = parseFloat(body.rabais_pct ?? current[0].rabais_pct ?? 0);
+    const service = (body.type_service ?? current[0].type_service) as ServiceType;
+    const superficie = parseFloat(body.superficie ?? current[0].superficie);
+    const rabais = parseFloat(body.rabais_pct ?? current[0].rabais_pct ?? 0);
+    const prixCarre = Number(body.prix_pied_carre ?? current[0].prix_pied_carre ?? 0);
 
-      if (service in SERVICES && superficie > 0) {
-        const calc = calculateQuote(service, superficie, rabais);
-        body.prix_pied_carre = calc.prix_pied_carre;
-        body.sous_total = calc.sous_total;
-        body.tps = calc.tps;
-        body.tvq = calc.tvq;
-        body.total = calc.total;
-        body.depot_requis = calc.depot_requis;
-        body.rabais_pct = calc.rabais_pct;
-        body.rabais_montant = calc.rabais_montant;
-      }
+    // Prix fixe : si body.sous_total est explicitement passé (modal édition), c'est le sous_total SERVICE seul.
+    // Sinon on conserve le sous_total service existant (current[0].sous_total - extras_actuels post-rabais).
+    const isPrixFixe = (!prixCarre || prixCarre === 0) && Number(current[0].sous_total) > 0;
+    let sousTotalService: number;
+    if (body.sous_total !== undefined && isPrixFixe) {
+      sousTotalService = parseFloat(body.sous_total);
+    } else if (isPrixFixe) {
+      // Reconstruct service-only from current : current.sous_total - previousExtrasNet
+      const prevRabais = Number(current[0].rabais_pct ?? 0);
+      const currentSousTotal = Number(current[0].sous_total ?? 0);
+      // Avant fix: current.sous_total = service_net SEUL. On garde cette convention.
+      sousTotalService = currentSousTotal / (1 - prevRabais / 100 || 1); // brut
+    } else {
+      sousTotalService = 0; // calculé par le helper via prix_pied_carre * superficie
     }
-    // Prix fixe: if sous_total is explicitly passed, recalculate taxes
-    if (isPrixFixe && body.sous_total !== undefined) {
-      const sousTotal = parseFloat(body.sous_total);
-      const rabais = parseFloat(body.rabais_pct ?? current[0].rabais_pct ?? 0);
-      const rabaisMontant = sousTotal * (rabais / 100);
-      const sousApresRabais = sousTotal - rabaisMontant;
-      const tps = Math.round(sousApresRabais * 0.05 * 100) / 100;
-      const tvq = Math.round(sousApresRabais * 0.09975 * 100) / 100;
-      const total = Math.round((sousApresRabais + tps + tvq) * 100) / 100;
-      body.sous_total = sousApresRabais;
-      body.tps = tps;
-      body.tvq = tvq;
-      body.total = total;
-      body.depot_requis = Math.round(total * 0.30 * 100) / 100;
-      body.rabais_montant = rabaisMontant;
+
+    if (service in SERVICES || isPrixFixe) {
+      const calc = calculateQuoteWithExtras({
+        serviceType: service,
+        superficie,
+        prixPiedCarre: isPrixFixe ? 0 : (SERVICES[service]?.prix ?? prixCarre),
+        sousTotalService: isPrixFixe ? sousTotalService : 0,
+        rabaisPct: rabais,
+        extrasTotal,
+      });
+      body.prix_pied_carre = calc.prix_pied_carre;
+      body.sous_total = calc.sous_total;
+      body.tps = calc.tps;
+      body.tvq = calc.tvq;
+      body.total = calc.total;
+      body.depot_requis = calc.depot_requis;
+      body.rabais_pct = calc.rabais_pct;
+      body.rabais_montant = calc.rabais_montant;
+      serviceNetForItem = calc.service_net;
     }
   }
 
@@ -105,14 +119,15 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 
   if (!rows[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
-  // Sync quote_items for single-item quotes when superficie or sous_total changes
-  if (body.superficie !== undefined || body.sous_total !== undefined) {
+  // Sync quote_items: store service_net (post-rabais service only, NOT extras).
+  // sous_total at the quote level already includes extras; the item line shows the service alone.
+  if (body.superficie !== undefined || serviceNetForItem !== null) {
     const items = await query('SELECT id FROM quote_items WHERE quote_id = $1', [parseInt(id)]).catch(() => []);
     if (items.length === 1) {
       const itemUpdates: string[] = [];
       const itemVals: unknown[] = [];
       if (body.superficie !== undefined) { itemUpdates.push(`superficie = $${itemUpdates.length + 1}`); itemVals.push(parseFloat(body.superficie)); }
-      if (body.sous_total !== undefined) { itemUpdates.push(`sous_total = $${itemUpdates.length + 1}`); itemVals.push(body.sous_total); }
+      if (serviceNetForItem !== null) { itemUpdates.push(`sous_total = $${itemUpdates.length + 1}`); itemVals.push(serviceNetForItem); }
       if (itemUpdates.length > 0) {
         itemVals.push(items[0].id);
         await query(`UPDATE quote_items SET ${itemUpdates.join(', ')} WHERE id = $${itemVals.length}`, itemVals).catch(() => {});

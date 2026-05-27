@@ -272,6 +272,64 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
     setAction('');
   }
 
+  async function handleMarkAllPaid() {
+    if (!quote) return;
+    if (!confirm(`Confirmer que TOUT est payé pour le devis #${quote.id} (depot + solde) ? Le devis passe en COMPLETE.`)) return;
+    setAction('paycomplete');
+    setError('');
+    try {
+      // 1) confirm deposit if not already done
+      if (!['depot_paye', 'planifie', 'complete'].includes(quote.statut)) {
+        const r1 = await fetch(`/api/quotes/${quote.id}/confirm-deposit`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const d1 = await r1.json();
+        if (!d1.success && !d1.conflict) {
+          // conflict means dates taken — proceed anyway by patching status
+          await updateQuote(quote.id, { statut: 'depot_paye' });
+        }
+      }
+      // 2) confirm balance if not already done
+      const hasBalance = !!(quote as unknown as Record<string, unknown>).balance_paid_at;
+      if (!hasBalance) {
+        const r2 = await fetch(`/api/quotes/${quote.id}/confirm-balance`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+        const d2 = await r2.json();
+        if (!d2.success) {
+          // fallback: just set status complete
+          await updateQuote(quote.id, { statut: 'complete' });
+        }
+      } else {
+        await updateQuote(quote.id, { statut: 'complete' });
+      }
+      // 3) mark linked invoice fully paid if exists
+      if (linkedInvoice) {
+        try {
+          const inv = await fetch(`/api/invoices/${linkedInvoice.id}`).then(r => r.json());
+          if (inv && !inv.depot_paye) {
+            await fetch(`/api/invoices/${linkedInvoice.id}/payment`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'depot', montant: Number(inv.depot_montant), methode: 'virement' }),
+            });
+          }
+          if (inv && !inv.final_paye) {
+            await fetch(`/api/invoices/${linkedInvoice.id}/payment`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ type: 'final', montant: Number(inv.final_montant), methode: 'virement' }),
+            });
+          }
+          await fetch(`/api/invoices/${linkedInvoice.id}`, {
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ statut: 'completee' }),
+          });
+        } catch { /* ignore — non bloquant */ }
+      }
+      const updated = await fetchQuote(quote.id);
+      setQuote(updated);
+      setSendSuccess(`✅ Devis #${quote.id} marqué payé complet. Facture clôturée.`);
+    } catch (e) {
+      setError(`Erreur: ${e instanceof Error ? e.message : String(e)}`);
+    }
+    setAction('');
+  }
+
   if (loading) return <div className="p-6 text-slate-400">Chargement...</div>;
   if (!quote) return <div className="p-6 text-red-400">Devis introuvable</div>;
 
@@ -299,6 +357,23 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       {sendSuccess && (
         <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-2">
           <p className="text-green-400 text-sm">{sendSuccess}</p>
+        </div>
+      )}
+
+      {/* Marquer tout payé — un clic pour clôturer le devis + sa facture */}
+      {quote.statut !== 'complete' && quote.statut !== 'refuse' && ['envoye', 'contrat_signe', 'depot_paye', 'planifie'].includes(quote.statut) && (
+        <div className="bg-emerald-500/10 border border-emerald-500/40 rounded-xl p-4 flex flex-wrap items-center gap-3">
+          <div className="flex-1 min-w-[200px]">
+            <p className="text-emerald-300 text-xs font-bold uppercase tracking-wider">Tout est payé ?</p>
+            <p className="text-white text-sm">Un seul clic — confirme dépôt + solde, passe en COMPLETE, ferme la facture liée.</p>
+          </div>
+          <button
+            onClick={handleMarkAllPaid}
+            disabled={!!action}
+            className="bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-white font-bold rounded-lg px-5 py-2.5 text-sm transition shadow-lg shadow-emerald-500/30"
+          >
+            {action === 'paycomplete' ? 'Clôture…' : `✅ Marquer payé complet — ${formatMoney(Number(quote.total))}`}
+          </button>
         </div>
       )}
 

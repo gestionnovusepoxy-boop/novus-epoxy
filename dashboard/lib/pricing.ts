@@ -122,6 +122,53 @@ export function calculateQuoteCustomPrice(sousTotal: number) {
   return { sous_total: sousTotal, tps, tvq, total, depot_requis: depot };
 }
 
+/**
+ * Recalc complet d'un devis avec services + extras + rabais.
+ * Rabais s'applique UNIQUEMENT sur les services (Flake/etc.), JAMAIS sur les extras.
+ * Extras = prix fixe net.
+ */
+export function calculateQuoteWithExtras(opts: {
+  serviceType: ServiceType | string;
+  superficie: number;
+  prixPiedCarre: number | null; // si 0/null + sousTotalService > 0 => prix fixe
+  sousTotalService: number; // pour prix fixe; sinon recalculé à partir de prix * superficie
+  rabaisPct: number;
+  extrasTotal: number; // somme des extras (déjà calculée, jamais rabaisée)
+}) {
+  const { serviceType, superficie, prixPiedCarre, sousTotalService, rabaisPct, extrasTotal } = opts;
+
+  // Service brut: prix * superficie OU sous_total existant si prix fixe
+  const isPrixFixe = (!prixPiedCarre || prixPiedCarre === 0) && sousTotalService > 0;
+  const knownPrix = serviceType in SERVICES ? SERVICES[serviceType as ServiceType].prix : (prixPiedCarre ?? 0);
+  const serviceBrut = isPrixFixe
+    ? sousTotalService
+    : Math.round((knownPrix * superficie) * 100) / 100;
+
+  const rabaisMontant = Math.round(serviceBrut * (rabaisPct / 100) * 100) / 100;
+  const serviceNet = Math.round((serviceBrut - rabaisMontant) * 100) / 100;
+  const extrasNet = Math.round(extrasTotal * 100) / 100;
+  const sousTotal = Math.round((serviceNet + extrasNet) * 100) / 100;
+
+  const tps = Math.round(sousTotal * TPS_RATE * 100) / 100;
+  const tvq = Math.round(sousTotal * TVQ_RATE * 100) / 100;
+  const total = Math.round((sousTotal + tps + tvq) * 100) / 100;
+  const depot = Math.round(total * DEPOT_RATE * 100) / 100;
+
+  return {
+    prix_pied_carre: isPrixFixe ? 0 : knownPrix,
+    service_brut: serviceBrut,
+    service_net: serviceNet,
+    extras_total: extrasNet,
+    rabais_pct: rabaisPct,
+    rabais_montant: rabaisMontant,
+    sous_total: sousTotal,
+    tps,
+    tvq,
+    total,
+    depot_requis: depot,
+  };
+}
+
 // Extras prédéfinis (le user peut aussi en créer des custom)
 export const EXTRAS_PREDEFINIS = [
   { key: 'masquage', label: 'Masquage complet', prix_defaut: 250 },
