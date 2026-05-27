@@ -416,6 +416,29 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             ✏️ Modifier
           </button>
         )}
+        {!editing && (
+          <button
+            onClick={async () => {
+              setAction('recalc'); setError('');
+              try {
+                const r = await fetch(`/api/quotes/${quote.id}/recalc`, { method: 'POST' });
+                const d = await r.json();
+                if (d.ok) {
+                  const updated = await fetchQuote(quote.id);
+                  setQuote(updated);
+                  setSendSuccess(`Recalculé : sous-total ${formatMoney(d.sous_total)}, total ${formatMoney(d.total)}`);
+                } else {
+                  setError(d.error || 'Erreur recalc');
+                }
+              } catch (e) { setError(`Erreur: ${e instanceof Error ? e.message : String(e)}`); }
+              setAction('');
+            }}
+            disabled={!!action}
+            className="bg-amber-600 hover:bg-amber-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-40"
+          >
+            {action === 'recalc' ? 'Recalcul…' : '🔄 Recalculer prix (extras + rabais)'}
+          </button>
+        )}
         {quote.sent_at && (
           <button onClick={handleResend} disabled={!!action} className="bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-40">
             {action === 'resend' ? 'Renvoi...' : '📤 Renvoyer au client'}
@@ -656,7 +679,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
               const isPrixFixe = Number(item.prix_pied_carre) === 0 && Number(item.sous_total) > 0;
               return (
                 <div key={idx} className="flex justify-between text-slate-300">
-                  <span>{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service}{isPrixFixe ? ` — Prix fixe — ${Number(item.superficie)} pi²` : ` x ${Number(item.superficie)} pi²`}</span>
+                  <span>{SERVICES[item.type_service as ServiceType]?.label ?? item.type_service}{isPrixFixe ? ` — Prix fixe — ${Number(item.superficie)} pi²` : ` x ${Number(item.superficie)} pi² @ ${formatMoney(Number(item.prix_pied_carre))}/pi²`}</span>
                   <span>{formatMoney(Number(item.sous_total))}</span>
                 </div>
               );
@@ -687,7 +710,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
 
           {Number(quote.rabais_pct) > 0 && (
             <div className="flex justify-between text-green-400 font-medium">
-              <span>Rabais {quote.rabais_pct}%</span>
+              <span>Rabais {quote.rabais_pct}% (services seulement, pas les extras)</span>
               <span>-{formatMoney(Number(quote.rabais_montant))}</span>
             </div>
           )}

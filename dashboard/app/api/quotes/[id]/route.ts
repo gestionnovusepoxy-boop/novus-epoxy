@@ -84,7 +84,9 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
       body.depot_requis = calc.depot_requis;
       body.rabais_pct = calc.rabais_pct;
       body.rabais_montant = calc.rabais_montant;
-      serviceNetForItem = calc.service_net;
+      // Store SERVICE BRUT in quote_items.sous_total (gross before rabais).
+      // The rabais line + sous_total at the quote level already reflect the discount.
+      serviceNetForItem = calc.service_brut;
     }
   }
 
