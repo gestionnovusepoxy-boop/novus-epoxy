@@ -9,43 +9,63 @@ import { isQuietHours } from '@/lib/telegram-utils';
 
 const VALID_SLOTS = ['matin', 'apres-midi', 'journee'] as const;
 type Slot = typeof VALID_SLOTS[number];
+type ExtraDay = { date: string; slot: Slot };
 
 function normalizeSlot(s: unknown, fallback: Slot = 'matin'): Slot {
   return VALID_SLOTS.includes(s as Slot) ? (s as Slot) : fallback;
 }
 
+function normalizeExtraDays(raw: unknown): ExtraDay[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map(d => {
+      if (!d || typeof d !== 'object') return null;
+      const dateStr = String((d as { date?: unknown }).date ?? '').slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+      return { date: dateStr, slot: normalizeSlot((d as { slot?: unknown }).slot) };
+    })
+    .filter((d): d is ExtraDay => d !== null);
+}
+
 /**
  * Check if a proposed (date, slot) conflicts with an existing confirmed booking.
+ * Inspects jour1, jour2, AND extra_days[] of all confirmed bookings on the target date.
  * - journee blocks both matin and apres-midi on that date.
  * - matin/apres-midi each only block their own slot — unless the existing booking is journee.
- * Returns the conflicting booking id if any, otherwise null. Optionally excludes a booking id.
  */
 async function findSlotConflict(date: string, slot: Slot, excludeBookingId?: number): Promise<number | null> {
+  // Pull every confirmed booking that touches this date on any of its days.
+  // We accept a slight over-fetch (filter app-side over extras) for simplicity.
   const params: unknown[] = [date];
   let exclude = '';
   if (excludeBookingId) {
     params.push(excludeBookingId);
     exclude = ' AND id != $2';
   }
-
-  // Pull all confirmed bookings on that date (either jour1 or jour2)
   const rows = await query(
-    `SELECT id, jour1_date, jour1_slot, jour2_date, jour2_slot
+    `SELECT id, jour1_date, jour1_slot, jour2_date, jour2_slot, extra_days
      FROM bookings
      WHERE statut = 'confirme'
-       AND (jour1_date = $1 OR jour2_date = $1)${exclude}`,
-    params
+       AND (jour1_date = $1 OR jour2_date = $1 OR extra_days::text LIKE '%' || $1 || '%')${exclude}`,
+    params,
   );
 
-  for (const r of rows) {
-    const existingSlot = (r.jour1_date as Date).toISOString().split('T')[0] === date
-      ? (r.jour1_slot as Slot)
-      : (r.jour2_slot as Slot);
+  const collision = (existing: Slot): boolean => {
+    if (slot === 'journee' || existing === 'journee') return true;
+    return slot === existing;
+  };
 
-    // journee on either side blocks anything
-    if (slot === 'journee' || existingSlot === 'journee') return r.id as number;
-    // same half-day collision
-    if (slot === existingSlot) return r.id as number;
+  for (const r of rows) {
+    const j1Date = r.jour1_date ? (r.jour1_date as Date).toISOString().split('T')[0] : null;
+    const j2Date = r.jour2_date ? (r.jour2_date as Date).toISOString().split('T')[0] : null;
+
+    if (j1Date === date && collision(r.jour1_slot as Slot)) return r.id as number;
+    if (j2Date === date && collision(r.jour2_slot as Slot)) return r.id as number;
+
+    const extras = Array.isArray(r.extra_days) ? (r.extra_days as ExtraDay[]) : [];
+    for (const ed of extras) {
+      if (ed.date === date && collision(normalizeSlot(ed.slot))) return r.id as number;
+    }
   }
   return null;
 }
@@ -93,7 +113,7 @@ export async function GET(req: NextRequest) {
   if (!quoteId) return NextResponse.json({ error: 'quote_id requis' }, { status: 400 });
 
   const rows = await query(
-    `SELECT id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut FROM bookings WHERE quote_id = $1 ORDER BY created_at DESC LIMIT 1`,
+    `SELECT id, jour1_date, jour1_slot, jour2_date, jour2_slot, extra_days, statut FROM bookings WHERE quote_id = $1 ORDER BY created_at DESC LIMIT 1`,
     [parseInt(quoteId)]
   );
 
@@ -105,8 +125,9 @@ export async function GET(req: NextRequest) {
       id: b.id,
       jour1_date: (b.jour1_date as Date).toISOString().split('T')[0],
       jour1_slot: b.jour1_slot,
-      jour2_date: (b.jour2_date as Date).toISOString().split('T')[0],
+      jour2_date: b.jour2_date ? (b.jour2_date as Date).toISOString().split('T')[0] : null,
       jour2_slot: b.jour2_slot,
+      extra_days: Array.isArray(b.extra_days) ? (b.extra_days as ExtraDay[]) : [],
       statut: b.statut,
     },
   });
@@ -123,6 +144,7 @@ export async function PATCH(req: NextRequest) {
 
   const j1Slot = normalizeSlot(jour1_slot, 'matin');
   const j2Slot = normalizeSlot(jour2_slot, 'apres-midi');
+  const extraDays = normalizeExtraDays(body.extra_days);
 
   // Update by booking id directly (from calendar edit modal)
   if (id) {
@@ -135,10 +157,14 @@ export async function PATCH(req: NextRequest) {
       const c2 = await findSlotConflict(jour2_date, j2Slot, Number(id));
       if (c2) return NextResponse.json({ error: `Conflit : un autre chantier confirme occupe deja ce slot le ${jour2_date}` }, { status: 409 });
     }
+    for (const ed of extraDays) {
+      const c = await findSlotConflict(ed.date, ed.slot, Number(id));
+      if (c) return NextResponse.json({ error: `Conflit : un autre chantier confirme occupe deja ce slot le ${ed.date}` }, { status: 409 });
+    }
 
     const result = await query(
-      `UPDATE bookings SET jour1_date = COALESCE($2, jour1_date), jour1_slot = $3, jour2_date = $4, jour2_slot = $5, updated_at = NOW() WHERE id = $1 RETURNING *`,
-      [id, jour1_date, j1Slot, jour2_date || null, jour2_date ? j2Slot : null]
+      `UPDATE bookings SET jour1_date = COALESCE($2, jour1_date), jour1_slot = $3, jour2_date = $4, jour2_slot = $5, extra_days = $6::jsonb, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, jour1_date, j1Slot, jour2_date || null, jour2_date ? j2Slot : null, JSON.stringify(extraDays)]
     );
     if (result.length === 0) return NextResponse.json({ error: 'Booking introuvable' }, { status: 404 });
     return NextResponse.json({ ok: true, booking: result[0] });
@@ -158,12 +184,18 @@ export async function PATCH(req: NextRequest) {
     const c2 = await findSlotConflict(jour2_date, j2Slot, excludeId);
     if (c2) return NextResponse.json({ error: `Conflit : un autre chantier confirme occupe deja ce slot le ${jour2_date}` }, { status: 409 });
   }
+  for (const ed of extraDays) {
+    const c = await findSlotConflict(ed.date, ed.slot, excludeId);
+    if (c) return NextResponse.json({ error: `Conflit : un autre chantier confirme occupe deja ce slot le ${ed.date}` }, { status: 409 });
+  }
+
+  const extraDaysJson = JSON.stringify(extraDays);
 
   if (existing.length === 0) {
     // Create new booking
     await query(
-      `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut) VALUES ($1, $2, $3, $4, $5, 'confirme')`,
-      [quote_id, jour1_date, j1Slot, jour2_date || null, jour2_date ? j2Slot : 'apres-midi']
+      `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, extra_days, statut) VALUES ($1, $2, $3, $4, $5, $6::jsonb, 'confirme')`,
+      [quote_id, jour1_date, j1Slot, jour2_date || null, jour2_date ? j2Slot : 'apres-midi', extraDaysJson]
     );
     // Link booking to quote and advance status to planifie if depot_paye
     const booking = await query(`SELECT id FROM bookings WHERE quote_id = $1 ORDER BY id DESC LIMIT 1`, [quote_id]);
@@ -175,8 +207,8 @@ export async function PATCH(req: NextRequest) {
     }
   } else {
     await query(
-      `UPDATE bookings SET jour1_date = $1, jour1_slot = $2, jour2_date = $3, jour2_slot = $4, statut = 'confirme', updated_at = NOW() WHERE quote_id = $5`,
-      [jour1_date, j1Slot, jour2_date || null, jour2_date ? j2Slot : 'apres-midi', quote_id]
+      `UPDATE bookings SET jour1_date = $1, jour1_slot = $2, jour2_date = $3, jour2_slot = $4, extra_days = $5::jsonb, statut = 'confirme', updated_at = NOW() WHERE quote_id = $6`,
+      [jour1_date, j1Slot, jour2_date || null, jour2_date ? j2Slot : 'apres-midi', extraDaysJson, quote_id]
     );
     // Advance status to planifie if depot_paye
     await query(

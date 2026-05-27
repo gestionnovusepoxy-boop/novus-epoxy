@@ -49,8 +49,9 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         setBooking(data.booking);
         setNewJ1(data.booking.jour1_date);
         setNewJ1Slot(data.booking.jour1_slot || 'matin');
-        setNewJ2(data.booking.jour2_date);
-        setNewJ2Slot(data.booking.jour2_slot);
+        setNewJ2(data.booking.jour2_date || '');
+        setNewJ2Slot(data.booking.jour2_slot || 'apres-midi');
+        setNewExtraDays(Array.isArray(data.booking.extra_days) ? data.booking.extra_days : []);
       }
     }).catch(() => {});
     // Fetch linked invoice
@@ -65,10 +66,11 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
     setSavingDates(true);
     setError('');
     try {
+      const cleanedExtras = newExtraDays.filter(d => d.date).map(d => ({ date: d.date, slot: d.slot || 'matin' }));
       const res = await fetch(`/api/bookings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quote_id: parseInt(id), jour1_date: newJ1, jour1_slot: newJ1Slot, jour2_date: newJ2, jour2_slot: newJ2Slot }),
+        body: JSON.stringify({ quote_id: parseInt(id), jour1_date: newJ1, jour1_slot: newJ1Slot, jour2_date: newJ2 || null, jour2_slot: newJ2Slot, extra_days: cleanedExtras }),
       });
       const data = await res.json();
       if (data.ok) {
@@ -232,12 +234,14 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
   const [linkedInvoice, setLinkedInvoice] = useState<{ id: number; numero: string } | null>(null);
 
   // Booking state
-  const [booking, setBooking] = useState<{ id: number; jour1_date: string; jour1_slot: string; jour2_date: string; jour2_slot: string; statut: string } | null>(null);
+  type ExtraDay = { date: string; slot: string };
+  const [booking, setBooking] = useState<{ id: number; jour1_date: string; jour1_slot: string; jour2_date: string; jour2_slot: string; extra_days?: ExtraDay[]; statut: string } | null>(null);
   const [editingDates, setEditingDates] = useState(false);
   const [newJ1, setNewJ1] = useState('');
   const [newJ2, setNewJ2] = useState('');
   const [newJ1Slot, setNewJ1Slot] = useState('matin');
   const [newJ2Slot, setNewJ2Slot] = useState('apres-midi');
+  const [newExtraDays, setNewExtraDays] = useState<ExtraDay[]>([]);
   const [savingDates, setSavingDates] = useState(false);
 
   function slotLabel(s: string) {
@@ -814,18 +818,27 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           </div>
           {!editingDates ? (
             <div>
-              <div className="grid grid-cols-2 gap-4 text-sm mb-4">
-                <div className="bg-slate-900 rounded-lg p-3">
-                  <p className="text-cyan-400 text-xs font-semibold mb-1">JOUR 1 — Preparation</p>
-                  <p className="text-white font-medium">{new Date(booking.jour1_date + 'T12:00:00').toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-                  <p className="text-slate-400 text-xs">{slotLabel(booking.jour1_slot)}</p>
-                </div>
-                <div className="bg-slate-900 rounded-lg p-3">
-                  <p className="text-cyan-400 text-xs font-semibold mb-1">JOUR 2 — Finition</p>
-                  <p className="text-white font-medium">{new Date(booking.jour2_date + 'T12:00:00').toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-                  <p className="text-slate-400 text-xs">{slotLabel(booking.jour2_slot)}</p>
-                </div>
-              </div>
+              {(() => {
+                const allDays: { idx: number; date: string; slot: string; phase: string }[] = [
+                  { idx: 1, date: booking.jour1_date, slot: booking.jour1_slot, phase: 'Préparation' },
+                ];
+                if (booking.jour2_date) allDays.push({ idx: 2, date: booking.jour2_date, slot: booking.jour2_slot, phase: (booking.extra_days?.length ?? 0) > 0 ? 'Application' : 'Finition' });
+                (booking.extra_days ?? []).forEach((ed, i) => {
+                  const isLast = i === (booking.extra_days?.length ?? 0) - 1;
+                  allDays.push({ idx: 3 + i, date: ed.date, slot: ed.slot, phase: isLast ? 'Finition' : 'Application' });
+                });
+                return (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm mb-4">
+                    {allDays.map(d => (
+                      <div key={d.idx} className="bg-slate-900 rounded-lg p-3">
+                        <p className="text-cyan-400 text-xs font-semibold mb-1">JOUR {d.idx}/{allDays.length} — {d.phase}</p>
+                        <p className="text-white font-medium">{new Date(d.date + 'T12:00:00').toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
+                        <p className="text-slate-400 text-xs">{slotLabel(d.slot)}</p>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
               <button onClick={() => setEditingDates(true)} className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition">
                 Modifier les dates
               </button>
@@ -858,12 +871,36 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
                   </select>
                 </div>
               </div>
+              {/* Extra days (Jour 3, 4, 5, ...) */}
+              {newExtraDays.length > 0 && (
+                <div className="space-y-2 pt-2 border-t border-slate-700">
+                  <p className="text-cyan-300 text-xs font-bold uppercase">Jours supplémentaires</p>
+                  {newExtraDays.map((ed, i) => (
+                    <div key={i} className="grid grid-cols-1 sm:grid-cols-[80px_1fr_1fr_auto] gap-2 items-end">
+                      <div className="text-slate-400 text-xs">Jour {3 + i}</div>
+                      <input type="date" value={ed.date} onChange={e => setNewExtraDays(prev => prev.map((x, j) => j === i ? { ...x, date: e.target.value } : x))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500" />
+                      <select value={ed.slot} onChange={e => setNewExtraDays(prev => prev.map((x, j) => j === i ? { ...x, slot: e.target.value } : x))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                        <option value="matin">Matin (8h-12h)</option>
+                        <option value="apres-midi">Après-midi (12h-16h)</option>
+                        <option value="journee">Journée complète (8h-16h)</option>
+                      </select>
+                      <button onClick={() => setNewExtraDays(prev => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-300 px-2 text-lg">×</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <button
+                onClick={() => setNewExtraDays(prev => [...prev, { date: '', slot: 'matin' }])}
+                className="text-cyan-400 hover:text-cyan-300 text-sm font-medium border border-cyan-500/30 rounded-lg px-3 py-1.5 hover:bg-cyan-500/10 transition"
+              >
+                + Ajouter une journée
+              </button>
               <p className="text-cyan-400/80 text-xs">📲 Synchronisé automatiquement avec ton agenda iPhone via l&apos;abonnement iCal.</p>
               <div className="flex gap-2">
                 <button onClick={handleSaveDates} disabled={savingDates} className="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-40">
                   {savingDates ? 'Sauvegarde...' : 'Sauvegarder'}
                 </button>
-                <button onClick={() => { setEditingDates(false); setNewJ1(booking.jour1_date); setNewJ2(booking.jour2_date); setNewJ1Slot(booking.jour1_slot || 'matin'); setNewJ2Slot(booking.jour2_slot); }} className="bg-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm hover:bg-slate-600">Annuler</button>
+                <button onClick={() => { setEditingDates(false); setNewJ1(booking.jour1_date); setNewJ2(booking.jour2_date); setNewJ1Slot(booking.jour1_slot || 'matin'); setNewJ2Slot(booking.jour2_slot); setNewExtraDays(booking.extra_days ?? []); }} className="bg-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm hover:bg-slate-600">Annuler</button>
               </div>
             </div>
           )}
@@ -959,6 +996,29 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
                 </select>
               </div>
             </div>
+            {newExtraDays.length > 0 && (
+              <div className="space-y-2 pt-2 border-t border-slate-700">
+                <p className="text-amber-300 text-xs font-bold uppercase">Jours supplémentaires</p>
+                {newExtraDays.map((ed, i) => (
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-[80px_1fr_1fr_auto] gap-2 items-end">
+                    <div className="text-slate-400 text-xs">Jour {3 + i}</div>
+                    <input type="date" value={ed.date} onChange={e => setNewExtraDays(prev => prev.map((x, j) => j === i ? { ...x, date: e.target.value } : x))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500" />
+                    <select value={ed.slot} onChange={e => setNewExtraDays(prev => prev.map((x, j) => j === i ? { ...x, slot: e.target.value } : x))} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+                      <option value="matin">Matin (8h-12h)</option>
+                      <option value="apres-midi">Après-midi (12h-16h)</option>
+                      <option value="journee">Journée complète (8h-16h)</option>
+                    </select>
+                    <button onClick={() => setNewExtraDays(prev => prev.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-300 px-2 text-lg">×</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button
+              onClick={() => setNewExtraDays(prev => [...prev, { date: '', slot: 'matin' }])}
+              className="text-amber-400 hover:text-amber-300 text-sm font-medium border border-amber-500/30 rounded-lg px-3 py-1.5 hover:bg-amber-500/10 transition"
+            >
+              + Ajouter une journée
+            </button>
             <p className="text-amber-400/80 text-xs">📲 Sauvegarde → ajouté à ton agenda iPhone via l&apos;abonnement iCal.</p>
             <button
               onClick={handleSaveDates}

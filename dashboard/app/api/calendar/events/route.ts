@@ -30,7 +30,7 @@ export async function GET(req: NextRequest) {
 
   // 1. Bookings as calendar events
   const bookings = await query(
-    `SELECT b.id, b.jour1_date, b.jour1_slot, b.jour2_date, b.jour2_slot, b.statut,
+    `SELECT b.id, b.jour1_date, b.jour1_slot, b.jour2_date, b.jour2_slot, b.extra_days, b.statut,
             q.client_nom, q.client_adresse, q.client_tel, q.type_service, q.superficie, q.total, q.id AS quote_id
      FROM bookings b
      JOIN quotes q ON q.id = b.quote_id
@@ -38,6 +38,12 @@ export async function GET(req: NextRequest) {
      ORDER BY b.jour1_date ASC`,
     []
   );
+
+  const slotTimes = (s: string) =>
+    s === 'journee' ? { start: '08:00', end: '16:00' }
+    : s === 'matin' ? { start: '08:00', end: '12:00' }
+    : { start: '12:00', end: '16:00' };
+  const slotCls = (s: string) => s === 'journee' ? ['novus-day'] : s === 'matin' ? ['novus-am'] : ['novus-pm'];
 
   const bookingEvents = bookings.flatMap(b => {
     const nom = b.client_nom as string;
@@ -52,61 +58,49 @@ export async function GET(req: NextRequest) {
     const isProvisoire = statut === 'en_attente';
     const isComplete = statut === 'complete' || statut === 'paye' || statut === 'facture';
 
-    // Color coding: green=complete, amber=provisoire, blue=confirmed active
-    const color1 = isComplete ? '#22c55e' : isProvisoire ? '#f59e0b' : '#3b82f6';
-    const color2 = isComplete ? '#16a34a' : isProvisoire ? '#d97706' : '#2563eb';
-
-    const slotTimes = (s: string) =>
-      s === 'journee' ? { start: '08:00', end: '16:00' }
-      : s === 'matin' ? { start: '08:00', end: '12:00' }
-      : { start: '12:00', end: '16:00' };
-    const slot1 = slotTimes(b.jour1_slot as string);
-    const slot2 = slotTimes(b.jour2_slot as string);
+    const colorActive = isComplete ? '#22c55e' : isProvisoire ? '#f59e0b' : '#3b82f6';
+    const colorAlt = isComplete ? '#16a34a' : isProvisoire ? '#d97706' : '#2563eb';
 
     const j1 = toDateStr(b.jour1_date);
     const j2 = b.jour2_date ? toDateStr(b.jour2_date) : null;
+    const extraDays = Array.isArray(b.extra_days)
+      ? (b.extra_days as Array<{ date: string; slot: string }>)
+      : [];
 
     const statusLabel = isComplete ? ' ✓' : isProvisoire ? ' ?' : '';
-    const extra = { type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut, jour1_date: j1, jour1_slot: b.jour1_slot, jour2_date: j2, jour2_slot: b.jour2_slot };
-
-    // Short address: take first part before comma or limit to ~30 chars
     const shortAddr = adresse ? (adresse.length > 35 ? adresse.slice(0, 35) + '...' : adresse) : '';
     const addrSuffix = shortAddr ? ` - ${shortAddr}` : '';
 
-    const slotCls = (s: string) => s === 'journee' ? ['novus-day'] : s === 'matin' ? ['novus-am'] : ['novus-pm'];
-    const cls1 = slotCls(b.jour1_slot as string);
-    const cls2 = slotCls(b.jour2_slot as string);
+    // Build a list of all days for this booking (jour1, jour2, then extra_days)
+    type DaySpec = { idx: number; date: string; slot: string };
+    const days: DaySpec[] = [{ idx: 1, date: j1, slot: b.jour1_slot as string }];
+    if (j2) days.push({ idx: 2, date: j2, slot: b.jour2_slot as string });
+    extraDays.forEach((ed, i) => days.push({ idx: 3 + i, date: ed.date, slot: ed.slot }));
 
-    const events = [
-      {
-        id: `booking-${b.id}-j1`,
-        title: `J1: ${nom}${addrSuffix}${statusLabel}`,
-        start: `${j1}T${slot1.start}:00`,
-        end: `${j1}T${slot1.end}:00`,
-        backgroundColor: color1,
-        borderColor: color1,
-        classNames: cls1,
+    const totalDays = days.length;
+    const extra = {
+      type: 'booking', bookingId: b.id, quoteId, nom, service, adresse, tel, superficie, total, statut,
+      jour1_date: j1, jour1_slot: b.jour1_slot, jour2_date: j2, jour2_slot: b.jour2_slot,
+      extra_days: extraDays,
+    };
+
+    return days.map(d => {
+      const times = slotTimes(d.slot);
+      const color = d.idx % 2 === 1 ? colorActive : colorAlt;
+      const cls = slotCls(d.slot);
+      const label = totalDays === 1 ? `J${d.idx}` : `J${d.idx}/${totalDays}`;
+      return {
+        id: `booking-${b.id}-j${d.idx}`,
+        title: `${label}: ${nom}${addrSuffix}${statusLabel}`,
+        start: `${d.date}T${times.start}:00`,
+        end: `${d.date}T${times.end}:00`,
+        backgroundColor: color,
+        borderColor: color,
+        classNames: cls,
         extendedProps: extra,
         editable: !isComplete,
-      },
-    ];
-
-    // Only add jour 2 if it exists
-    if (b.jour2_date && j2) {
-      events.push({
-        id: `booking-${b.id}-j2`,
-        title: `J2: ${nom}${addrSuffix}${statusLabel}`,
-        start: `${j2}T${slot2.start}:00`,
-        end: `${j2}T${slot2.end}:00`,
-        backgroundColor: color2,
-        borderColor: color2,
-        classNames: cls2,
-        extendedProps: extra,
-        editable: !isComplete,
-      });
-    }
-
-    return events;
+      };
+    });
   });
 
   // 2. Manual calendar events
