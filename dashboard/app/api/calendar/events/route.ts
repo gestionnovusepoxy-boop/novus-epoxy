@@ -56,8 +56,12 @@ export async function GET(req: NextRequest) {
     const color1 = isComplete ? '#22c55e' : isProvisoire ? '#f59e0b' : '#3b82f6';
     const color2 = isComplete ? '#16a34a' : isProvisoire ? '#d97706' : '#2563eb';
 
-    const slot1 = (b.jour1_slot as string) === 'matin' ? { start: '08:00', end: '12:00' } : { start: '12:00', end: '16:00' };
-    const slot2 = (b.jour2_slot as string) === 'matin' ? { start: '08:00', end: '12:00' } : { start: '12:00', end: '16:00' };
+    const slotTimes = (s: string) =>
+      s === 'journee' ? { start: '08:00', end: '16:00' }
+      : s === 'matin' ? { start: '08:00', end: '12:00' }
+      : { start: '12:00', end: '16:00' };
+    const slot1 = slotTimes(b.jour1_slot as string);
+    const slot2 = slotTimes(b.jour2_slot as string);
 
     const j1 = toDateStr(b.jour1_date);
     const j2 = b.jour2_date ? toDateStr(b.jour2_date) : null;
@@ -69,8 +73,9 @@ export async function GET(req: NextRequest) {
     const shortAddr = adresse ? (adresse.length > 35 ? adresse.slice(0, 35) + '...' : adresse) : '';
     const addrSuffix = shortAddr ? ` - ${shortAddr}` : '';
 
-    const cls1 = slot1.start === '08:00' ? ['novus-am'] : ['novus-pm'];
-    const cls2 = slot2.start === '08:00' ? ['novus-am'] : ['novus-pm'];
+    const slotCls = (s: string) => s === 'journee' ? ['novus-day'] : s === 'matin' ? ['novus-am'] : ['novus-pm'];
+    const cls1 = slotCls(b.jour1_slot as string);
+    const cls2 = slotCls(b.jour2_slot as string);
 
     const events = [
       {
@@ -172,11 +177,14 @@ export async function PUT(req: NextRequest) {
     const jour = match[2]; // j1 or j2
 
     // Extract date and time directly from the ISO string to avoid timezone shifts
-    // start can be "2026-05-09T08:00:00-04:00" or "2026-05-09T08:00:00" or "2026-05-09"
     const dateStr = String(start).slice(0, 10); // "2026-05-09"
-    const timePart = String(start).slice(11, 13); // "08" or ""
-    const hour = timePart ? parseInt(timePart) : 8;
-    const slot = hour < 12 ? 'matin' : 'apres-midi';
+    const timePart = String(start).slice(11, 13);
+    const endTimePart = end ? String(end).slice(11, 13) : '';
+    const startHour = timePart ? parseInt(timePart) : 8;
+    const endHour = endTimePart ? parseInt(endTimePart) : startHour + 4;
+    // If event spans full work day (8h to 16h), treat as journee
+    const isFullDay = startHour <= 8 && endHour >= 16;
+    const slot = isFullDay ? 'journee' : startHour < 12 ? 'matin' : 'apres-midi';
 
     if (jour === 'j1') {
       await query(`UPDATE bookings SET jour1_date = $1, jour1_slot = $2 WHERE id = $3`, [dateStr, slot, bookingId]);

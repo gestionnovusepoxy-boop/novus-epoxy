@@ -7,6 +7,49 @@ import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
 import { isQuietHours } from '@/lib/telegram-utils';
 
+const VALID_SLOTS = ['matin', 'apres-midi', 'journee'] as const;
+type Slot = typeof VALID_SLOTS[number];
+
+function normalizeSlot(s: unknown, fallback: Slot = 'matin'): Slot {
+  return VALID_SLOTS.includes(s as Slot) ? (s as Slot) : fallback;
+}
+
+/**
+ * Check if a proposed (date, slot) conflicts with an existing confirmed booking.
+ * - journee blocks both matin and apres-midi on that date.
+ * - matin/apres-midi each only block their own slot — unless the existing booking is journee.
+ * Returns the conflicting booking id if any, otherwise null. Optionally excludes a booking id.
+ */
+async function findSlotConflict(date: string, slot: Slot, excludeBookingId?: number): Promise<number | null> {
+  const params: unknown[] = [date];
+  let exclude = '';
+  if (excludeBookingId) {
+    params.push(excludeBookingId);
+    exclude = ' AND id != $2';
+  }
+
+  // Pull all confirmed bookings on that date (either jour1 or jour2)
+  const rows = await query(
+    `SELECT id, jour1_date, jour1_slot, jour2_date, jour2_slot
+     FROM bookings
+     WHERE statut = 'confirme'
+       AND (jour1_date = $1 OR jour2_date = $1)${exclude}`,
+    params
+  );
+
+  for (const r of rows) {
+    const existingSlot = (r.jour1_date as Date).toISOString().split('T')[0] === date
+      ? (r.jour1_slot as Slot)
+      : (r.jour2_slot as Slot);
+
+    // journee on either side blocks anything
+    if (slot === 'journee' || existingSlot === 'journee') return r.id as number;
+    // same half-day collision
+    if (slot === existingSlot) return r.id as number;
+  }
+  return null;
+}
+
 async function notifyTelegramBooking(quoteId: number, clientName: string, jour1: string, jour2: string | null) {
   if (isQuietHours()) return;
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
@@ -78,12 +121,24 @@ export async function PATCH(req: NextRequest) {
   const body = await req.json();
   const { id, quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot } = body;
 
+  const j1Slot = normalizeSlot(jour1_slot, 'matin');
+  const j2Slot = normalizeSlot(jour2_slot, 'apres-midi');
+
   // Update by booking id directly (from calendar edit modal)
   if (id) {
     if (!jour1_date) return NextResponse.json({ error: 'jour1_date requis' }, { status: 400 });
+
+    // Conflict check against other confirmed bookings (exclude this one)
+    const c1 = await findSlotConflict(jour1_date, j1Slot, Number(id));
+    if (c1) return NextResponse.json({ error: `Conflit : un autre chantier confirme occupe deja ce slot le ${jour1_date}` }, { status: 409 });
+    if (jour2_date) {
+      const c2 = await findSlotConflict(jour2_date, j2Slot, Number(id));
+      if (c2) return NextResponse.json({ error: `Conflit : un autre chantier confirme occupe deja ce slot le ${jour2_date}` }, { status: 409 });
+    }
+
     const result = await query(
-      `UPDATE bookings SET jour1_date = COALESCE($2, jour1_date), jour1_slot = COALESCE($3, jour1_slot), jour2_date = $4, jour2_slot = $5, updated_at = NOW() WHERE id = $1 RETURNING *`,
-      [id, jour1_date, jour1_slot || 'matin', jour2_date || null, jour2_slot || null]
+      `UPDATE bookings SET jour1_date = COALESCE($2, jour1_date), jour1_slot = $3, jour2_date = $4, jour2_slot = $5, updated_at = NOW() WHERE id = $1 RETURNING *`,
+      [id, jour1_date, j1Slot, jour2_date || null, jour2_date ? j2Slot : null]
     );
     if (result.length === 0) return NextResponse.json({ error: 'Booking introuvable' }, { status: 404 });
     return NextResponse.json({ ok: true, booking: result[0] });
@@ -95,11 +150,20 @@ export async function PATCH(req: NextRequest) {
   }
 
   const existing = await query(`SELECT id FROM bookings WHERE quote_id = $1`, [quote_id]);
+  const excludeId = existing.length > 0 ? (existing[0].id as number) : undefined;
+
+  const c1 = await findSlotConflict(jour1_date, j1Slot, excludeId);
+  if (c1) return NextResponse.json({ error: `Conflit : un autre chantier confirme occupe deja ce slot le ${jour1_date}` }, { status: 409 });
+  if (jour2_date) {
+    const c2 = await findSlotConflict(jour2_date, j2Slot, excludeId);
+    if (c2) return NextResponse.json({ error: `Conflit : un autre chantier confirme occupe deja ce slot le ${jour2_date}` }, { status: 409 });
+  }
+
   if (existing.length === 0) {
     // Create new booking
     await query(
       `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut) VALUES ($1, $2, $3, $4, $5, 'confirme')`,
-      [quote_id, jour1_date, jour1_slot || 'matin', jour2_date || null, jour2_slot || 'apres-midi']
+      [quote_id, jour1_date, j1Slot, jour2_date || null, jour2_date ? j2Slot : 'apres-midi']
     );
     // Link booking to quote and advance status to planifie if depot_paye
     const booking = await query(`SELECT id FROM bookings WHERE quote_id = $1 ORDER BY id DESC LIMIT 1`, [quote_id]);
@@ -112,7 +176,7 @@ export async function PATCH(req: NextRequest) {
   } else {
     await query(
       `UPDATE bookings SET jour1_date = $1, jour1_slot = $2, jour2_date = $3, jour2_slot = $4, statut = 'confirme', updated_at = NOW() WHERE quote_id = $5`,
-      [jour1_date, jour1_slot || 'matin', jour2_date || null, jour2_slot || 'apres-midi', quote_id]
+      [jour1_date, j1Slot, jour2_date || null, jour2_date ? j2Slot : 'apres-midi', quote_id]
     );
     // Advance status to planifie if depot_paye
     await query(
@@ -150,7 +214,8 @@ export async function POST(req: NextRequest) {
   const quoteId = parseInt(body.quote_id);
   const jour1Date = body.jour1_date;
   const jour2Date = body.jour2_date;
-  const jour2Slot = body.jour2_slot || 'apres-midi';
+  const jour1Slot = normalizeSlot(body.jour1_slot, 'matin');
+  const jour2Slot = normalizeSlot(body.jour2_slot, 'apres-midi');
 
   // Verify quote
   const quotes = await query(`SELECT * FROM quotes WHERE id = $1`, [quoteId]);
@@ -169,29 +234,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Ce devis ne peut pas être planifié.' }, { status: 400 });
   }
 
-  // Check slots are still available — only confirmed bookings block dates
-  const conflicts = await query(
-    `SELECT id FROM bookings
-     WHERE statut = 'confirme'
-     AND (
-       (jour1_date = $1 AND jour1_slot = $4)
-       OR (jour2_date = $2 AND jour2_slot = $3)
-       OR (jour1_date = $2 AND jour1_slot = $3)
-       OR (jour2_date = $1 AND jour2_slot = $4)
-     )`,
-    [jour1Date, jour2Date, jour2Slot, 'matin']
-  );
-
-  if (conflicts.length > 0) {
-    return NextResponse.json({ error: 'Ces dates ne sont plus disponibles' }, { status: 409 });
+  // Check slots are still available — only confirmed bookings block dates.
+  // journee blocks both halves; matin/apres-midi each block their own half.
+  const c1 = await findSlotConflict(jour1Date, jour1Slot);
+  if (c1) return NextResponse.json({ error: 'Ces dates ne sont plus disponibles' }, { status: 409 });
+  if (jour2Date) {
+    const c2 = await findSlotConflict(jour2Date, jour2Slot);
+    if (c2) return NextResponse.json({ error: 'Ces dates ne sont plus disponibles' }, { status: 409 });
   }
 
   // Create booking — provisional (en_attente) until deposit is paid
   const rows = await query(
     `INSERT INTO bookings (quote_id, jour1_date, jour1_slot, jour2_date, jour2_slot, statut)
-     VALUES ($1, $2, 'matin', $3, $4, 'en_attente')
+     VALUES ($1, $2, $3, $4, $5, 'en_attente')
      RETURNING id`,
-    [quoteId, jour1Date, jour2Date, jour2Slot]
+    [quoteId, jour1Date, jour1Slot, jour2Date, jour2Slot]
   );
 
   const bookingId = rows[0].id as number;
@@ -202,10 +259,14 @@ export async function POST(req: NextRequest) {
     [bookingId, quoteId]
   );
 
+  const slotLabelOf = (s: Slot) => s === 'journee' ? '8h-16h (journee complete)' : s === 'matin' ? '8h-12h' : '12h-16h';
+  const slotShortOf = (s: Slot) => s === 'journee' ? 'JOURNEE' : s === 'matin' ? 'AM' : 'PM';
+
   // Notify admin via email
   const adminEmail = process.env.ADMIN_EMAIL;
   if (adminEmail) {
-    const slotLabel = jour2Slot === 'matin' ? '8h-12h' : '12h-16h';
+    const slotLabel = slotLabelOf(jour2Slot);
+    const slot1Label = slotLabelOf(jour1Slot);
     try {
       const j1 = new Date(jour1Date + 'T12:00:00');
       const j2 = new Date(jour2Date + 'T12:00:00');
@@ -226,7 +287,7 @@ export async function POST(req: NextRequest) {
               <p style="margin:4px 0;"><strong>Adresse:</strong> ${escapeHtml((q.client_adresse || 'N/A') as string)}</p>
             </div>
             <div style="background:white;padding:16px;border-radius:8px;margin:16px 0;">
-              <p style="margin:4px 0;font-size:16px;"><strong>Jour 1 (prep):</strong> ${fmt(j1)} — 8h a 12h</p>
+              <p style="margin:4px 0;font-size:16px;"><strong>Jour 1 (prep):</strong> ${fmt(j1)} — ${slot1Label}</p>
               <p style="margin:4px 0;font-size:16px;"><strong>Jour 2 (finition):</strong> ${fmt(j2)} — ${slotLabel}</p>
             </div>
             <a href="https://novus-epoxy.vercel.app/dashboard/calendrier" style="background:#f59e0b;color:#0f172a;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;margin-right:8px;">Voir le calendrier</a>
@@ -242,7 +303,8 @@ export async function POST(req: NextRequest) {
     const j1 = new Date(jour1Date + 'T12:00:00');
     const j2 = new Date(jour2Date + 'T12:00:00');
     const fmtDate = (d: Date) => d.toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' });
-    const slotText = jour2Slot === 'matin' ? '8h a 12h' : '12h a 16h';
+    const slotText = slotLabelOf(jour2Slot);
+    const slot1Text = slotLabelOf(jour1Slot);
 
     try {
       await sendEmail({
@@ -258,7 +320,7 @@ export async function POST(req: NextRequest) {
 <p style="margin:0 0 12px;">Bonjour ${escapeHtml(q.client_nom as string)},</p>
 <div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:16px;margin:0 0 16px;">
 <p style="margin:0 0 6px;font-weight:700;color:#166534;">Dates provisoires :</p>
-<p style="margin:0 0 4px;color:#1e293b;">📆 <strong>Jour 1 (preparation):</strong> ${fmtDate(j1)} — 8h a 12h</p>
+<p style="margin:0 0 4px;color:#1e293b;">📆 <strong>Jour 1 (preparation):</strong> ${fmtDate(j1)} — ${slot1Text}</p>
 <p style="margin:0;color:#1e293b;">📆 <strong>Jour 2 (finition):</strong> ${fmtDate(j2)} — ${slotText}</p>
 </div>
 <div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 16px;">
@@ -282,7 +344,7 @@ export async function POST(req: NextRequest) {
 
   // SMS to admins (both Luca + Jason) with dashboard link
   const adminPhones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];
-  const smsText = `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} AM, Jour 2: ${jour2Date} ${jour2Slot === 'matin' ? 'AM' : 'PM'}. Devis #${quoteId}\n${process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app'}/dashboard/devis`;
+  const smsText = `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} ${slotShortOf(jour1Slot)}, Jour 2: ${jour2Date} ${slotShortOf(jour2Slot)}. Devis #${quoteId}\n${process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app'}/dashboard/devis`;
   await Promise.all(adminPhones.map(phone => sendSMS(phone, smsText).catch(() => {})));
 
   // Telegram to admins

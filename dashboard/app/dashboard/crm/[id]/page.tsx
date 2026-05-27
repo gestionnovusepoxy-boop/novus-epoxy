@@ -168,7 +168,7 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         ) : (
           <div className="space-y-2">
             {quotes.map(q => (
-              <Link key={q.id} href={`/dashboard/devis/${q.id}`} className="block bg-slate-800/50 hover:bg-slate-800 border border-slate-700 rounded-lg p-3 transition">
+              <Link key={q.id} href={`/dashboard/devis/${q.id}`} className={`block ${q.deposit_paid_at || ['depot_paye','planifie','complete'].includes(q.statut) ? 'bg-emerald-500/10 border-emerald-500/40 hover:bg-emerald-500/15' : 'bg-slate-800/50 hover:bg-slate-800 border-slate-700'} border rounded-lg p-3 transition`}>
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div>
                     <span className="text-white font-medium">Devis #{q.id}</span>
@@ -176,14 +176,18 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
                   </div>
                   <div className="flex items-center gap-3 text-sm">
                     <span className="font-semibold text-amber-400">{fmtMoney(q.total)}</span>
-                    <span className="px-2 py-0.5 bg-slate-700 rounded text-xs">{q.statut}</span>
+                    {(q.deposit_paid_at || ['depot_paye','planifie','complete'].includes(q.statut)) ? (
+                      <span className="px-2 py-0.5 bg-emerald-500/30 text-emerald-200 border border-emerald-500/40 rounded text-xs font-bold">✅ DÉPÔT REÇU</span>
+                    ) : (
+                      <span className="px-2 py-0.5 bg-slate-700 rounded text-xs">{q.statut}</span>
+                    )}
                   </div>
                 </div>
                 <div className="mt-2 flex gap-4 text-xs text-slate-500">
                   <span>Créé: {fmtDate(q.created_at)}</span>
                   {q.sent_at && <span>Envoyé: {fmtDate(q.sent_at)}</span>}
                   {q.first_view_at && <span className="text-cyan-400">👁 Vu: {fmtDate(q.first_view_at)}</span>}
-                  {q.deposit_paid_at && <span className="text-green-400">💰 Dépôt payé</span>}
+                  {q.deposit_paid_at && <span className="text-emerald-400 font-medium">💰 Dépôt: {fmtDate(q.deposit_paid_at)}</span>}
                 </div>
               </Link>
             ))}

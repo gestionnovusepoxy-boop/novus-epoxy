@@ -48,6 +48,7 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       if (data.booking) {
         setBooking(data.booking);
         setNewJ1(data.booking.jour1_date);
+        setNewJ1Slot(data.booking.jour1_slot || 'matin');
         setNewJ2(data.booking.jour2_date);
         setNewJ2Slot(data.booking.jour2_slot);
       }
@@ -67,14 +68,14 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       const res = await fetch(`/api/bookings`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ quote_id: parseInt(id), jour1_date: newJ1, jour1_slot: 'matin', jour2_date: newJ2, jour2_slot: newJ2Slot }),
+        body: JSON.stringify({ quote_id: parseInt(id), jour1_date: newJ1, jour1_slot: newJ1Slot, jour2_date: newJ2, jour2_slot: newJ2Slot }),
       });
       const data = await res.json();
       if (data.ok) {
         // Refresh booking from server
         const br = await fetch(`/api/bookings?quote_id=${id}`).then(r => r.json());
         if (br.booking) setBooking(br.booking);
-        else setBooking({ id: 0, jour1_date: newJ1, jour1_slot: 'matin', jour2_date: newJ2, jour2_slot: newJ2Slot, statut: 'en_attente' });
+        else setBooking({ id: 0, jour1_date: newJ1, jour1_slot: newJ1Slot, jour2_date: newJ2, jour2_slot: newJ2Slot, statut: 'en_attente' });
         setEditingDates(false);
         // Also update quote status to planifie if depot_paye
         const updated = await fetchQuote(parseInt(id));
@@ -235,8 +236,15 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
   const [editingDates, setEditingDates] = useState(false);
   const [newJ1, setNewJ1] = useState('');
   const [newJ2, setNewJ2] = useState('');
+  const [newJ1Slot, setNewJ1Slot] = useState('matin');
   const [newJ2Slot, setNewJ2Slot] = useState('apres-midi');
   const [savingDates, setSavingDates] = useState(false);
+
+  function slotLabel(s: string) {
+    if (s === 'journee') return 'Journée complète (8h-16h)';
+    if (s === 'matin') return 'Matin (8h-12h)';
+    return 'Après-midi (12h-16h)';
+  }
 
   async function handleConfirmDeposit() {
     if (!quote) return;
@@ -291,6 +299,26 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
       {sendSuccess && (
         <div className="bg-green-500/10 border border-green-500/30 rounded-lg px-4 py-2">
           <p className="text-green-400 text-sm">{sendSuccess}</p>
+        </div>
+      )}
+
+      {/* DÉPÔT REÇU — gros badge visible immédiatement */}
+      {['depot_paye', 'planifie', 'complete'].includes(quote.statut) && (
+        <div className="bg-gradient-to-r from-emerald-500/20 to-green-500/20 border-2 border-emerald-500/60 rounded-xl p-4 sm:p-5 flex items-center gap-4 shadow-lg shadow-emerald-500/10">
+          <div className="text-4xl sm:text-5xl">✅</div>
+          <div className="flex-1">
+            <p className="text-emerald-300 text-xs font-bold uppercase tracking-wider">Dépôt reçu</p>
+            <p className="text-white text-lg sm:text-xl font-bold">{formatMoney(Number(quote.depot_requis))} encaissé</p>
+            {quote.paid_at && (
+              <p className="text-emerald-400/80 text-xs mt-0.5">Confirmé le {formatDate(quote.paid_at)}</p>
+            )}
+          </div>
+          {!!(quote as unknown as Record<string, unknown>).balance_paid_at && (
+            <div className="hidden sm:flex flex-col items-end">
+              <span className="text-emerald-300 text-xs font-bold">SOLDE PAYÉ</span>
+              <span className="text-white text-sm">{formatMoney(Number(quote.total) - Number(quote.depot_requis))}</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -692,12 +720,12 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
                 <div className="bg-slate-900 rounded-lg p-3">
                   <p className="text-cyan-400 text-xs font-semibold mb-1">JOUR 1 — Preparation</p>
                   <p className="text-white font-medium">{new Date(booking.jour1_date + 'T12:00:00').toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-                  <p className="text-slate-400 text-xs">{booking.jour1_slot === 'matin' ? 'AM (8h-12h)' : 'PM (12h-16h)'}</p>
+                  <p className="text-slate-400 text-xs">{slotLabel(booking.jour1_slot)}</p>
                 </div>
                 <div className="bg-slate-900 rounded-lg p-3">
                   <p className="text-cyan-400 text-xs font-semibold mb-1">JOUR 2 — Finition</p>
                   <p className="text-white font-medium">{new Date(booking.jour2_date + 'T12:00:00').toLocaleDateString('fr-CA', { weekday: 'long', day: 'numeric', month: 'long' })}</p>
-                  <p className="text-slate-400 text-xs">{booking.jour2_slot === 'matin' ? 'AM (8h-12h)' : 'PM (12h-16h)'}</p>
+                  <p className="text-slate-400 text-xs">{slotLabel(booking.jour2_slot)}</p>
                 </div>
               </div>
               <button onClick={() => setEditingDates(true)} className="text-cyan-400 hover:text-cyan-300 text-sm font-medium transition">
@@ -706,28 +734,38 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             </div>
           ) : (
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="text-slate-400 text-xs block mb-1">Jour 1</label>
+                  <label className="text-slate-400 text-xs block mb-1">Jour 1 — Date</label>
                   <input type="date" value={newJ1} onChange={e => setNewJ1(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500" />
                 </div>
                 <div>
-                  <label className="text-slate-400 text-xs block mb-1">Jour 2</label>
+                  <label className="text-slate-400 text-xs block mb-1">Jour 1 — Horaire</label>
+                  <select value={newJ1Slot} onChange={e => setNewJ1Slot(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                    <option value="matin">Matin (8h-12h)</option>
+                    <option value="apres-midi">Après-midi (12h-16h)</option>
+                    <option value="journee">Journée complète (8h-16h)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-slate-400 text-xs block mb-1">Jour 2 — Date</label>
                   <input type="date" value={newJ2} onChange={e => setNewJ2(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500" />
                 </div>
+                <div>
+                  <label className="text-slate-400 text-xs block mb-1">Jour 2 — Horaire</label>
+                  <select value={newJ2Slot} onChange={e => setNewJ2Slot(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
+                    <option value="matin">Matin (8h-12h)</option>
+                    <option value="apres-midi">Après-midi (12h-16h)</option>
+                    <option value="journee">Journée complète (8h-16h)</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <label className="text-slate-400 text-xs block mb-1">Jour 2 — Slot</label>
-                <select value={newJ2Slot} onChange={e => setNewJ2Slot(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500">
-                  <option value="matin">Matin (8h-12h)</option>
-                  <option value="apres-midi">Apres-midi (12h-16h)</option>
-                </select>
-              </div>
+              <p className="text-cyan-400/80 text-xs">📲 Synchronisé automatiquement avec ton agenda iPhone via l&apos;abonnement iCal.</p>
               <div className="flex gap-2">
                 <button onClick={handleSaveDates} disabled={savingDates} className="bg-cyan-600 hover:bg-cyan-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-40">
                   {savingDates ? 'Sauvegarde...' : 'Sauvegarder'}
                 </button>
-                <button onClick={() => { setEditingDates(false); setNewJ1(booking.jour1_date); setNewJ2(booking.jour2_date); setNewJ2Slot(booking.jour2_slot); }} className="bg-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm hover:bg-slate-600">Annuler</button>
+                <button onClick={() => { setEditingDates(false); setNewJ1(booking.jour1_date); setNewJ2(booking.jour2_date); setNewJ1Slot(booking.jour1_slot || 'matin'); setNewJ2Slot(booking.jour2_slot); }} className="bg-slate-700 text-slate-300 rounded-lg px-4 py-2 text-sm hover:bg-slate-600">Annuler</button>
               </div>
             </div>
           )}
@@ -797,23 +835,33 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
           <h3 className="text-amber-400 text-xs font-medium uppercase tracking-wider mb-3">Planifier les travaux</h3>
           <p className="text-slate-400 text-xs mb-4">Aucune date de travaux planifiée. Choisissez les dates ci-dessous.</p>
           <div className="space-y-3">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="text-slate-400 text-xs block mb-1">Jour 1 — Préparation</label>
+                <label className="text-slate-400 text-xs block mb-1">Jour 1 — Date (préparation)</label>
                 <input type="date" value={newJ1} onChange={e => setNewJ1(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500" />
               </div>
               <div>
-                <label className="text-slate-400 text-xs block mb-1">Jour 2 — Finition</label>
+                <label className="text-slate-400 text-xs block mb-1">Jour 1 — Horaire</label>
+                <select value={newJ1Slot} onChange={e => setNewJ1Slot(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+                  <option value="matin">Matin (8h-12h)</option>
+                  <option value="apres-midi">Après-midi (12h-16h)</option>
+                  <option value="journee">Journée complète (8h-16h)</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-slate-400 text-xs block mb-1">Jour 2 — Date (finition)</label>
                 <input type="date" value={newJ2} onChange={e => setNewJ2(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500" />
               </div>
+              <div>
+                <label className="text-slate-400 text-xs block mb-1">Jour 2 — Horaire</label>
+                <select value={newJ2Slot} onChange={e => setNewJ2Slot(e.target.value)} className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
+                  <option value="matin">Matin (8h-12h)</option>
+                  <option value="apres-midi">Après-midi (12h-16h)</option>
+                  <option value="journee">Journée complète (8h-16h)</option>
+                </select>
+              </div>
             </div>
-            <div>
-              <label className="text-slate-400 text-xs block mb-1">Slot Jour 2</label>
-              <select value={newJ2Slot} onChange={e => setNewJ2Slot(e.target.value)} className="bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500">
-                <option value="matin">Matin (8h-12h)</option>
-                <option value="apres-midi">Après-midi (12h-16h)</option>
-              </select>
-            </div>
+            <p className="text-amber-400/80 text-xs">📲 Sauvegarde → ajouté à ton agenda iPhone via l&apos;abonnement iCal.</p>
             <button
               onClick={handleSaveDates}
               disabled={savingDates || !newJ1 || !newJ2}

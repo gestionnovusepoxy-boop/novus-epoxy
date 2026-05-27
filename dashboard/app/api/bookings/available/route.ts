@@ -51,11 +51,22 @@ export async function GET(req: NextRequest) {
     []
   );
 
-  // Build a set of booked date+slot combos
+  // Build a set of booked date+slot combos. journee blocks both matin and apres-midi.
   const booked = new Set<string>();
+  const addSlot = (date: string, slot: string) => {
+    if (slot === 'journee') {
+      booked.add(`${date}:matin`);
+      booked.add(`${date}:apres-midi`);
+      booked.add(`${date}:journee`);
+    } else {
+      booked.add(`${date}:${slot}`);
+    }
+  };
   for (const b of bookedRows) {
-    booked.add(`${(b.jour1_date as Date).toISOString().split('T')[0]}:${b.jour1_slot}`);
-    booked.add(`${(b.jour2_date as Date).toISOString().split('T')[0]}:${b.jour2_slot}`);
+    addSlot((b.jour1_date as Date).toISOString().split('T')[0], b.jour1_slot as string);
+    if (b.jour2_date) {
+      addSlot((b.jour2_date as Date).toISOString().split('T')[0], b.jour2_slot as string);
+    }
   }
 
   // Generate available morning slots for next 30 days

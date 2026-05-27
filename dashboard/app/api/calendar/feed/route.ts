@@ -42,17 +42,25 @@ export async function GET(req: NextRequest) {
     const quoteId = b.quote_id;
 
     const j1 = (b.jour1_date as Date).toISOString().split('T')[0].replace(/-/g, '');
-    const j2 = (b.jour2_date as Date).toISOString().split('T')[0].replace(/-/g, '');
+    const j2 = b.jour2_date ? (b.jour2_date as Date).toISOString().split('T')[0].replace(/-/g, '') : null;
+    const j1Slot = b.jour1_slot as string;
     const j2Slot = b.jour2_slot as string;
 
-    // Jour 1 — morning 8:00-12:00
+    const slotTimes = (s: string): [string, string, string] =>
+      s === 'journee' ? ['080000', '160000', '8h-16h (journee complete)']
+      : s === 'matin' ? ['080000', '120000', '8h-12h (AM)']
+      : ['120000', '160000', '12h-16h (PM)'];
+
+    const [j1Start, j1End, j1Label] = slotTimes(j1Slot);
+
+    // Jour 1
     lines.push('BEGIN:VEVENT');
     lines.push(`UID:novus-j1-${b.id}@novusepoxy.ca`);
-    lines.push(`DTSTART;TZID=America/Toronto:${j1}T080000`);
-    lines.push(`DTEND;TZID=America/Toronto:${j1}T120000`);
-    lines.push(`SUMMARY:JOUR 1 — ${clientName} (${service})`);
+    lines.push(`DTSTART;TZID=America/Toronto:${j1}T${j1Start}`);
+    lines.push(`DTEND;TZID=America/Toronto:${j1}T${j1End}`);
+    lines.push(`SUMMARY:JOUR 1 — ${clientName} (${service}) ${j1Label}`);
     lines.push(`LOCATION:${address}`);
-    lines.push(`DESCRIPTION:Client: ${clientName}\\nTel: ${tel}\\nService: ${service}\\nSuperficie: ${sqft} pi²\\nDevis #${quoteId}\\n\\nPreparation et premiere couche`);
+    lines.push(`DESCRIPTION:Client: ${clientName}\\nTel: ${tel}\\nService: ${service}\\nSuperficie: ${sqft} pi²\\nDevis #${quoteId}\\nHoraire: ${j1Label}\\n\\nPreparation et premiere couche`);
     lines.push('STATUS:CONFIRMED');
     lines.push('BEGIN:VALARM');
     lines.push('TRIGGER:-PT1H');
@@ -61,24 +69,24 @@ export async function GET(req: NextRequest) {
     lines.push('END:VALARM');
     lines.push('END:VEVENT');
 
-    // Jour 2
-    const j2Start = j2Slot === 'matin' ? '080000' : '120000';
-    const j2End = j2Slot === 'matin' ? '120000' : '160000';
-
-    lines.push('BEGIN:VEVENT');
-    lines.push(`UID:novus-j2-${b.id}@novusepoxy.ca`);
-    lines.push(`DTSTART;TZID=America/Toronto:${j2}T${j2Start}`);
-    lines.push(`DTEND;TZID=America/Toronto:${j2}T${j2End}`);
-    lines.push(`SUMMARY:JOUR 2 — ${clientName} (finition)`);
-    lines.push(`LOCATION:${address}`);
-    lines.push(`DESCRIPTION:Client: ${clientName}\\nTel: ${tel}\\nService: ${service}\\nDevis #${quoteId}\\n\\nFinition et deuxieme couche`);
-    lines.push('STATUS:CONFIRMED');
-    lines.push('BEGIN:VALARM');
-    lines.push('TRIGGER:-PT1H');
-    lines.push('ACTION:DISPLAY');
-    lines.push(`DESCRIPTION:Finition chez ${clientName} dans 1h`);
-    lines.push('END:VALARM');
-    lines.push('END:VEVENT');
+    // Jour 2 (optional)
+    if (j2) {
+      const [j2Start, j2End, j2Label] = slotTimes(j2Slot);
+      lines.push('BEGIN:VEVENT');
+      lines.push(`UID:novus-j2-${b.id}@novusepoxy.ca`);
+      lines.push(`DTSTART;TZID=America/Toronto:${j2}T${j2Start}`);
+      lines.push(`DTEND;TZID=America/Toronto:${j2}T${j2End}`);
+      lines.push(`SUMMARY:JOUR 2 — ${clientName} (finition) ${j2Label}`);
+      lines.push(`LOCATION:${address}`);
+      lines.push(`DESCRIPTION:Client: ${clientName}\\nTel: ${tel}\\nService: ${service}\\nDevis #${quoteId}\\nHoraire: ${j2Label}\\n\\nFinition et deuxieme couche`);
+      lines.push('STATUS:CONFIRMED');
+      lines.push('BEGIN:VALARM');
+      lines.push('TRIGGER:-PT1H');
+      lines.push('ACTION:DISPLAY');
+      lines.push(`DESCRIPTION:Finition chez ${clientName} dans 1h`);
+      lines.push('END:VALARM');
+      lines.push('END:VEVENT');
+    }
   }
 
   lines.push('END:VCALENDAR');
