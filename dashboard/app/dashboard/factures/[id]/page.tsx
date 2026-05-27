@@ -26,9 +26,11 @@ const LABEL: Record<InvoiceStatut, string> = {
   annulee:          'Annulee',
 };
 
-const METHODES = ['virement', 'cheque', 'comptant', 'carte', 'autre'] as const;
+// Stripe/carte retiré (feedback_stripe_never) — Interac, chèque, comptant seulement
+const METHODES = ['virement', 'cheque', 'comptant', 'autre'] as const;
 const METHODE_LABEL: Record<string, string> = {
-  virement: 'Virement', cheque: 'Cheque', comptant: 'Comptant', carte: 'Carte', autre: 'Autre',
+  virement: 'Virement Interac', cheque: 'Chèque', comptant: 'Comptant', autre: 'Autre',
+  carte: 'Carte (legacy)', // garde le label au cas où des anciennes factures aient 'carte' stocké
 };
 
 interface Invoice {

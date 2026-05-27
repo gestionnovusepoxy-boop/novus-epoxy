@@ -41,7 +41,6 @@ const SECTIONS: NavSection[] = [
       { href: '/dashboard/comptabilite', label: 'Comptabilit\u00e9', icon: '\u{1F4B0}' },
       { href: '/dashboard/depenses',     label: 'D\u00e9penses',     icon: '\u{1F4B3}' },
       { href: '/dashboard/banque',       label: 'Banque',       icon: '\u{1F3E6}' },
-      { href: 'https://dashboard.stripe.com/payments', label: 'Stripe', icon: '\u{1F4B3}' },
     ],
   },
   {
