@@ -47,7 +47,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   let html: string;
 
   if (depositPaid && paymentLink) {
-    // Balance payment email with Stripe link
+    // Balance payment email — paiement par virement Interac (Stripe jamais utilise)
     subject = `Novus Epoxy — Solde à payer ${formatMoney(solde)} (Facture ${inv.numero})`;
     html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
 <div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:16px;background:#ffffff;">
@@ -70,7 +70,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   Payer mon solde — ${formatMoney(solde)}
 </a>
 </div>
-<p style="text-align:center;color:#64748b;font-size:12px;margin:0 0 16px;">Virement Interac (0$ de frais) ou carte de crédit (3% frais) — votre choix sur la page de paiement.</p>
+<p style="text-align:center;color:#64748b;font-size:12px;margin:0 0 16px;">Virement Interac (0$ de frais), chèque ou comptant — détails sur la page de paiement.</p>
 <div style="background:#f1f5f9;border-radius:6px;padding:10px;font-size:12px;color:#475569;">
 <strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
 <strong>Chantier :</strong> Jason — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>

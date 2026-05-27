@@ -1,9 +1,12 @@
 import { query } from '@/lib/db';
+import { insertInvoiceWithRetry } from '@/lib/invoice-numero';
 
 /**
  * Crée (ou retrouve) une facture pour un devis dont le dépôt a été reçu.
  * Idempotent — appelable depuis n'importe quel trigger (confirm-deposit,
- * Telegram callback, Stripe webhook, cron). N'envoie PAS d'email au client.
+ * Telegram callback, cron). N'envoie PAS d'email au client.
+ *
+ * Paiements: Interac, chèque, comptant uniquement — Stripe jamais utilisé.
  *
  * Retourne l'invoice_id (créé ou existant), ou null si quote introuvable.
  */
@@ -45,29 +48,17 @@ export async function ensureInvoiceForQuote(quoteId: number): Promise<{ invoice_
 
   let created = false;
   if (!invoiceRows.length) {
-    // Generate invoice number NE-YYYY-NNNN
-    const year = new Date().getFullYear();
-    const prefix = `NE-${year}-`;
-    const lastNum = await query(
-      `SELECT numero FROM invoices WHERE numero LIKE $1 ORDER BY numero DESC LIMIT 1`,
-      [`${prefix}%`]
-    );
-    let nextNum = 1;
-    if (lastNum[0]) {
-      const parts = String(lastNum[0].numero).split('-');
-      nextNum = parseInt(parts[parts.length - 1] ?? '0') + 1;
-    }
-    const numero = `${prefix}${String(nextNum).padStart(4, '0')}`;
-
-    invoiceRows = await query(
-      `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre,
-                             rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, statut)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'en_cours')
-       RETURNING id`,
-      [numero, quoteId, clientId,
-       q.type_service, q.superficie, q.prix_pied_carre,
-       Number(q.rabais_pct ?? 0), Number(q.rabais_montant ?? 0),
-       q.sous_total, q.tps, q.tvq, q.total, q.depot_requis]
+    invoiceRows = await insertInvoiceWithRetry({ digits: 4 }, (numero) =>
+      query(
+        `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre,
+                               rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, statut)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'en_cours')
+         RETURNING id`,
+        [numero, quoteId, clientId,
+         q.type_service, q.superficie, q.prix_pied_carre,
+         Number(q.rabais_pct ?? 0), Number(q.rabais_montant ?? 0),
+         q.sous_total, q.tps, q.tvq, q.total, q.depot_requis]
+      )
     );
     created = true;
   }

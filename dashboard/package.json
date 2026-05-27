@@ -27,7 +27,6 @@
     "@oliverames/meta-mcp-server": "^2.0.2",
     "@react-email/components": "^1.0.10",
     "@sentry/nextjs": "^10.46.0",
-    "@stripe/mcp": "^0.3.3",
     "@tremor/react": "^3.18.7",
     "@twilio-alpha/mcp": "^0.7.0",
     "@types/nodemailer": "^7.0.11",
@@ -45,7 +44,6 @@
     "react-dom": "^19.2.4",
     "react-email": "^5.2.10",
     "recharts": "^3.8.1",
-    "stripe": "^20.4.1",
     "zod": "^3.25.0"
   },
   "devDependencies": {

@@ -4,6 +4,7 @@ import { query } from '@/lib/db';
 import { google } from 'googleapis';
 import { isQuietHours } from '@/lib/telegram-utils';
 import { callLLM } from '@/lib/llm';
+import { insertInvoiceWithRetry } from '@/lib/invoice-numero';
 
 export const maxDuration = 90;
 
@@ -159,18 +160,7 @@ export async function GET(req: NextRequest) {
     checks.push({ name: 'Gmail OAuth', ok: false, detail: String(err), severity: 'critical' });
   }
 
-  // 1f. Stripe
-  try {
-    const res = await fetch('https://api.stripe.com/v1/balance', {
-      headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` },
-    });
-    const data = await res.json();
-    checks.push({ name: 'Stripe', ok: data.object === 'balance', detail: data.object === 'balance' ? 'Balance OK' : data.error?.message ?? 'Error' });
-  } catch (err) {
-    checks.push({ name: 'Stripe', ok: false, detail: String(err) });
-  }
-
-  // 1g. Twilio
+  // 1f. Twilio
   try {
     const sid = process.env.TWILIO_ACCOUNT_SID ?? '';
     const token = process.env.TWILIO_AUTH_TOKEN ?? '';
@@ -183,11 +173,12 @@ export async function GET(req: NextRequest) {
     checks.push({ name: 'Twilio', ok: false, detail: String(err) });
   }
 
-  // 1h. Env vars
+  // 1g. Env vars
+  // Stripe ne fait plus partie de la stack — Novus Epoxy = Interac/cheque/comptant uniquement.
   const requiredVars = [
     'DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_ADMIN_CHAT_IDS',
     'TELEGRAM_WEBHOOK_SECRET', 'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN',
-    'STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET', 'AUTH_SECRET', 'ADMIN_API_KEY', 'CRON_SECRET',
+    'AUTH_SECRET', 'ADMIN_API_KEY', 'CRON_SECRET',
   ];
   // At least one LLM key must be set
   if (!process.env.OPENROUTER_API_KEY && !process.env.ANTHROPIC_API_KEY) {
@@ -348,13 +339,12 @@ export async function GET(req: NextRequest) {
             [q.client_nom, q.client_email, q.client_tel, q.client_adresse]);
           clientId = nc[0].id;
         }
-        const yearStr = new Date().getFullYear().toString();
-        const prefix = `NE-${yearStr}-`;
-        await query(
-          `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant, depot_paye, depot_paye_at, depot_methode, statut, date_emission)
-           VALUES ($1 || LPAD((COALESCE((SELECT MAX(CAST(SPLIT_PART(numero,'-',3) AS INT)) FROM invoices WHERE numero LIKE $2), 0) + 1)::text, 3, '0'),
-                   $3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true,NOW(),'autre','depot_recu',CURRENT_DATE)`,
-          [prefix, `${prefix}%`, q.id, clientId, q.type_service, q.superficie, q.prix_pied_carre, q.rabais_pct ?? 0, q.rabais_montant ?? 0, q.sous_total, q.tps, q.tvq, q.total, depot, solde]
+        await insertInvoiceWithRetry({ digits: 3 }, (numero) =>
+          query(
+            `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre, rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, final_montant, depot_paye, depot_paye_at, depot_methode, statut, date_emission)
+             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,true,NOW(),'autre','depot_recu',CURRENT_DATE)`,
+            [numero, q.id, clientId, q.type_service, q.superficie, q.prix_pied_carre, q.rabais_pct ?? 0, q.rabais_montant ?? 0, q.sous_total, q.tps, q.tvq, q.total, depot, solde]
+          )
         );
       } catch { /* skip individual failures */ }
     }

@@ -880,7 +880,7 @@ function buildTools(agentId: AgentId) {
     }),
 
     verifier_integrations: tool({
-      description: 'Teste les integrations externes en temps reel: Twilio, Gmail, Telegram, Stripe, Anthropic.',
+      description: 'Teste les integrations externes en temps reel: Twilio, Gmail, Telegram, Anthropic.',
       parameters: z.object({}),
       execute: async () => {
         const results: Record<string, { ok: boolean; detail: string }> = {};
@@ -912,17 +912,6 @@ function buildTools(agentId: AgentId) {
 
         // Gmail
         results.gmail = { ok: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_REFRESH_TOKEN), detail: process.env.GOOGLE_CLIENT_ID ? 'Credentials presentes' : 'Non configure' };
-
-        // Stripe
-        if (process.env.STRIPE_SECRET_KEY) {
-          try {
-            const res = await fetch('https://api.stripe.com/v1/balance', {
-              headers: { 'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}` },
-            });
-            const data = await res.json();
-            results.stripe = { ok: res.ok, detail: res.ok ? `Balance: ${data.available?.[0]?.amount / 100}$ CAD` : `Erreur ${res.status}` };
-          } catch { results.stripe = { ok: false, detail: 'Connection echouee' }; }
-        } else { results.stripe = { ok: false, detail: 'Non configure' }; }
 
         // DB
         try {
@@ -1176,7 +1165,7 @@ function getSystemPrompt(agentId: AgentId): string {
     sage: `Tu es Sage, la creatrice de contenu et gestionnaire de portfolio de Novus Epoxy. Tu geres le portfolio photo automatiquement: scan du Google Drive de Jason, classification par IA (type, couleur, qualite), upload sur Vercel Blob, et integration dans le portfolio DB. Tu generes aussi du contenu marketing pour Instagram et Facebook.\n${base}\nTu scannes le Drive pour de nouvelles photos, tu les classifies avec Vision, et tu les ajoutes au portfolio. Les photos du portfolio sont automatiquement utilisees par Hunter dans les emails de prospection.\nTu peux voir les dernieres photos du portfolio.`,
     zara: `Tu es Zara, la gestionnaire de reservations de Novus Epoxy. Tu geres le calendrier complet: creer, deplacer, confirmer des reservations.\n${base}\nLes travaux epoxy prennent generalement 2 jours consecutifs (jour1 = application, jour2 = finition). Slot = matin ou apres-midi.\nQuand on te demande de placer une reservation, verifie les jours disponibles d'abord, puis cree la reservation.\nQuand un depot est paye et que le client veut reserver, cree la reservation et confirme-la.\nTu peux aussi voir l'agenda de la semaine et deplacer des reservations si besoin.\nPas de travaux la fin de semaine (samedi/dimanche).`,
     bolt: `Tu es Bolt, le commandant des communications de Novus Epoxy. Tu es le lien entre le dashboard et l'equipe sur Telegram.\n${base}\nTon role:\n- Resume quotidien: compile les stats du jour et envoie un beau message sur Telegram\n- Planning semaine: genere le planning avec tous les chantiers de la semaine\n- Alerte leads chauds: identifie les leads a contacter d'urgence\n- Devis en attente: rappelle les devis qui trainent\nQuand tu envoies sur Telegram, formate en HTML (<b>, <i>, emojis) pour que ce soit clair et beau.\nTu es le motivateur de l'equipe — chaque message doit etre energique et actionnable.`,
-    echo: `Tu es Echo, le gardien du systeme Novus Epoxy. Tu surveilles TOUT: integrations (Twilio, Gmail, Stripe, Telegram, Anthropic), crons, base de donnees, erreurs recentes, tentatives de login.\n${base}\nQuand on te demande un rapport, utilise TOUS tes outils pour donner un portrait complet. Si quelque chose est en panne ou en retard, signale-le clairement avec des solutions.\nTu peux tester les integrations en temps reel (ping Anthropic, Telegram, Twilio, Stripe).\nTu es le systeme d'alerte — si tu vois un probleme, sois direct et clair.`,
+    echo: `Tu es Echo, le gardien du systeme Novus Epoxy. Tu surveilles TOUT: integrations (Twilio, Gmail, Telegram, Anthropic), crons, base de donnees, erreurs recentes, tentatives de login.\n${base}\nQuand on te demande un rapport, utilise TOUS tes outils pour donner un portrait complet. Si quelque chose est en panne ou en retard, signale-le clairement avec des solutions.\nTu peux tester les integrations en temps reel (ping Anthropic, Telegram, Twilio).\nNote: Stripe n'est PAS dans la stack — Novus Epoxy = Interac/cheque/comptant uniquement.\nTu es le systeme d'alerte — si tu vois un probleme, sois direct et clair.`,
     nova: `Tu es Nova, l'agente chatbot de Novus Epoxy. Tu geres les conversations automatiques avec les clients potentiels.\n${base}\nTu vois les conversations en cours, les devis generes automatiquement, et les leads en attente d'approbation.\nTu peux voir les conversations actives, les derniers messages clients, et les leads generes par le chatbot.`,
     jason: `Tu es Denis, le Prospecteur Avance de Novus Epoxy. Tu es l'agent autonome de Jason — tu geres toute sa prospection.\n${base}\nTu envoies les emails depuis jason@novusepoxy.shop (SMTP Hostinger) et les SMS depuis le 581-709-5940 (numero Twilio de Jason).\nTon role: voir les leads de Jason, envoyer des emails/SMS de prospection personnalises, scorer les leads, generer des plans d'attaque.\nJason est le vendeur terrain — il va sur le terrain faire les soumissions. Toi tu prepares le terrain en amont.\nQuand tu envoies un email de prospection, inclus toujours des photos du portfolio et un CTA vers novusepoxy.ca/#contact.\nQuand tu envoies un SMS, signe toujours "Jason — Novus Epoxy 581-307-2678".\nTon ton est direct, motivant, axe resultats. Tu es un predateur commercial silencieux.`,
   };

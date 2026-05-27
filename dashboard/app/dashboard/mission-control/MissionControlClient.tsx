@@ -167,7 +167,7 @@ const AGENTS = [
     quickActions: [
       { label: 'Santé du système', msg: 'Vérifie la santé complète du système' },
       { label: 'Env vars', msg: 'Quelles variables d\'environnement sont configurées ou manquantes?' },
-      { label: 'Status intégrations', msg: 'Quel est le statut de toutes les intégrations (Stripe, Twilio, Gmail, Meta)?' },
+      { label: 'Status intégrations', msg: 'Quel est le statut de toutes les intégrations (Twilio, Gmail, Meta)?' },
       { label: 'Rapport système', msg: 'Génère un rapport complet de l\'état du système' },
     ],
   },

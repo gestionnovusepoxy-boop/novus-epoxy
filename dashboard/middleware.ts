@@ -184,19 +184,10 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Public quote endpoints (contract, payment, pay)
-  if (pathname.match(/^\/api\/quotes\/\d+\/(contract|payment-info|pay|confirm-deposit|confirm-balance|calendar)/)) {
+  // Public quote endpoints (contract, payment, confirm)
+  if (pathname.match(/^\/api\/quotes\/\d+\/(contract|payment-info|confirm-deposit|confirm-balance|calendar)/)) {
     const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
     if (isRateLimited(`quote-public:${ip}`, 30, 60_000)) {
-      return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
-    }
-    return NextResponse.next();
-  }
-
-  // Stripe webhook
-  if (pathname === '/api/stripe/webhook' && req.method === 'POST') {
-    const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? 'unknown';
-    if (isRateLimited(`stripe:${ip}`, 60, 60_000)) {
       return NextResponse.json({ error: 'Trop de requêtes' }, { status: 429 });
     }
     return NextResponse.next();
@@ -213,5 +204,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/upload', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis', '/api/sms/incoming', '/api/quotes/:path*', '/api/stripe/webhook', '/api/leads/zapier'],
+  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/upload', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis', '/api/sms/incoming', '/api/quotes/:path*', '/api/leads/zapier'],
 };
