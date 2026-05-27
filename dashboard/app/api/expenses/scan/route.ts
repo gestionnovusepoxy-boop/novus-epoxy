@@ -1,33 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { callLLM } from '@/lib/llm';
 
-async function scanOneReceipt(apiKey: string, file: File) {
+async function scanOneReceipt(file: File) {
   const bytes = await file.arrayBuffer();
   const base64 = Buffer.from(bytes).toString('base64');
   const mediaType = file.type || 'image/jpeg';
+  const dataUrl = `data:${mediaType};base64,${base64}`;
 
-  const claudeRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'image',
-              source: { type: 'base64', media_type: mediaType, data: base64 },
-            },
-            {
-              type: 'text',
-              text: `Analyse cette photo de facture/reçu et extrais les informations suivantes en JSON strict (pas de markdown, juste le JSON):
+  const text = await callLLM({
+    tier: 'smart', // x-ai/grok-4.20 supports vision via OpenRouter
+    agent: 'expenses-scan',
+    maxTokens: 1024,
+    messages: [
+      {
+        role: 'user',
+        content: [
+          { type: 'image_url', image_url: { url: dataUrl } },
+          {
+            type: 'text',
+            text: `Analyse cette photo de facture/reçu et extrais les informations suivantes en JSON strict (pas de markdown, juste le JSON):
 
 {
   "fournisseur": "nom du commerce/fournisseur",
@@ -45,20 +38,12 @@ Si le montant HT n'est pas visible mais le total TTC l'est, calcule le HT à par
 Si les taxes ne sont pas détaillées, mets tps et tvq à 0 et montant_ht = montant_ttc.
 Pour la catégorie, devine en fonction du fournisseur et des items (ex: quincaillerie = materiaux, station essence = transport, etc).
 Réponds UNIQUEMENT avec le JSON, rien d'autre.`,
-            },
-          ],
-        },
-      ],
-    }),
+          },
+        ],
+      },
+    ],
   });
 
-  if (!claudeRes.ok) {
-    const err = await claudeRes.text();
-    throw new Error(`Erreur Claude: ${err}`);
-  }
-
-  const claudeData = await claudeRes.json();
-  const text = claudeData.content?.[0]?.text ?? '';
   const jsonStr = text.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   return JSON.parse(jsonStr);
 }
@@ -66,9 +51,6 @@ Réponds UNIQUEMENT avec le JSON, rien d'autre.`,
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
-
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return NextResponse.json({ error: 'ANTHROPIC_API_KEY manquant' }, { status: 500 });
 
   const formData = await req.formData();
   const files = formData.getAll('photos') as File[];
@@ -120,7 +102,7 @@ export async function POST(req: NextRequest) {
     const batchResults = await Promise.allSettled(
       batch.map(async (file, idx) => {
         try {
-          const parsed = await scanOneReceipt(apiKey, file);
+          const parsed = await scanOneReceipt(file);
           const dup = isDuplicate(parsed);
           return { file: file.name || `Photo ${i + idx + 1}`, data: parsed, duplicate: dup };
         } catch (err) {

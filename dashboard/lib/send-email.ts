@@ -2,6 +2,52 @@ import { google } from 'googleapis';
 import { query } from '@/lib/db';
 
 /**
+ * Detects Gmail OAuth `invalid_grant` errors (revoked / expired refresh token).
+ * On detection:
+ *   1. Persists `gmail_oauth_broken=true` in kv_store (idempotent — so other paths short-circuit).
+ *   2. Sends ONE Telegram alert per day (deduped via `gmail_alert_YYYY-MM-DD`).
+ * Never throws — observability only.
+ */
+export async function handleGmailAuthError(err: unknown): Promise<void> {
+  const msg = err instanceof Error ? err.message : String(err);
+  const lower = msg.toLowerCase();
+  if (!lower.includes('invalid_grant') && !lower.includes('invalid grant')) return;
+
+  try {
+    await query(
+      `INSERT INTO kv_store (key, value, updated_at) VALUES ('gmail_oauth_broken', 'true', NOW())
+       ON CONFLICT (key) DO UPDATE SET value = 'true', updated_at = NOW()`
+    );
+  } catch { /* ignore */ }
+
+  // Dedup alert per day
+  const today = new Date().toISOString().slice(0, 10);
+  const alertKey = `gmail_alert_${today}`;
+  try {
+    const rows = await query(`SELECT 1 FROM kv_store WHERE key = $1`, [alertKey]) as unknown[];
+    if (rows.length > 0) return;
+    await query(
+      `INSERT INTO kv_store (key, value, updated_at) VALUES ($1, 'sent', NOW()) ON CONFLICT (key) DO NOTHING`,
+      [alertKey]
+    );
+  } catch { /* ignore */ }
+
+  const token = process.env.TELEGRAM_BOT_TOKEN ?? '';
+  const chat = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+  if (!token || !chat) return;
+  try {
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: chat,
+        text: '🚨 Gmail OAuth invalide (invalid_grant). Re-auth requis: visit /api/auth/google (clic manuel). Tous les emails sortants/scans sont en pause jusque la.',
+      }),
+    });
+  } catch { /* never block on alert */ }
+}
+
+/**
  * Sends system emails (devis, contrats, replies Aria, etc.)
  * Primary: Gmail (gestionnovusepoxy@gmail.com) — visible dans Messages envoyés
  * Fallback: Resend si Gmail fail
@@ -39,6 +85,8 @@ export async function sendEmail({
     return await sendViaGmail({ to, subject, html, replyTo, cc, bcc });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
+    // Fire-and-forget detection: if invalid_grant, persist flag + alert (deduped per day)
+    void handleGmailAuthError(err);
     console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
     return sendViaResend({ to, subject, html, replyTo, cc });
   }
@@ -88,12 +136,17 @@ async function sendViaGmail({
   const raw = `${headerLines}\r\n\r\n${html}`;
   const encoded = Buffer.from(raw).toString('base64url');
 
-  const res = await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw: encoded },
-  });
-
-  return { id: res.data.id ?? `gmail-${Date.now()}` };
+  try {
+    const res = await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: encoded },
+    });
+    return { id: res.data.id ?? `gmail-${Date.now()}` };
+  } catch (err) {
+    // Detect invalid_grant (revoked refresh token) — alert once/day + persist flag
+    void handleGmailAuthError(err);
+    throw err;
+  }
 }
 
 async function sendViaResend({

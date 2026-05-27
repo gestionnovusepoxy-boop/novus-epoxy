@@ -1,9 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { type ServiceType } from '@/lib/api';
 import { SERVICES, calculateMultiQuote, formatMoney, EXTRAS_PREDEFINIS } from '@/lib/pricing';
+
+interface ActivePromoDTO {
+  nom: string;
+  rabais_pct: number;
+  date_fin: string | null;
+}
 
 interface ServiceItem {
   type_service: ServiceType;
@@ -35,8 +41,24 @@ export default function NouveauDevisPage() {
     client_adresse: searchParams.get('ville') ?? '',
     etat_plancher: '',
     notes: searchParams.get('notes') ?? '',
-    rabais_pct: 15,
+    rabais_pct: 0,
   });
+
+  // Promo dynamique — source unique = table `promotions` (lib/promotions.ts)
+  const [promo, setPromo] = useState<ActivePromoDTO | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/promotions/active')
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: ActivePromoDTO[]) => {
+        if (cancelled) return;
+        const p = rows[0] ?? null;
+        setPromo(p);
+        if (p) setForm(prev => ({ ...prev, rabais_pct: Number(p.rabais_pct) }));
+      })
+      .catch(() => { /* pas de promo */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const [items, setItems] = useState<ServiceItem[]>([
     { type_service: validService, superficie: searchParams.get('superficie') ?? '', prix_fixe: false, prix_fixe_montant: '' },
@@ -332,15 +354,17 @@ export default function NouveauDevisPage() {
               className={`${inputClass} resize-none`}
             />
           </div>
-          <label className="flex items-center gap-3 cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={form.rabais_pct === 15}
-              onChange={e => setForm(prev => ({ ...prev, rabais_pct: e.target.checked ? 15 : 0 }))}
-              className="w-4 h-4 accent-amber-500"
-            />
-            <span className="text-sm text-amber-400 font-medium">Appliquer le rabais Mai 15%</span>
-          </label>
+          {promo && (
+            <label className="flex items-center gap-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={form.rabais_pct === Number(promo.rabais_pct)}
+                onChange={e => setForm(prev => ({ ...prev, rabais_pct: e.target.checked ? Number(promo.rabais_pct) : 0 }))}
+                className="w-4 h-4 accent-amber-500"
+              />
+              <span className="text-sm text-amber-400 font-medium">Appliquer {promo.nom} ({promo.rabais_pct}%)</span>
+            </label>
+          )}
         </div>
 
         {/* Preview prix */}
@@ -369,7 +393,7 @@ export default function NouveauDevisPage() {
 
               {preview.rabais_pct > 0 && (
                 <div className="flex justify-between text-green-400 font-medium">
-                  <span>Rabais Mai {preview.rabais_pct}% (sur services)</span>
+                  <span>{promo?.nom ?? 'Rabais'} {preview.rabais_pct}% (sur services)</span>
                   <span>-{formatMoney(preview.rabais_montant)}</span>
                 </div>
               )}

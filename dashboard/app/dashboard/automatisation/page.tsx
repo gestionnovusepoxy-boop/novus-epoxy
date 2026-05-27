@@ -16,7 +16,8 @@ const STATUT_LABELS: Record<string, string> = {
 };
 
 interface AutoData {
-  crons: { path: string; label: string; schedule: string; status: 'actif' | 'arrete' }[];
+  crons: { path: string; label: string; schedule: string; status: 'actif' | 'manquant'; missing?: boolean }[];
+  missingCrons?: string[];
   sms: { total: number; sent: number; failed: number };
   emails: { total: number; delivered: number; opened: number; bounced: number };
   leads: { today: number; total: number; prospected: number };
@@ -168,7 +169,12 @@ export default function AutomatisationPage() {
             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-white font-semibold text-sm">Taches automatiques (Crons)</h3>
-                <span className="text-xs text-slate-400">{data.crons.length} actifs</span>
+                <span className="text-xs text-slate-400">
+                  {data.crons.filter(c => c.status === 'actif').length}/{data.crons.length} actifs
+                  {data.missingCrons && data.missingCrons.length > 0 && (
+                    <span className="text-red-400 ml-2">{data.missingCrons.length} manquants</span>
+                  )}
+                </span>
               </div>
               {data.crons.length === 0 ? (
                 <p className="text-slate-500 text-sm">Aucune donnee de cron trouvee</p>

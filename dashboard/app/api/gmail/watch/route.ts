@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { query } from '@/lib/db';
+import { handleGmailAuthError } from '@/lib/send-email';
 
 // Registers Gmail push notifications via users.watch()
 // Must be called once to start, then every ~6 days to renew (expires after 7 days).
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
     console.error('[Gmail Watch] Failed:', message);
+    void handleGmailAuthError(err);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

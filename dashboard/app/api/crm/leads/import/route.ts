@@ -61,11 +61,8 @@ function scoreTemperature(lead: ParsedLead): 'chaud' | 'tiede' | 'froid' {
   return 'froid';
 }
 
-// Parse CSV text into leads using Claude Haiku (fast + cheap)
+// Parse CSV text into leads using OpenRouter bulk tier (fast + cheap)
 async function parseWithClaude(rawText: string): Promise<ParsedLead[]> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) throw new Error('ANTHROPIC_API_KEY manquant');
-
   // Split into chunks of ~6000 chars to avoid context limits
   const chunks: string[] = [];
   const lines = rawText.split('\n').filter(l => l.trim());

@@ -3,14 +3,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { query } from '@/lib/db';
 import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/pricing';
-import { sendEmail } from '@/lib/send-email';
+import { sendEmail, handleGmailAuthError } from '@/lib/send-email';
 import { callLLM } from '@/lib/llm';
 
 export const maxDuration = 60; // Allow up to 60s for large CSV imports
 
 const CRON_SECRET = () => process.env.CRON_SECRET ?? '';
 const BOT_TOKEN = () => process.env.TELEGRAM_BOT_TOKEN ?? '';
-const ANTHROPIC_KEY = () => process.env.ANTHROPIC_API_KEY ?? '';
 const ADMIN_CHAT_IDS = () => {
   const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
   const adminIds = getAdminChatIds();
@@ -81,13 +80,13 @@ async function analyzeWithClaude(
   needs_attention: boolean;
   reply_suggestion?: string;
 }> {
-  const messages: Array<{ role: string; content: unknown }> = [];
-
-  const imageContent: unknown[] = [];
+  type TextPart = { type: 'text'; text: string };
+  type ImagePart = { type: 'image_url'; image_url: { url: string } };
+  const imageContent: Array<TextPart | ImagePart> = [];
   if (attachmentData) {
     imageContent.push({
-      type: 'image',
-      source: { type: 'base64', media_type: attachmentData.mimeType, data: attachmentData.base64 },
+      type: 'image_url',
+      image_url: { url: `data:${attachmentData.mimeType};base64,${attachmentData.base64}` },
     });
   }
   imageContent.push({
@@ -142,32 +141,19 @@ IMPORTANT pour les clients:
 - TOUJOURS signer "L'equipe Novus Epoxy"`,
   });
 
-  messages.push({ role: 'user', content: imageContent });
-
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY(),
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 1024,
-      messages,
-    }),
+  const text = await callLLM({
+    tier: 'smart', // x-ai/grok-4.20 supports vision via OpenRouter
+    agent: 'email-scan',
+    maxTokens: 1024,
+    messages: [{ role: 'user', content: imageContent }],
   });
-
-  if (!res.ok) throw new Error(`Claude API error: ${res.status}`);
-  const data = await res.json();
-  const text = data.content?.[0]?.text ?? '{}';
 
   // Extract JSON from response (handle markdown code blocks)
   const jsonMatch = text.match(/\{[\s\S]*\}/);
   try {
     return JSON.parse(jsonMatch?.[0] ?? '{}');
   } catch {
-    console.error('[email-scan] Claude returned invalid JSON:', text.slice(0, 200));
+    console.error('[email-scan] LLM returned invalid JSON:', text.slice(0, 200));
     return { type: 'autre', summary: 'Analyse échouée', needs_attention: false };
   }
 }
@@ -532,6 +518,12 @@ export async function GET(req: NextRequest) {
   const adminKey = process.env.ADMIN_API_KEY ?? '';
   if (!token || (token !== cronSecret && token !== adminKey)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  // Short-circuit when OAuth is known-broken — avoid wasting a cron run / log spam.
+  const oauthBrokenRows = await query(`SELECT value FROM kv_store WHERE key = 'gmail_oauth_broken'`).catch(() => []);
+  if (oauthBrokenRows?.[0]?.value === 'true') {
+    return NextResponse.json({ skipped: 'gmail_oauth_broken' });
   }
 
   const gmail = await getGmailClient();
@@ -1044,6 +1036,9 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error('[Email Scan] Fatal error:', msg);
+
+    // Detect invalid_grant explicitly — persist flag + alert once/day, then short-circuit future runs.
+    void handleGmailAuthError(err);
 
     // Track consecutive failures
     const failCountRows = await query(`SELECT value FROM kv_store WHERE key = 'email_scan_fail_count'`).catch(() => []);

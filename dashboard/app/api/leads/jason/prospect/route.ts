@@ -3,6 +3,35 @@ import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
 import { sendSMS } from '@/lib/sms';
+import { getActivePromo, type ActivePromo } from '@/lib/promotions';
+
+function promoBanner(p: ActivePromo): string {
+  if (!p.active) return '';
+  const end = p.ends_at ? p.ends_at.toLocaleDateString('fr-CA', { day: 'numeric', month: 'long', year: 'numeric' }) : null;
+  return `<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
+    <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">${p.label}</p>
+    <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">${p.pct}% de rabais!</p>
+    ${end ? `<p style="color:#78716c;font-size:12px;margin:4px 0 0;">Offre valide jusqu'au ${end}</p>` : ''}
+  </div>`;
+}
+
+function promoTextResidential(p: ActivePromo): string {
+  if (!p.active) return '';
+  return ` Profitez de notre rabais de ${p.pct}% (${p.label}) pour transformer vos planchers!`;
+}
+
+function promoTextFacebookIntro(p: ActivePromo): string {
+  if (!p.active) return '';
+  return ` Profitez de notre rabais de ${p.pct}% (${p.label})!`;
+}
+
+function promoCalloutFacebook(p: ActivePromo): string {
+  if (!p.active) return '';
+  return `<div style="background:#ecfdf5;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #6ee7b7;">
+    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">🎉 ${p.label} — ${p.pct}% de rabais!</p>
+    <p style="color:#047857;font-size:13px;margin:0;">Le rabais s'applique automatiquement a votre soumission.</p>
+  </div>`;
+}
 
 export const maxDuration = 60; // Allow up to 60s for large batches
 
@@ -71,7 +100,7 @@ function getPrenom(nom: string): string {
   return nom.split(' ')[0];
 }
 
-function buildResidentialHtml(prenom: string, project: string, photos: { url: string; caption: string }[]): string {
+function buildResidentialHtml(prenom: string, project: string, photos: { url: string; caption: string }[], promo: ActivePromo): string {
   const photoGrid = photos.map((p, i) => {
     const pl = i % 2 === 0 ? '0' : '4px';
     const pr = i % 2 === 0 ? '4px' : '0';
@@ -90,15 +119,10 @@ function buildResidentialHtml(prenom: string, project: string, photos: { url: st
 </div>
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
-  <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
-    <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">Promotion du mois de mai</p>
-    <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">15% de rabais sur tous nos services!</p>
-    <p style="color:#78716c;font-size:12px;margin:4px 0 0;">Offre valide jusqu'au 31 mai 2026</p>
-  </div>
+  ${promoBanner(promo)}
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
     C'est Jason de Novus Epoxy! On se spécialise en planchers époxy haut de gamme dans la région de Québec.
-    ${project ? `J'ai vu que vous pourriez être intéressé par <strong>${project}</strong>.` : 'On aimerait vous montrer ce qu\'on fait.'}
-    Profitez de notre rabais de 15% ce mois-ci pour transformer vos planchers!
+    ${project ? `J'ai vu que vous pourriez être intéressé par <strong>${project}</strong>.` : 'On aimerait vous montrer ce qu\'on fait.'}${promoTextResidential(promo)}
   </p>
   <p style="color:#1e293b;font-weight:700;font-size:15px;margin:0 0 12px;">Nos réalisations :</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;">
@@ -131,7 +155,7 @@ function buildResidentialHtml(prenom: string, project: string, photos: { url: st
 </div></body></html>`;
 }
 
-function buildCommercialHtml(prenom: string, photos: { url: string; caption: string }[]): string {
+function buildCommercialHtml(prenom: string, photos: { url: string; caption: string }[], promo: ActivePromo): string {
   const photoGrid = photos.map((p, i) => {
     const pl = i % 2 === 0 ? '0' : '4px';
     const pr = i % 2 === 0 ? '4px' : '0';
@@ -151,11 +175,7 @@ function buildCommercialHtml(prenom: string, photos: { url: string; caption: str
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom},</p>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;"></p>
-  <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
-    <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">Promotion Avril</p>
-    <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">15% de rabais sur tous nos services!</p>
-    <p style="color:#78716c;font-size:12px;margin:4px 0 0;">Offre valide jusqu'au 31 mai 2026</p>
-  </div>
+  ${promoBanner(promo)}
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
     Je me presente, <strong>Jason</strong>, de Novus Epoxy. On travaille avec plusieurs entrepreneurs dans la région de Québec et on cherche à bâtir des <strong>partenariats solides</strong>.
   </p>
@@ -187,7 +207,7 @@ function buildCommercialHtml(prenom: string, photos: { url: string; caption: str
 </div></body></html>`;
 }
 
-function buildFacebookLeadHtml(prenom: string, photos: { url: string; caption: string }[]): string {
+function buildFacebookLeadHtml(prenom: string, photos: { url: string; caption: string }[], promo: ActivePromo): string {
   const photoGrid = photos.slice(0, 2).map((p, i) => {
     const pl = i % 2 === 0 ? '0' : '4px';
     const pr = i % 2 === 0 ? '4px' : '0';
@@ -204,13 +224,9 @@ function buildFacebookLeadHtml(prenom: string, photos: { url: string; caption: s
 <div style="padding:24px;">
   <p style="color:#1e293b;font-size:16px;margin:0 0 6px;">Bonjour ${prenom}!</p>
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 8px;"></p>
-  <div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:8px;padding:14px;margin:0 0 16px;text-align:center;">
-    <p style="color:#92400e;font-weight:700;font-size:16px;margin:0 0 4px;">Promotion Avril</p>
-    <p style="color:#0f172a;font-weight:800;font-size:22px;margin:0;">15% de rabais!</p>
-    <p style="color:#78716c;font-size:12px;margin:4px 0 0;">Valide jusqu'au 31 mai 2026</p>
-  </div>
+  ${promoBanner(promo)}
   <p style="color:#475569;font-size:14px;line-height:1.6;margin:0 0 16px;">
-    Merci d'avoir demandé votre <strong>soumission gratuite</strong>! On est ravis de votre intérêt. Profitez de notre rabais de 15% en mai!
+    Merci d'avoir demandé votre <strong>soumission gratuite</strong>! On est ravis de votre intérêt.${promoTextFacebookIntro(promo)}
     Pour préparer votre soumission personnalisée rapidement, on a besoin de quelques détails :
   </p>
   <div style="background:#fffbeb;border:2px solid #f59e0b;border-radius:12px;padding:20px;margin:0 0 20px;">
@@ -223,10 +239,7 @@ function buildFacebookLeadHtml(prenom: string, photos: { url: string; caption: s
       5. <strong>Adresse des travaux</strong> — Pour calculer le déplacement
     </p>
   </div>
-  <div style="background:#ecfdf5;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #6ee7b7;">
-    <p style="color:#065f46;font-weight:700;font-size:14px;margin:0 0 4px;">🎉 Spécial mai — 15% de rabais!</p>
-    <p style="color:#047857;font-size:13px;margin:0;">Le rabais s'applique automatiquement a votre soumission.</p>
-  </div>
+  ${promoCalloutFacebook(promo)}
   ${photoGrid ? `<p style="color:#1e293b;font-weight:700;font-size:14px;margin:0 0 8px;">Quelques-unes de nos réalisations :</p>
   <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 20px;"><tr>${photoGrid}</tr></table>` : ''}
   <div style="background:#f8fafc;border-radius:8px;padding:16px;margin:0 0 20px;border:1px solid #e2e8f0;">

@@ -1,6 +1,5 @@
 // SMS classifier — detects opt-out and complaint phrases (FR + EN).
-// Used by /api/sms/webhook and /api/sms/incoming so behavior is identical
-// regardless of which Twilio webhook URL is configured.
+// Used by /api/sms/incoming (the secured Twilio webhook with signature validation).
 //
 // Strategy: normalize (lowercase + strip diacritics + collapse punctuation+whitespace)
 // before matching against a list of regex patterns. Complaints are a strict superset

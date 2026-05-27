@@ -8,6 +8,7 @@ import { SERVICES, type ServiceType, calculateQuote, formatMoney } from '@/lib/p
 import { sendSMS } from '@/lib/sms';
 import { google } from 'googleapis';
 import { runAction } from '@/lib/composio';
+import { getActivePromo, formatPromoText } from '@/lib/promotions';
 
 export const maxDuration = 60;
 
@@ -404,8 +405,13 @@ Date: ${new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric
             ? `"Bonjour ${String(l.nom).split(' ')[0]}! C'est Jason de Novus Epoxy. Je t'appelle par rapport à ton projet${l.service ? ` de plancher ${l.service}` : ''}${l.ville ? ` à ${l.ville}` : ''}. As-tu 2 minutes?"`
             : `Objet: Votre projet de plancher époxy${l.superficie ? ` — ${l.superficie} pi²` : ''} — Soumission gratuite`;
 
+          const promo = await getActivePromo();
+          const promoMention = promo.active
+            ? `mentionner ${promo.label} ${promo.pct}%`
+            : 'mettre l\'accent sur la valeur + garantie';
+
           const objections_probables = [];
-          if (followups >= 1) objections_probables.push('A déjà reçu un contact — mentionner le rabais Mai 15%');
+          if (followups >= 1) objections_probables.push(`A déjà reçu un contact — ${promoMention}`);
           if (jours > 7) objections_probables.push('Peut avoir trouvé un autre fournisseur — demander directement');
           if (!l.superficie) objections_probables.push('Pas encore qualifié — découvrir les besoins');
           if (l.temperature === 'froid') objections_probables.push('Lead refroidi — approche valeur long terme');
@@ -416,11 +422,14 @@ Date: ${new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric
             canal_recommande,
             script_approche,
             objections_probables,
+            promo_active: promo.active ? formatPromoText(promo) : null,
             closing_tip: l.temperature === 'chaud'
               ? '🎯 Lead chaud — proposer rendez-vous directement'
               : followups === 0
                 ? '⚡ Premier contact — se concentrer sur la découverte des besoins'
-                : '🔄 Relance — rappeler la valeur + promo Avril',
+                : promo.active
+                  ? `🔄 Relance — rappeler la valeur + ${promo.label} ${promo.pct}%`
+                  : '🔄 Relance — rappeler la valeur + garantie',
             lien_dashboard: `https://novus-epoxy.vercel.app/dashboard/crm`,
           };
         },
@@ -446,24 +455,35 @@ Date: ${new Date().toLocaleDateString('fr-CA', { weekday: 'long', year: 'numeric
           const superficie = l.superficie ? ` de ${l.superficie} pi²` : '';
           const ville = l.ville ? ` à ${l.ville}` : '';
 
+          // Promo dynamique — jamais hard-coded
+          const promo = await getActivePromo();
+          const promoSms = promo.active ? ` ${promo.label} ${promo.pct}% en ce moment.` : '';
+          const promoSmsUrgence = promo.active
+            ? `Rabais ${promo.pct}% ${promo.label} se termine bientôt. `
+            : '';
+          const promoEmailSujet = promo.active ? `${promo.label} ${promo.pct}% — ` : '';
+          const promoEmailBody = promo.active
+            ? `\n\nNous offrons actuellement un rabais de ${promo.pct}% (${promo.label}).`
+            : '';
+
           let message = '';
 
           if (canal === 'sms') {
             if (ton === 'direct') {
-              message = `Bonjour ${prenom}! Jason de Novus Epoxy. Toujours intéressé par votre projet${superficie}? On a le rabais Mai 15% en ce moment. Soumission gratuite: novusepoxy.ca/#contact ou 581-307-2678`;
+              message = `Bonjour ${prenom}! Jason de Novus Epoxy. Toujours intéressé par votre projet${superficie}?${promoSms} Soumission gratuite: novusepoxy.ca/#contact ou 581-307-2678`;
             } else if (ton === 'urgence') {
-              message = `${prenom}! Rabais 15% Mai se termine bientôt. Votre projet${superficie}${ville} — on peut vous préparer une soumission cette semaine. Intéressé? 581-307-2678`;
+              message = `${prenom}! ${promoSmsUrgence}Votre projet${superficie}${ville} — on peut vous préparer une soumission cette semaine. Intéressé? 581-307-2678`;
             } else {
               message = `Bonjour ${prenom}! C'est Jason de Novus Epoxy. On pense encore à votre projet de ${service}${superficie}${ville}. Si vous avez des questions ou voulez une soumission gratuite, on est là! 581-307-2678`;
             }
           } else {
             const sujet = ton === 'urgence'
-              ? `Rabais 15% Mai — Votre projet ${service}${superficie}`
+              ? `${promoEmailSujet}Votre projet ${service}${superficie}`
               : `Votre soumission ${service}${superficie} — Novus Epoxy`;
 
             const corps = ton === 'direct'
-              ? `Bonjour ${prenom},\n\nSuite à votre intérêt pour un ${service}${superficie}${ville}, nous voulions vous rappeler que notre équipe est disponible pour vous préparer une soumission gratuite.\n\nEn mai, nous offrons un rabais de 15% sur tous nos projets.\n\nPour obtenir votre soumission: novusepoxy.ca/#contact\n\nÀ bientôt,\nJason — Novus Epoxy\n581-307-2678`
-              : `Bonjour ${prenom},\n\nNous espérons que tout va bien! Nous pensons encore à votre projet de ${service}${superficie}${ville}.\n\nNous avons actuellement un rabais spécial de 15% pour les projets de mai — c'est une belle opportunité!\n\nSi vous avez des questions ou souhaitez qu'on vous prépare une soumission personnalisée, on est disponibles.\n\nBonne journée,\nJason — Novus Epoxy\n📞 581-307-2678\n🌐 novusepoxy.ca`;
+              ? `Bonjour ${prenom},\n\nSuite à votre intérêt pour un ${service}${superficie}${ville}, nous voulions vous rappeler que notre équipe est disponible pour vous préparer une soumission gratuite.${promoEmailBody}\n\nPour obtenir votre soumission: novusepoxy.ca/#contact\n\nÀ bientôt,\nJason — Novus Epoxy\n581-307-2678`
+              : `Bonjour ${prenom},\n\nNous espérons que tout va bien! Nous pensons encore à votre projet de ${service}${superficie}${ville}.${promoEmailBody}\n\nSi vous avez des questions ou souhaitez qu'on vous prépare une soumission personnalisée, on est disponibles.\n\nBonne journée,\nJason — Novus Epoxy\n📞 581-307-2678\n🌐 novusepoxy.ca`;
 
             message = `SUJET: ${sujet}\n\n${corps}`;
           }

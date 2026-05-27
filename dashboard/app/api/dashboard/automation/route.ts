@@ -1,44 +1,118 @@
 import { NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { readFile, stat } from 'node:fs/promises';
+import path from 'node:path';
 
-// All 20 crons from vercel.json with human-readable labels and schedules
-// Heures affichees en heure du Quebec (EDT = UTC-4, EST = UTC-5)
-// En avril (EDT): UTC-4, donc 13 UTC = 9h Quebec
-const VERCEL_CRONS = [
-  { path: '/api/gmail/watch',             label: 'Gmail Watch renewal',            schedule: '0 6 * * *',    desc: 'Tous les jours 2h (nuit)' },
-  { path: '/api/cron/recurring-expenses', label: 'Depenses recurrentes',           schedule: '0 10 * * *',   desc: 'Tous les jours 6h' },
-  { path: '/api/cron/email-scan',         label: 'Scan emails entrants',           schedule: '0 8 * * *',    desc: 'Tous les jours 4h (nuit)' },
-  { path: '/api/cron/morning-summary',    label: 'Resume du matin (Telegram)',     schedule: '0 8 * * *',    desc: 'Tous les jours 4h (nuit)' },
-  { path: '/api/cron/aria-prospect',      label: 'Aria prospection email',         schedule: '0 9 * * *',    desc: 'Tous les jours 5h + cron-job.org aux 10 min' },
-  { path: '/api/cron/deposit-watch',      label: 'Surveillance depots',            schedule: '0 9 * * *',    desc: 'Tous les jours 5h' },
-  { path: '/api/cron/relance-facture',    label: 'Relance factures impayees',      schedule: '0 11 * * *',   desc: 'Tous les jours 7h' },
-  { path: '/api/cron/rappels',            label: 'Rappels rendez-vous',            schedule: '0 12 * * *',   desc: 'Tous les jours 8h' },
-  { path: '/api/cron/health-check',       label: 'Health check (Echo)',            schedule: '0 12 * * *',   desc: 'Tous les jours 8h + cron-job.org aux 15 min' },
-  { path: '/api/cron/sync-submissions',   label: 'Sync soumissions CRM',          schedule: '30 12 * * *',  desc: 'Tous les jours 8h30' },
-  { path: '/api/cron/relance',            label: 'Relance devis (48h + 5j)',       schedule: '0 13 * * *',   desc: 'Tous les jours 9h' },
-  { path: '/api/cron/lead-followup',      label: 'Relance leads (Claude IA)',      schedule: '0 13 * * *',   desc: 'Tous les jours 9h' },
-  { path: '/api/cron/iris-report',        label: 'Rapport Iris (finances)',        schedule: '0 13 * * *',   desc: 'Tous les jours 9h' },
-  { path: '/api/cron/depot',              label: 'Rappel depot contrat',           schedule: '0 14 * * *',   desc: 'Tous les jours 10h' },
-  { path: '/api/cron/relance-prospect',   label: 'Relance prospects (48h + 5j)',   schedule: '0 14 * * *',   desc: 'Tous les jours 10h' },
-  { path: '/api/cron/prospect-followup',  label: 'Suivi prospects (desactive)',    schedule: '0 14 * * *',   desc: 'Fusionne dans relance-prospect' },
-  { path: '/api/cron/avis',               label: 'Demande avis Google',            schedule: '0 15 * * *',   desc: 'Tous les jours 11h' },
-  { path: '/api/cron/nurture-leads',      label: 'Nurture leads tiedes (5 etapes)',schedule: '0 15 * * *',   desc: 'Tous les jours 11h' },
-  { path: '/api/cron/referral',           label: 'Programme referral (6 mois)',    schedule: '0 16 * * 1',   desc: 'Lundi 12h' },
-  { path: '/api/cron/reviews',            label: 'Rappel avis Google (admin)',     schedule: '0 10 * * 1',   desc: 'Lundi 6h' },
-];
+export const dynamic = 'force-dynamic';
+
+type VercelConfig = {
+  crons?: { path: string; schedule: string }[];
+};
+
+type CronEntry = {
+  path: string;
+  schedule: string;
+  label: string;
+  status: 'actif' | 'manquant';
+  missing?: boolean;
+};
+
+// Human-readable labels keyed by API path (no query string).
+// If a cron is missing here, we fall back to the last path segment.
+const CRON_LABELS: Record<string, string> = {
+  '/api/gmail/watch':             'Gmail Watch renewal',
+  '/api/gmail/cleanup':           'Gmail cleanup',
+  '/api/cron/recurring-expenses': 'Depenses recurrentes',
+  '/api/cron/email-scan':         'Scan emails entrants',
+  '/api/cron/morning-summary':    'Resume matin/soir (Telegram)',
+  '/api/cron/aria-prospect':      'Aria prospection email',
+  '/api/cron/deposit-watch':      'Surveillance depots',
+  '/api/cron/relance-facture':    'Relance factures impayees',
+  '/api/cron/rappels':            'Rappels rendez-vous',
+  '/api/cron/health-check':       'Health check (Echo)',
+  '/api/cron/sync-submissions':   'Sync soumissions CRM',
+  '/api/cron/relance':            'Relance devis (48h + 5j)',
+  '/api/cron/lead-followup':      'Relance leads (Claude IA)',
+  '/api/cron/iris-report':        'Rapport Iris (finances)',
+  '/api/cron/depot':              'Rappel depot contrat',
+  '/api/cron/relance-prospect':   'Relance prospects (48h + 5j)',
+  '/api/cron/avis':               'Demande avis Google',
+  '/api/cron/nurture-leads':      'Nurture leads tiedes (5 etapes)',
+  '/api/cron/referral':           'Programme referral (6 mois)',
+  '/api/cron/reviews':            'Rappel avis Google (admin)',
+  '/api/cron/fb-leads-sync':      'Sync leads Facebook Ads',
+  '/api/cron/soustraitants-paie': 'Paie sous-traitants (samedi)',
+  '/api/cron/monthly-accounting': 'Comptabilite mensuelle',
+  '/api/cron/worker-reminders':   'Rappels travailleurs',
+  '/api/cron/meta-ads-spend':     'Suivi depenses Meta Ads',
+  '/api/cron/ads-weekly':         'Rapport pubs hebdomadaire',
+  '/api/crm/leads/sync-ghl':      'Sync GoHighLevel CRM',
+};
+
+function describeSchedule(schedule: string): string {
+  // Simple human-readable hints — keep raw cron alongside for accuracy.
+  return schedule;
+}
+
+function labelFor(p: string): string {
+  const clean = p.split('?')[0];
+  if (CRON_LABELS[clean]) return CRON_LABELS[clean];
+  return clean.split('/').filter(Boolean).pop() ?? clean;
+}
+
+async function routeExists(apiPath: string): Promise<boolean> {
+  // Strip query string, then map to filesystem (app/<path>/route.ts).
+  const clean = apiPath.split('?')[0];
+  const rel = clean.replace(/^\//, ''); // "api/cron/email-scan"
+  const candidates = [
+    path.join(process.cwd(), 'app', rel, 'route.ts'),
+    path.join(process.cwd(), 'app', rel, 'route.tsx'),
+    path.join(process.cwd(), 'app', rel, 'route.js'),
+  ];
+  for (const f of candidates) {
+    try {
+      await stat(f);
+      return true;
+    } catch {
+      // continue
+    }
+  }
+  return false;
+}
+
+async function loadVercelCrons(): Promise<{ path: string; schedule: string }[]> {
+  // vercel.json sits at the project root (same dir as package.json on Vercel = cwd).
+  const cfgPath = path.join(process.cwd(), 'vercel.json');
+  try {
+    const raw = await readFile(cfgPath, 'utf-8');
+    const cfg = JSON.parse(raw) as VercelConfig;
+    return Array.isArray(cfg.crons) ? cfg.crons : [];
+  } catch {
+    return [];
+  }
+}
 
 export async function GET() {
   const session = await auth();
   if (!session) return NextResponse.json({ error: 'Non autorise' }, { status: 401 });
 
-  // All crons from vercel.json — they run automatically on Vercel's scheduler
-  const crons = VERCEL_CRONS.map(c => ({
-    path: c.path,
-    label: c.label,
-    schedule: c.desc,
-    status: 'actif' as const,
-  }));
+  const vercelCrons = await loadVercelCrons();
+
+  const crons: CronEntry[] = await Promise.all(
+    vercelCrons.map(async (c) => {
+      const exists = await routeExists(c.path);
+      return {
+        path: c.path,
+        schedule: describeSchedule(c.schedule),
+        label: labelFor(c.path),
+        status: exists ? 'actif' : 'manquant',
+        ...(exists ? {} : { missing: true }),
+      } as CronEntry;
+    })
+  );
+
+  const missingCrons = crons.filter((c) => c.missing).map((c) => c.path);
 
   // SMS stats today
   const smsToday = await query(`
@@ -86,6 +160,7 @@ export async function GET() {
 
   return NextResponse.json({
     crons,
+    missingCrons,
     sms: smsToday[0] || { total: 0, sent: 0, failed: 0 },
     emails: emailsToday[0] || { total: 0, delivered: 0, opened: 0, bounced: 0 },
     leads: { today: leadsToday[0]?.cnt || 0, total: leadsTotal[0]?.cnt || 0, prospected: leadsProspected[0]?.cnt || 0 },

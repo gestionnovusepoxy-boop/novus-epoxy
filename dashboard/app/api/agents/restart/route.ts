@@ -5,7 +5,7 @@ import { auth } from '@/lib/auth';
 export const dynamic = 'force-dynamic';
 
 const ADMIN_API_KEY = () => process.env.ADMIN_API_KEY ?? '';
-const BASE_URL = () => process.env.NEXTAUTH_URL ?? process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000';
+const BASE_URL = () => process.env.NEXTAUTH_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
 async function internalCall(path: string, method: 'GET' | 'POST' = 'GET'): Promise<{ ok: boolean; detail: string }> {
   const key = ADMIN_API_KEY();
@@ -64,7 +64,8 @@ async function restartAgent(agentId: string): Promise<{ ok: boolean; message: st
     }
     case 'denis':
     case 'jason': {
-      const r = await internalCall('/api/cron/prospect-followup', 'GET');
+      // prospect-followup fusionne dans relance-prospect
+      const r = await internalCall('/api/cron/relance-prospect', 'GET');
       return { ok: r.ok, message: r.ok ? 'Verification prospection lancee' : `Erreur: ${r.detail}` };
     }
     case 'hunter': {
