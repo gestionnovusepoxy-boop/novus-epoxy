@@ -41,9 +41,10 @@ export async function GET(req: NextRequest) {
   let balanceAlerts = 0;
 
   // --- 1. Quotes with depot_paye status but no payment record ---
+  // Note: quotes table is flat (no client_id FK) — client info is embedded as client_nom/email/tel.
+  // For the invoice we just leave client_id NULL (invoices.client_id is nullable).
   const depositQuotes = await query(`
-    SELECT q.id, q.client_nom, q.depot_requis, q.total, q.deposit_paid_at,
-           q.client_id
+    SELECT q.id, q.client_nom, q.depot_requis, q.total, q.deposit_paid_at
     FROM quotes q
     WHERE q.statut = 'depot_paye'
       AND q.deposit_paid_at IS NOT NULL
@@ -56,7 +57,7 @@ export async function GET(req: NextRequest) {
 
   for (const q of depositQuotes) {
     const quoteId = q.id as number;
-    const clientId = q.client_id as number | null;
+    const clientId: number | null = null;
     const depotMontant = Number(q.depot_requis ?? 0);
     if (depotMontant <= 0) continue;
 
