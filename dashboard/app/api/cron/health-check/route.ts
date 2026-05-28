@@ -158,6 +158,10 @@ export async function GET(req: NextRequest) {
     }
   } catch (err) {
     checks.push({ name: 'Gmail OAuth', ok: false, detail: String(err), severity: 'critical' });
+    // Proactively flag broken OAuth + fire the tap-to-fix Telegram alert so Luca
+    // re-auths within seconds, instead of discovering it when an email silently fails.
+    const { handleGmailAuthError } = await import('@/lib/send-email');
+    await handleGmailAuthError(err).catch(() => {});
   }
 
   // 1f. Twilio

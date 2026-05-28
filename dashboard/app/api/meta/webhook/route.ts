@@ -10,10 +10,10 @@ import { scoreLead } from '@/lib/lead-scoring';
 
 // GET — Meta webhook verification (subscribe handshake)
 export async function GET(req: NextRequest) {
-  const VERIFY_TOKEN = process.env.META_VERIFY_TOKEN ?? '';
+  const VERIFY_TOKEN = (process.env.META_VERIFY_TOKEN ?? '').trim();
   const { searchParams } = new URL(req.url);
   const mode      = searchParams.get('hub.mode');
-  const token     = searchParams.get('hub.verify_token');
+  const token     = (searchParams.get('hub.verify_token') ?? '').trim();
   const challenge = searchParams.get('hub.challenge');
 
   if (mode === 'subscribe' && token === VERIFY_TOKEN) {

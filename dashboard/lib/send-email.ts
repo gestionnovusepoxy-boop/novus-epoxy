@@ -36,12 +36,17 @@ export async function handleGmailAuthError(err: unknown): Promise<void> {
   const chat = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
   if (!token || !chat) return;
   try {
+    // Tap-to-fix: button opens the OAuth consent flow directly. ~10s to restore.
     await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: chat,
-        text: '🚨 Gmail OAuth invalide (invalid_grant). Re-auth requis: visit /api/auth/google (clic manuel). Tous les emails sortants/scans sont en pause jusque la.',
+        text: '🚨 <b>Gmail OAuth expiré</b> — emails + scans en pause.\n\nClique le bouton, choisis le compte gestionnovusepoxy, puis "Avancé → Continuer". Ça repart tout seul.\n\n⚠️ Pour que ça ne casse plus jamais: Google Cloud Console → OAuth consent screen → <b>PUBLISH APP</b> (sinon ça expire ~7j).',
+        parse_mode: 'HTML',
+        reply_markup: { inline_keyboard: [[
+          { text: '🔑 Reconnecter Gmail (1 clic)', url: 'https://novus-epoxy.vercel.app/api/auth/google' },
+        ]]},
       }),
     });
   } catch { /* never block on alert */ }

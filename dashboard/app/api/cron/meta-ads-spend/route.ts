@@ -45,17 +45,28 @@ export async function GET(req: NextRequest) {
   // 2) Pull spend by campaign for yesterday
   // Meta Marketing API requires act_ prefix on ad account ID for insights endpoint.
   const accountWithPrefix = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`;
-  const insightsUrl = `https://graph.facebook.com/v25.0/${accountWithPrefix}/insights?level=campaign&fields=campaign_id,campaign_name,spend,impressions,clicks&time_range=${encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }))}&access_token=${token}`;
+  // `actions` carries Meta's OWN count of form-fills (action_type = lead / leadgen).
+  // Without it the dashboard only knows about leads that reached our DB.
+  const insightsUrl = `https://graph.facebook.com/v25.0/${accountWithPrefix}/insights?level=campaign&fields=campaign_id,campaign_name,spend,impressions,clicks,actions&time_range=${encodeURIComponent(JSON.stringify({ since: dateStr, until: dateStr }))}&access_token=${token}`;
   const insRes = await fetch(insightsUrl);
   if (!insRes.ok) {
     const err = await insRes.json().catch(() => ({}));
     return NextResponse.json({ error: 'Meta insights error', detail: err }, { status: 502 });
   }
   const ins = await insRes.json();
-  type Insight = { campaign_id?: string; campaign_name?: string; spend?: string; impressions?: string; clicks?: string };
+  type FbAction = { action_type: string; value: string };
+  type Insight = { campaign_id?: string; campaign_name?: string; spend?: string; impressions?: string; clicks?: string; actions?: FbAction[] };
   const items = (ins.data ?? []) as Insight[];
 
-  // 3) Lead count for yesterday from CRM
+  // Meta form-fills per campaign: sum lead-type actions (covers lead ads + on-site forms).
+  const LEAD_ACTION_TYPES = ['lead', 'leadgen_grouped', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead'];
+  const metaFormFills = (it: Insight): number =>
+    (it.actions ?? [])
+      .filter((a) => LEAD_ACTION_TYPES.includes(a.action_type))
+      .reduce((sum, a) => sum + Number(a.value ?? 0), 0);
+  const totalMetaFormFills = items.reduce((sum, it) => sum + metaFormFills(it), 0);
+
+  // 3) Lead count for yesterday from CRM (leads that actually synced into our DB)
   const leadRows = await query(
     `SELECT COUNT(*)::int AS n FROM crm_leads WHERE source IN ('facebook-leadad', 'facebook-zapier') AND created_at::date = $1::date`,
     [dateStr]
@@ -106,16 +117,20 @@ export async function GET(req: NextRequest) {
   const fxRate = Number(process.env.USD_CAD_RATE ?? '1.0');
   const totalSpendCad = totalSpendNative * fxRate;
   const cplCad = totalLeads > 0 ? totalSpendCad / totalLeads : null;
+  // Store Meta's own form-fill count in raw_data so the dashboard can show
+  // "Meta dit X formulaires remplis / Y synchronisés au CRM" — the gap = leads not synced.
+  const totalMeta = JSON.stringify({ meta_form_fills: totalMetaFormFills, crm_leads: totalLeads });
   await query(
-    `INSERT INTO meta_ads_spend (date_day, ad_account_id, campaign_id, campaign_name, spend_usd, spend_cad, leads_count, cpl_cad)
-     VALUES ($1,$2,'TOTAL','Tous campagnes',$3,$4,$5,$6)
+    `INSERT INTO meta_ads_spend (date_day, ad_account_id, campaign_id, campaign_name, spend_usd, spend_cad, leads_count, cpl_cad, raw_data)
+     VALUES ($1,$2,'TOTAL','Tous campagnes',$3,$4,$5,$6,$7::jsonb)
      ON CONFLICT (date_day, campaign_id) DO UPDATE SET
        spend_usd = EXCLUDED.spend_usd,
        spend_cad = EXCLUDED.spend_cad,
        leads_count = EXCLUDED.leads_count,
        cpl_cad = EXCLUDED.cpl_cad,
+       raw_data = EXCLUDED.raw_data,
        synced_at = NOW()`,
-    [dateStr, adAccountId, totalSpendNative, totalSpendCad, totalLeads, cplCad]
+    [dateStr, adAccountId, totalSpendNative, totalSpendCad, totalLeads, cplCad, totalMeta]
   );
 
   return NextResponse.json({
@@ -125,7 +140,9 @@ export async function GET(req: NextRequest) {
     campaigns: items.length,
     spend_native: totalSpendNative,
     spend_cad: Number(totalSpendCad.toFixed(2)),
-    leads: totalLeads,
+    meta_form_fills: totalMetaFormFills, // Meta's authoritative count of form submissions
+    leads: totalLeads,                   // how many reached our CRM
+    leads_not_synced: Math.max(0, totalMetaFormFills - totalLeads),
     cpl_cad: cplCad ? Number(cplCad.toFixed(2)) : null,
   });
 }

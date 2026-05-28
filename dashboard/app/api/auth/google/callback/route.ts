@@ -40,25 +40,36 @@ export async function GET(req: NextRequest) {
     // Clear the broken flag so email-scan / relance-prospect resume immediately.
     await query(`DELETE FROM kv_store WHERE key = 'gmail_oauth_broken'`).catch(() => {});
 
-    // Auto-update Vercel env var if VERCEL_TOKEN is available
+    // Auto-update Vercel env var if VERCEL_TOKEN is available.
+    // The project lives under a TEAM, so every call MUST include ?teamId= or it 404s.
+    // (This is why the auto-update silently failed before.)
+    // NOTE: kv_store above is already the source of truth — this Vercel sync is just a backup.
     let vercelUpdated = false;
     const vercelToken = process.env.VERCEL_TOKEN;
-    const vercelProjectId = process.env.VERCEL_PROJECT_ID || 'novus-epoxy';
+    const projectId = process.env.VERCEL_PROJECT_ID || 'prj_Oz0holNug5EwsoVeY2GEyiz5S4k9';
+    const teamId = process.env.VERCEL_TEAM_ID || 'team_RPscWPrEHudwLzxC8zSzO2x2';
     if (vercelToken) {
       try {
-        // Remove old env var
-        await fetch(`https://api.vercel.com/v9/projects/${vercelProjectId}/env/GOOGLE_REFRESH_TOKEN`, {
-          method: 'DELETE',
-          headers: { Authorization: `Bearer ${vercelToken}` },
-        }).catch(() => {});
-        // Create new one
-        const createRes = await fetch(`https://api.vercel.com/v10/projects/${vercelProjectId}/env`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: 'GOOGLE_REFRESH_TOKEN', value: refreshToken, type: 'encrypted', target: ['production', 'preview'] }),
-        });
-        vercelUpdated = createRes.ok;
-      } catch { /* non-fatal */ }
+        const tq = `?teamId=${teamId}`;
+        const authH = { Authorization: `Bearer ${vercelToken}`, 'Content-Type': 'application/json' };
+        // Find existing env var id (DELETE/PATCH need the id, not the name)
+        const listRes = await fetch(`https://api.vercel.com/v9/projects/${projectId}/env${tq}`, { headers: authH });
+        const list = await listRes.json().catch(() => ({ envs: [] }));
+        const existing = (list.envs ?? []).find((e: { key: string; id: string }) => e.key === 'GOOGLE_REFRESH_TOKEN');
+        if (existing) {
+          const patchRes = await fetch(`https://api.vercel.com/v9/projects/${projectId}/env/${existing.id}${tq}`, {
+            method: 'PATCH', headers: authH,
+            body: JSON.stringify({ value: refreshToken }),
+          });
+          vercelUpdated = patchRes.ok;
+        } else {
+          const createRes = await fetch(`https://api.vercel.com/v10/projects/${projectId}/env${tq}`, {
+            method: 'POST', headers: authH,
+            body: JSON.stringify({ key: 'GOOGLE_REFRESH_TOKEN', value: refreshToken, type: 'encrypted', target: ['production', 'preview'] }),
+          });
+          vercelUpdated = createRes.ok;
+        }
+      } catch { /* non-fatal — kv_store already has it */ }
     }
 
     // Notify on Telegram
@@ -79,12 +90,17 @@ export async function GET(req: NextRequest) {
     }
 
     return new NextResponse(
-      `<!DOCTYPE html><html><body style="font-family:sans-serif;max-width:600px;margin:50px auto;padding:20px;">
-        <h1 style="color:green;">✅ Google reconnecté — FULL ACCESS!</h1>
-        ${vercelUpdated ? '<p style="color:green;font-weight:bold;">🔄 Vercel mis à jour automatiquement!</p>' : ''}
-        <p>Nouveau refresh token:</p>
-        <textarea style="width:100%;height:80px;font-family:monospace;font-size:12px;" readonly onclick="this.select()">${refreshToken}</textarea>
-        ${!vercelUpdated ? '<p style="color:red;font-weight:bold;">Copie ce token et donne-le a Claude pour mettre a jour Vercel.</p>' : '<p>Le ménage Gmail va commencer automatiquement!</p>'}
+      `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="font-family:sans-serif;max-width:600px;margin:50px auto;padding:20px;">
+        <h1 style="color:green;">✅ Google reconnecté — accès complet!</h1>
+        <p style="color:green;font-weight:bold;">Le token est sauvegardé dans la base de données. Rien à copier — tout fonctionne déjà.${vercelUpdated ? ' (Vercel aussi mis à jour 🔄)' : ''}</p>
+        <p>Gmail (envoi + scan + ménage) et les relances repartent automatiquement.</p>
+        <hr style="margin:24px 0;border:none;border-top:1px solid #e2e8f0;">
+        <p style="font-weight:bold;">⚠️ Pour que ça ne casse plus jamais (sinon ça expire ~7 jours):</p>
+        <ol style="color:#334155;line-height:1.6;">
+          <li>Va sur <a href="https://console.cloud.google.com/auth/overview" target="_blank">Google Cloud Console → OAuth consent screen</a></li>
+          <li>Si le statut est <b>"Testing"</b>, clique <b>"PUBLISH APP" / "Passer en production"</b> et confirme.</li>
+          <li>Le token ne sera plus jamais expiré (sauf révocation manuelle).</li>
+        </ol>
       </body></html>`,
       { headers: { 'Content-Type': 'text/html' } }
     );
