@@ -800,7 +800,7 @@ function buildTools(agentId: AgentId) {
           'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER',
           'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN',
           'ADMIN_EMAIL', 'ADMIN_PASSWORD', 'AUTH_SECRET', 'NEXTAUTH_URL',
-          'RESEND_API_KEY', 'STRIPE_SECRET_KEY',
+          'RESEND_API_KEY', 'OPENROUTER_API_KEY',
         ];
         const status = envVars.map(v => ({ variable: v, present: !!process.env[v] }));
         const ok = status.filter(s => s.present).length;

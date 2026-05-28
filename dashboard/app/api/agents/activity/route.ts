@@ -268,8 +268,8 @@ export async function GET() {
   if (Number(z.total_bookings ?? 0) === 0 && health['zara'] === 'green') health['zara'] = 'yellow';
 
   const envVars = [
-    'ANTHROPIC_API_KEY','DATABASE_URL','TELEGRAM_BOT_TOKEN',
-    'TWILIO_ACCOUNT_SID','GOOGLE_CLIENT_ID','STRIPE_SECRET_KEY',
+    'OPENROUTER_API_KEY','DATABASE_URL','TELEGRAM_BOT_TOKEN',
+    'TWILIO_ACCOUNT_SID','GOOGLE_CLIENT_ID',
   ];
   const envOk = envVars.filter(v => !!process.env[v]).length;
   const envMissing = envVars.filter(v => !process.env[v]);

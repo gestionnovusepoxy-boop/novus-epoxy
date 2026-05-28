@@ -87,7 +87,7 @@ async function checkEcho(): Promise<StatusResult> {
     return { status: 'erreur', detail: 'Health-check pas lance depuis 24h+', lastCheck: last };
   } catch {
     // kv_store might not have health check entry — that's OK, try env check
-    const envVars = ['ANTHROPIC_API_KEY', 'DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'TWILIO_ACCOUNT_SID', 'GOOGLE_CLIENT_ID', 'STRIPE_SECRET_KEY'];
+    const envVars = ['OPENROUTER_API_KEY', 'DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'TWILIO_ACCOUNT_SID', 'GOOGLE_CLIENT_ID'];
     const ok = envVars.filter(v => !!process.env[v]).length;
     if (ok === envVars.length) return { status: 'running', detail: `${ok}/${envVars.length} env vars OK` };
     return { status: 'veille', detail: `${ok}/${envVars.length} env vars configurees` };
