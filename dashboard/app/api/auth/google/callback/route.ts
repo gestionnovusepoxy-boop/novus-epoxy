@@ -37,6 +37,9 @@ export async function GET(req: NextRequest) {
       [refreshToken],
     ).catch(() => {});
 
+    // Clear the broken flag so email-scan / relance-prospect resume immediately.
+    await query(`DELETE FROM kv_store WHERE key = 'gmail_oauth_broken'`).catch(() => {});
+
     // Auto-update Vercel env var if VERCEL_TOKEN is available
     let vercelUpdated = false;
     const vercelToken = process.env.VERCEL_TOKEN;
