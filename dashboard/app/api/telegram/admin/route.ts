@@ -1,7 +1,7 @@
 import { getAdminChatIds } from '@/lib/telegram-utils';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
-import { SERVICES, type ServiceType, calculateQuote, formatMoney, getServiceDescriptionHtml } from '@/lib/pricing';
+import { SERVICES, type ServiceType, calculateQuote, calculateQuoteCustomPrice, formatMoney, getServiceDescriptionHtml } from '@/lib/pricing';
 import { sendSMS, notifyAdminSMS } from '@/lib/sms';
 import { timingSafeEqual } from 'crypto';
 import { google } from 'googleapis';
@@ -81,6 +81,21 @@ const TOOLS = [
         notes: { type: 'string', description: 'Notes additionnelles (optionnel)', default: '' },
       },
       required: ['client_nom', 'client_tel', 'type_service', 'superficie'],
+    },
+  },
+  {
+    name: 'creer_devis_prix_fixe',
+    description: 'Cree un devis a PRIX FIXE (forfaitaire) et l\'envoie au client. Utilise quand l\'admin donne un montant total directement au lieu d\'un prix au pied carre — typiquement apres avoir vu une photo (balcon, escalier, reparation). Ex: "fais un devis de 2300 pour Laurie", "minimum call pour le balcon de X", "1800 pour Marc avec note ...". Si l\'admin dit "minimum" ou "minimum call", utilise prix=1500.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        client_nom: { type: 'string', description: 'Nom (ou prenom) du client. Sert a retrouver le lead si le tel n\'est pas donne.' },
+        client_tel: { type: 'string', description: 'Tel du client (10 chiffres). Optionnel — sera retrouve depuis le CRM via le nom si absent.', default: '' },
+        prix: { type: 'number', description: 'Montant FORFAITAIRE avant taxes (le sous-total). Si l\'admin dit "minimum"/"minimum call" = 1500.' },
+        service_label: { type: 'string', description: 'Libelle du service a afficher (ex: "Balcon antiderapant", "Reparation beton"). Defaut: "Travaux sur mesure".', default: 'Travaux sur mesure' },
+        description: { type: 'string', description: 'Description des travaux / notes a inclure dans le devis (optionnel). L\'admin peut l\'ecrire en langage naturel.', default: '' },
+      },
+      required: ['client_nom', 'prix'],
     },
   },
   {
@@ -395,6 +410,82 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         tvq: formatMoney(calc.tvq),
         total: formatMoney(calc.total),
         depot: formatMoney(calc.depot_requis),
+        sms_envoye: smsSent,
+        lien_dashboard: `https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}`,
+      });
+    }
+
+    case 'creer_devis_prix_fixe': {
+      const clientNom = String(input.client_nom || '').trim();
+      let clientTel = String(input.client_tel || '').replace(/\D/g, '').slice(-10);
+      let clientEmail = '';
+      let adresse = '';
+      // Resolve tel/email/adresse from CRM by name if not given.
+      if (!clientTel && clientNom) {
+        const lead = await query(
+          `SELECT telephone, email, adresse FROM crm_leads WHERE nom ILIKE $1 ORDER BY created_at DESC LIMIT 1`,
+          [`%${clientNom}%`]
+        );
+        if (lead[0]) {
+          clientTel = String(lead[0].telephone || '').replace(/\D/g, '').slice(-10);
+          clientEmail = (lead[0].email as string) || '';
+          adresse = (lead[0].adresse as string) || '';
+        }
+      }
+      if (!clientTel) {
+        return JSON.stringify({ error: `Pas de telephone pour "${clientNom}". Donne-moi son numero.` });
+      }
+      const prix = Number(input.prix);
+      if (!Number.isFinite(prix) || prix <= 0) {
+        return JSON.stringify({ error: 'Prix invalide. Donne un montant (ex: 2300) ou dis "minimum call" (1500).' });
+      }
+      const calc = calculateQuoteCustomPrice(prix);
+      const serviceLabel = String(input.service_label || 'Travaux sur mesure').slice(0, 120);
+      const description = String(input.description || '').slice(0, 2000) || null;
+
+      const rows = await query(
+        `INSERT INTO quotes (
+          client_nom, client_email, client_tel, client_adresse,
+          type_service, superficie, notes, description_travaux,
+          prix_pied_carre, sous_total, tps, tvq, total, depot_requis,
+          statut, approved_at, sent_at
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,'envoye',NOW(),NOW())
+        RETURNING id`,
+        [
+          clientNom, clientEmail, clientTel, adresse,
+          'commercial', 0, serviceLabel, description,
+          0, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis,
+        ]
+      );
+      const quoteId = rows[0].id as number;
+      const solde = formatMoney(calc.total - calc.depot_requis);
+
+      const smsMsg = [
+        `Bonjour ${clientNom}!`,
+        `Voici votre soumission Novus Epoxy #${quoteId} :`,
+        ``,
+        serviceLabel,
+        `Total: ${formatMoney(calc.total)} (taxes incluses)`,
+        `Depot (30%): ${formatMoney(calc.depot_requis)}`,
+        `Solde: ${solde}`,
+        ``,
+        `Pour planifier vos travaux:`,
+        `https://novus-epoxy.vercel.app/reservation/${quoteId}`,
+        ``,
+        `Questions? 581-307-2678`,
+      ].join('\n');
+      const smsSent = await sendSMS(clientTel, smsMsg);
+      await notifyAdminSMS(quoteId, clientNom);
+
+      return JSON.stringify({
+        devis_id: quoteId,
+        client: clientNom,
+        telephone: clientTel,
+        service: serviceLabel,
+        prix_forfaitaire: formatMoney(calc.sous_total),
+        total: formatMoney(calc.total),
+        depot: formatMoney(calc.depot_requis),
+        description: description ? 'incluse' : 'aucune',
         sms_envoye: smsSent,
         lien_dashboard: `https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}`,
       });
@@ -1096,6 +1187,15 @@ SERVICES OFFERTS (type_service entre parentheses):
 
 IMPORTANT: Quand le client dit "couleur unie" ou "uni", utilise type_service="couleur_unie", PAS "flake".
 Quand le client dit "flocon" ou "flake", utilise type_service="flake".
+
+DEVIS A PRIX FIXE (outil creer_devis_prix_fixe):
+- Quand Luca te donne un MONTANT TOTAL directement (au lieu d'un prix/pi²), utilise creer_devis_prix_fixe.
+- Typiquement APRES une photo (balcon, escalier, reparation): Luca regarde la photo et dit le prix.
+- Ex: "fais un devis de 2300 pour Laurie" → prix=2300. "minimum call pour le balcon de Marc" → prix=1500. "1800 pour X note: 2 couches anti-derapant + reparation fissures" → prix=1800, description="2 couches anti-derapant + reparation fissures".
+- "minimum" ou "minimum call" = TOUJOURS prix=1500.
+- Si Luca ajoute une note/description (apres "note:", "avec", "description:", etc.), mets-la dans le champ description.
+- Tu peux retrouver le client par son prenom seul (le tel est cherche dans le CRM automatiquement).
+- Le minimum de 1500$ ne s'applique PAS au vinyl/plancher flottant.
 
 INFOS BUSINESS:
 - RBQ: 5861-8471-01
