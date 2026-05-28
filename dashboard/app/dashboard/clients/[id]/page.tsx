@@ -51,7 +51,15 @@ export default function ClientDetailPage({ params }: { params: Promise<{ id: str
         <button onClick={() => router.push('/dashboard/clients')} className="text-slate-400 hover:text-white text-sm mb-2 block transition">
           &larr; Retour aux clients
         </button>
-        <h2 className="text-2xl font-bold text-white">{client.nom}</h2>
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <h2 className="text-2xl font-bold text-white">{client.nom}</h2>
+          <Link
+            href={`/dashboard/devis/nouveau?clientId=${client.id}`}
+            className="bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-4 py-2 text-sm transition whitespace-nowrap"
+          >
+            + Nouveau devis
+          </Link>
+        </div>
       </div>
 
       <div className="bg-slate-800 border border-slate-700 rounded-xl p-6">

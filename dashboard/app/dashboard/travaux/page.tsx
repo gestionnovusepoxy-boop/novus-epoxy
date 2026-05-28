@@ -35,6 +35,7 @@ interface Travail {
   booking_statut: string | null;
   invoice_id: number | null;
   invoice_numero: string | null;
+  review_requested_at?: string | null;
 }
 
 interface JobPhoto {
@@ -968,6 +969,8 @@ function Section({ title, jobs, onRefresh }: { title: string; jobs: Travail[]; o
 /* ─── Completed Job Card (read-only) ─── */
 function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: boolean }) {
   const [expanded, setExpanded] = useState(autoExpand ?? false);
+  const [reviewRequestedAt, setReviewRequestedAt] = useState<string | null>(job.review_requested_at ?? null);
+  const [reviewLoading, setReviewLoading] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -975,6 +978,25 @@ function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: bool
       cardRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [autoExpand]);
+
+  async function handleRequestReview() {
+    if (reviewRequestedAt) return;
+    if (!confirm(`Envoyer la demande d'avis Google a ${job.client_nom}?`)) return;
+    setReviewLoading(true);
+    try {
+      const res = await fetch(`/api/quotes/${job.id}/request-review`, { method: 'POST' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert((data as { error?: string }).error ?? 'Echec de la demande');
+        return;
+      }
+      setReviewRequestedAt(new Date().toISOString());
+    } catch {
+      alert('Erreur reseau');
+    } finally {
+      setReviewLoading(false);
+    }
+  }
 
   return (
     <div ref={cardRef} className={`bg-slate-800/60 border rounded-xl p-5 space-y-4 ${autoExpand ? 'border-amber-500/50 ring-1 ring-amber-500/20' : 'border-slate-700/50'}`}>
@@ -1036,6 +1058,20 @@ function CompletedJobCard({ job, autoExpand }: { job: Travail; autoExpand?: bool
       >
         {expanded ? `▾ Masquer rapport projet #${job.id}` : `▸ Voir rapport projet #${job.id}`}
       </button>
+
+      {/* Google review CTA — visible only on completed jobs that haven't been asked yet (P2-3) */}
+      {job.statut === 'complete' && !reviewRequestedAt && (
+        <button
+          onClick={handleRequestReview}
+          disabled={reviewLoading}
+          className="w-full bg-yellow-500/10 hover:bg-yellow-500/20 disabled:opacity-50 text-yellow-300 font-semibold text-sm py-2.5 px-4 rounded-lg border border-yellow-500/30 transition flex items-center justify-center gap-2"
+        >
+          📩 {reviewLoading ? 'Envoi en cours...' : 'Demander avis Google'}
+        </button>
+      )}
+      {reviewRequestedAt && (
+        <p className="text-emerald-400 text-xs text-center">✓ Demande d&apos;avis Google envoyee</p>
+      )}
 
       {expanded && (
         <div className="space-y-3">

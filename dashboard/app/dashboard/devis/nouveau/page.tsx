@@ -60,6 +60,28 @@ export default function NouveauDevisPage() {
     return () => { cancelled = true; };
   }, []);
 
+  // Prefill client fields when ?clientId=N is in the URL (P2-1)
+  useEffect(() => {
+    const clientId = searchParams.get('clientId');
+    if (!clientId) return;
+    let cancelled = false;
+    fetch(`/api/clients/${clientId}`)
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { client?: { nom?: string; email?: string; telephone?: string | null; adresse?: string | null } } | null) => {
+        if (cancelled || !data?.client) return;
+        const c = data.client;
+        setForm(prev => ({
+          ...prev,
+          client_nom: c.nom ?? prev.client_nom,
+          client_email: c.email ?? prev.client_email,
+          client_tel: c.telephone ?? prev.client_tel,
+          client_adresse: c.adresse ?? prev.client_adresse,
+        }));
+      })
+      .catch(() => { /* prefill best-effort */ });
+    return () => { cancelled = true; };
+  }, [searchParams]);
+
   const [items, setItems] = useState<ServiceItem[]>([
     { type_service: validService, superficie: searchParams.get('superficie') ?? '', prix_fixe: false, prix_fixe_montant: '' },
   ]);
