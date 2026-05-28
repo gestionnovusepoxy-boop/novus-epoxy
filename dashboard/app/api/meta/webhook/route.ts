@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
 
 // Verify Meta webhook signature (X-Hub-Signature-256)
 function verifyMetaSignature(payload: string, signature: string | null): boolean {
-  const appSecret = process.env.META_APP_SECRET;
+  const appSecret = (process.env.META_APP_SECRET ?? '').trim(); // .trim() — env vars can carry trailing \n
   if (!appSecret) return true; // If secret not configured, allow through (cron sync is backup)
   if (!signature) return false;
 
@@ -48,22 +48,31 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get('x-hub-signature-256');
   if (!verifyMetaSignature(rawBody, signature)) {
     console.error('Meta webhook signature verification failed');
-    // Alert when signature is wrong (secret is set but signature doesn't match)
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
-    const chatIds = getAdminChatIds();
-    if (botToken && chatIds.length) {
-      await Promise.all(chatIds.map(id =>
-        fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            chat_id: id.trim(),
-            text: `🚨 <b>Meta webhook: signature incorrecte!</b>\n\nVérifier META_APP_SECRET dans Vercel.`,
-            parse_mode: 'HTML',
-          }),
-        }).catch(() => {})
-      ));
-    }
+    // Alert when signature is wrong — but DEDUP to once per hour so a misconfigured
+    // secret can't spam the group 15x (the bug Luca hit). Group-first per feedback_telegram_group.
+    try {
+      const hourKey = `meta_sig_alert_${new Date().toISOString().slice(0, 13)}`; // YYYY-MM-DDTHH
+      const seen = (await query(`SELECT 1 FROM kv_store WHERE key = $1`, [hourKey])) as unknown[];
+      if (seen.length === 0) {
+        await query(`INSERT INTO kv_store (key, value) VALUES ($1,'sent') ON CONFLICT (key) DO NOTHING`, [hourKey]);
+        const botToken = process.env.TELEGRAM_BOT_TOKEN;
+        const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+        const chatIds = groupId ? [groupId] : getAdminChatIds();
+        if (botToken && chatIds.length) {
+          await Promise.all(chatIds.map(id =>
+            fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: id.trim(),
+                text: `🚨 <b>Meta webhook: signature incorrecte!</b>\n\nMETA_APP_SECRET en prod ne correspond pas au secret de l'app Facebook. Les leads arrivent en retard via le cron backup. (Alerte limitée à 1x/h.)`,
+                parse_mode: 'HTML',
+              }),
+            }).catch(() => {})
+          ));
+        }
+      }
+    } catch { /* never block on alert */ }
     return NextResponse.json({ error: 'Invalid signature' }, { status: 403 });
   }
 
