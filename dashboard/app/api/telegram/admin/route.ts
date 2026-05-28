@@ -1950,7 +1950,15 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       }
     } catch { /* no active convo */ }
 
-    const isQuoteRequest = ((lowerText.includes('soumission') || lowerText.includes('devis') || lowerText.includes('produit moi') || lowerText.includes('créer un devis') || lowerText.includes('creer un devis') || lowerText.includes('fait moi un devis') || lowerText.includes('fais moi un devis')) && isAdmin) || (hasActiveConvo && isAdmin);
+    // On parle en langage naturel (pas en commandes). On déclenche le tool-use Marcel
+    // sur les formulations de devis ET sur les prix forfaitaires / balcons.
+    const quoteWords = ['soumission', 'devis', 'produit moi', 'créer un devis', 'creer un devis',
+      'fait moi un devis', 'fais moi un devis', 'fais un devis', 'fait un devis',
+      'minimum call', 'minimum', 'balcon', 'forfait', 'prix fixe', 'escalier'];
+    const hasQuoteWord = quoteWords.some(w => lowerText.includes(w));
+    // Prix forfaitaire pour quelqu'un : "2300 pour laurie", "1800$ au client", "1500 pour le balcon de marc"
+    const hasPriceForSomeone = /\b\d{3,5}\s*\$?\s*(pour|au|a)\b/i.test(lowerText);
+    const isQuoteRequest = ((hasQuoteWord || hasPriceForSomeone) && isAdmin) || (hasActiveConvo && isAdmin);
     if (isQuoteRequest) {
       const apiKey = process.env.ANTHROPIC_API_KEY;
       if (apiKey) {
@@ -1984,8 +1992,14 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
             body: JSON.stringify({
               model: 'claude-sonnet-4-6',
               max_tokens: 1024,
-              system: `Tu es l'assistant admin de Novus Epoxy. Extrais les infos client du message et appelle l'outil creer_devis_sms. Services: flake (8.50$/pi²), metallique (12.75$/pi²), commercial (15$/pi²), couleur_unie (7.50$/pi²), quartz (11$/pi²). Si le type n'est pas clair, utilise "flake" par défaut. Si pas de téléphone, mets "0000000000". Si tu as assez d'infos, cree le devis. Sinon demande ce qui manque.`,
-              tools: [TOOLS[0]], // creer_devis_sms tool
+              system: `Tu es l'assistant admin de Novus Epoxy. On te parle en langage NATUREL (jamais en commandes).
+
+DEUX façons de créer un devis:
+1) creer_devis_sms — quand on donne un type de service + superficie (prix au pi²). Services: flake (8.50$/pi²), metallique (12.75$/pi²), commercial (15$/pi²), couleur_unie (7.50$/pi²), quartz (11$/pi²), antiderapant (10$/pi²), meulage (3.50$/pi²). Si type pas clair = "flake".
+2) creer_devis_prix_fixe — quand on donne un MONTANT TOTAL directement (forfaitaire), typiquement après avoir vu une photo (balcon, escalier, réparation). Ex: "2300 pour Laurie" → prix=2300. "minimum call pour le balcon de Marc" → prix=1500. "1800 pour X note: 2 couches antidérapant" → prix=1800, description="2 couches antidérapant". "minimum"/"minimum call" = TOUJOURS 1500. Retrouve le client par son prénom (le tel est cherché dans le CRM). Mets toute note/description dans le champ description.
+
+Choisis le bon outil selon ce qu'on te donne. Si pas assez d'infos, demande ce qui manque (en langage naturel, pas de commande).`,
+              tools: [TOOLS[0], TOOLS[1]], // creer_devis_sms + creer_devis_prix_fixe
               messages: convoHistory,
             }),
           });
@@ -2078,6 +2092,55 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
               });
               // Clear conversation after quote created
               await query(`DELETE FROM kv_store WHERE key = $1`, [groupConvoKey]).catch(() => {});
+            } else if (toolUse && toolUse.name === 'creer_devis_prix_fixe') {
+              // Flat-price quote (balcon/escalier/réparation, prix décidé après photo)
+              const inp = toolUse.input as Record<string, unknown>;
+              const clientNom = String(inp.client_nom || '').trim();
+              let clientTel = String(inp.client_tel || '').replace(/\D/g, '').slice(-10);
+              let clientEmail = ''; let adresse = '';
+              if (!clientTel && clientNom) {
+                const lead = await query(`SELECT telephone, email, adresse FROM crm_leads WHERE nom ILIKE $1 ORDER BY created_at DESC LIMIT 1`, [`%${clientNom}%`]);
+                if (lead[0]) { clientTel = String(lead[0].telephone || '').replace(/\D/g, '').slice(-10); clientEmail = (lead[0].email as string) || ''; adresse = (lead[0].adresse as string) || ''; }
+              }
+              const prix = Number(inp.prix);
+              if (!clientTel) {
+                await sendTelegram(chatId, `❓ Je trouve pas le numéro de "${clientNom}". Donne-moi son tél et je prépare le devis.`);
+              } else if (!Number.isFinite(prix) || prix <= 0) {
+                await sendTelegram(chatId, `❓ C'est quoi le montant? (ex: 2300, ou "minimum call" = 1500$)`);
+              } else {
+                const calc = calculateQuoteCustomPrice(prix);
+                const serviceLabel = String(inp.service_label || 'Travaux sur mesure').slice(0, 120);
+                const description = String(inp.description || '').slice(0, 2000) || null;
+                const rows = await query(
+                  `INSERT INTO quotes (client_nom, client_email, client_tel, client_adresse, type_service, superficie, notes, description_travaux, prix_pied_carre, sous_total, tps, tvq, total, depot_requis, statut)
+                   VALUES ($1,$2,$3,$4,'commercial',0,$5,$6,0,$7,$8,$9,$10,$11,'brouillon') RETURNING id`,
+                  [clientNom, clientEmail, clientTel, adresse, serviceLabel, description, calc.sous_total, calc.tps, calc.tvq, calc.total, calc.depot_requis]
+                );
+                const quoteId = rows[0].id as number;
+                const summary = [
+                  `📋 <b>Devis #${quoteId} créé (prix fixe, brouillon)</b>`,
+                  ``,
+                  `👤 ${clientNom}`,
+                  `📞 ${clientTel}`,
+                  `🔧 ${serviceLabel}`,
+                  description ? `📝 ${description}` : '',
+                  ``,
+                  `💰 Forfait: ${formatMoney(calc.sous_total)}`,
+                  `💰 Total (taxes inc.): ${formatMoney(calc.total)}`,
+                  `💳 Dépôt: ${formatMoney(calc.depot_requis)}`,
+                  ``,
+                  `⚠️ <b>Approuve pour l'envoyer au client</b>`,
+                ].filter(Boolean).join('\n');
+                const buttons = { inline_keyboard: [
+                  [ { text: '✅ Approuver et envoyer', callback_data: `approve_quote_${quoteId}` }, { text: '❌ Rejeter', callback_data: `reject_quote_${quoteId}` } ],
+                  [ { text: '📋 Modifier', url: `https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}` } ],
+                ]};
+                await fetch(`https://api.telegram.org/bot${BOT_TOKEN()}/sendMessage`, {
+                  method: 'POST', headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ chat_id: chatId, text: summary, parse_mode: 'HTML', reply_markup: buttons }),
+                });
+                await query(`DELETE FROM kv_store WHERE key = $1`, [groupConvoKey]).catch(() => {});
+              }
             } else {
               // Claude responded with text (asking for more info) — save conversation
               const textBlock = content.find((b: CB) => b.type === 'text');
