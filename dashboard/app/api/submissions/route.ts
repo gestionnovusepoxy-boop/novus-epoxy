@@ -126,8 +126,8 @@ async function analyzeLeadWithClaude(submission: {
   nom: string; telephone: string | null; service: string | null;
   surface_estimee: string | null; ville: string | null; type_projet: string | null;
 }): Promise<{ temperature: string; urgence: string; action: string; raison: string; emoji: string } | null> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) return null;
+  // callLLM routes via OpenRouter — gate on that key, not the legacy Anthropic one.
+  if (!process.env.OPENROUTER_API_KEY && !process.env.ANTHROPIC_API_KEY) return null;
   try {
     const details = [
       `Nom: ${submission.nom}`,

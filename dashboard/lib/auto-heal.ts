@@ -200,9 +200,9 @@ export async function autoHeal(): Promise<void> {
       const blobOk = !!process.env.BLOB_READ_WRITE_TOKEN;
       checks.push(blobOk ? '✅ Vercel Blob (photos) OK' : '⚠️ Blob non configure');
 
-      // 7. Claude AI
-      const aiOk = !!process.env.ANTHROPIC_API_KEY;
-      checks.push(aiOk ? '✅ Claude AI configure' : '⚠️ IA non configuree');
+      // 7. LLM (OpenRouter primary, Anthropic legacy fallback)
+      const aiOk = !!(process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY);
+      checks.push(aiOk ? '✅ IA (OpenRouter) configuree' : '⚠️ IA non configuree');
 
       // 8. Business metrics
       const [leadCount, pendingProspect, pendingQuotes, activeJobs, emailsToday, smsToday, recentErrors] = await Promise.all([

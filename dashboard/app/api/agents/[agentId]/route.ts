@@ -796,11 +796,11 @@ function buildTools(agentId: AgentId) {
       parameters: z.object({}),
       execute: async () => {
         const envVars = [
-          'ANTHROPIC_API_KEY', 'DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_ADMIN_CHAT_IDS',
+          'OPENROUTER_API_KEY', 'DATABASE_URL', 'TELEGRAM_BOT_TOKEN', 'TELEGRAM_ADMIN_CHAT_IDS',
           'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'TWILIO_PHONE_NUMBER',
           'GOOGLE_CLIENT_ID', 'GOOGLE_CLIENT_SECRET', 'GOOGLE_REFRESH_TOKEN',
           'ADMIN_EMAIL', 'ADMIN_PASSWORD', 'AUTH_SECRET', 'NEXTAUTH_URL',
-          'RESEND_API_KEY', 'OPENROUTER_API_KEY',
+          'RESEND_API_KEY',
         ];
         const status = envVars.map(v => ({ variable: v, present: !!process.env[v] }));
         const ok = status.filter(s => s.present).length;

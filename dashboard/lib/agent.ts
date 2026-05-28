@@ -521,9 +521,8 @@ export async function processMessage(ctx: ConversationContext, userMessage: stri
     getActivePromosText(),
   ]);
 
-  // Call Claude API
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
+  // callLLM routes via OpenRouter — gate on that key, not the legacy Anthropic one.
+  if (!process.env.OPENROUTER_API_KEY && !process.env.ANTHROPIC_API_KEY) {
     const fallback = 'Merci pour ton message! Notre equipe va te repondre rapidement. En attendant, tu peux nous appeler ou remplir le formulaire sur novusepoxy.ca';
     await saveMessage(conversationId, 'assistant', fallback);
     return fallback;

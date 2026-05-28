@@ -228,9 +228,10 @@ export async function GET() {
   const boltMsgCount = Number(bt.msg_count ?? 0) || Number(bt.telegram_entries ?? 0);
   const boltLastDate = bt.last_telegram as string | undefined;
 
+  const llmKey = process.env.OPENROUTER_API_KEY ?? process.env.ANTHROPIC_API_KEY;
   const health: Record<string, 'green' | 'yellow' | 'red'> = {
-    marcel: process.env.ANTHROPIC_API_KEY ? 'green' : 'red',
-    hunter: process.env.ANTHROPIC_API_KEY ? 'green' : 'red',
+    marcel: llmKey ? 'green' : 'red',
+    hunter: llmKey ? 'green' : 'red',
     aria: process.env.GOOGLE_CLIENT_ID ? 'green' : 'red',
     rex: process.env.TWILIO_ACCOUNT_SID ? 'green' : 'red',
     iris: 'green',
@@ -238,8 +239,8 @@ export async function GET() {
     zara: 'green',
     bolt: process.env.TELEGRAM_BOT_TOKEN ? 'green' : 'red',
     echo: 'green',
-    nova: process.env.ANTHROPIC_API_KEY ? 'green' : 'red',
-    jason: process.env.ANTHROPIC_API_KEY ? 'green' : 'red',
+    nova: llmKey ? 'green' : 'red',
+    jason: llmKey ? 'green' : 'red',
   };
 
   // Check staleness — if no activity in 7+ days, mark yellow
