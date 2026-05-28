@@ -20,6 +20,10 @@ export const TPS_RATE = 0.05;
 export const TVQ_RATE = 0.09975;
 export const DEPOT_RATE = 0.30;
 
+// Minimum de job (minimum call) — on ne se déplace pas sous ce montant.
+// Tout devis dont le service tombe sous ce seuil est ramené à ce minimum.
+export const MIN_JOB_DOLLARS = 1500;
+
 /**
  * Calcul simple — un service au pi² + rabais. Calcul interne en CENTS.
  * Retourne des dollars (interface DB inchangée).
@@ -28,13 +32,19 @@ export function calculateQuote(type: ServiceType, superficie: number, rabais_pct
   const prixCents = dollarsToCents(SERVICES[type].prix);
   const sousTotalBrutCents = mulCents(prixCents, superficie);
   const rabaisCents = pctOfCents(sousTotalBrutCents, rabais_pct);
-  const sousTotalCents = sousTotalBrutCents - rabaisCents;
+  // Apply minimum-job floor AFTER rabais — never bill the service portion below MIN_JOB.
+  // EXCEPTION: vinyl (plancher flottant) is exempt from the $1500 minimum.
+  const minJobCents = type === 'vinyl_click' ? 0 : dollarsToCents(MIN_JOB_DOLLARS);
+  const afterRabaisCents = sousTotalBrutCents - rabaisCents;
+  const sousTotalCents = Math.max(afterRabaisCents, minJobCents);
+  const minimumApplied = afterRabaisCents < minJobCents;
   const { tpsCents, tvqCents, totalCents, depotCents } = taxesFromSubtotalCents(sousTotalCents);
 
   return {
     prix_pied_carre: SERVICES[type].prix,
     rabais_pct,
     rabais_montant: centsToDollars(rabaisCents),
+    minimum_applique: minimumApplied,
     sous_total: centsToDollars(sousTotalCents),
     tps: centsToDollars(tpsCents),
     tvq: centsToDollars(tvqCents),
