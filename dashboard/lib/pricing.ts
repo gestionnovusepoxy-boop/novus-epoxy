@@ -1,3 +1,5 @@
+import { dollarsToCents, centsToDollars, mulCents, pctOfCents, sumCents, taxesFromSubtotalCents } from './money';
+
 export const SERVICES = {
   flake:         { label: 'Flocon (Flake)',  prix: 8.50 },
   metallique:    { label: 'Métallique',      prix: 12.75 },
@@ -18,25 +20,26 @@ export const TPS_RATE = 0.05;
 export const TVQ_RATE = 0.09975;
 export const DEPOT_RATE = 0.30;
 
+/**
+ * Calcul simple — un service au pi² + rabais. Calcul interne en CENTS.
+ * Retourne des dollars (interface DB inchangée).
+ */
 export function calculateQuote(type: ServiceType, superficie: number, rabais_pct = 0) {
-  const prix = SERVICES[type].prix;
-  const sousTotalBrut = Math.round(prix * superficie * 100) / 100;
-  const rabaisMontant = Math.round(sousTotalBrut * (rabais_pct / 100) * 100) / 100;
-  const sousTotal = Math.round((sousTotalBrut - rabaisMontant) * 100) / 100;
-  const tps = Math.round(sousTotal * TPS_RATE * 100) / 100;
-  const tvq = Math.round(sousTotal * TVQ_RATE * 100) / 100;
-  const total = Math.round((sousTotal + tps + tvq) * 100) / 100;
-  const depot = Math.round(total * DEPOT_RATE * 100) / 100;
+  const prixCents = dollarsToCents(SERVICES[type].prix);
+  const sousTotalBrutCents = mulCents(prixCents, superficie);
+  const rabaisCents = pctOfCents(sousTotalBrutCents, rabais_pct);
+  const sousTotalCents = sousTotalBrutCents - rabaisCents;
+  const { tpsCents, tvqCents, totalCents, depotCents } = taxesFromSubtotalCents(sousTotalCents);
 
   return {
-    prix_pied_carre: prix,
+    prix_pied_carre: SERVICES[type].prix,
     rabais_pct,
-    rabais_montant: rabaisMontant,
-    sous_total: sousTotal,
-    tps,
-    tvq,
-    total,
-    depot_requis: depot,
+    rabais_montant: centsToDollars(rabaisCents),
+    sous_total: centsToDollars(sousTotalCents),
+    tps: centsToDollars(tpsCents),
+    tvq: centsToDollars(tvqCents),
+    total: centsToDollars(totalCents),
+    depot_requis: centsToDollars(depotCents),
   };
 }
 
@@ -114,12 +117,15 @@ export function getServiceDescriptionHtml(type: string): string {
 }
 
 export function calculateQuoteCustomPrice(sousTotal: number) {
-  const tps = Math.round(sousTotal * TPS_RATE * 100) / 100;
-  const tvq = Math.round(sousTotal * TVQ_RATE * 100) / 100;
-  const total = Math.round((sousTotal + tps + tvq) * 100) / 100;
-  const depot = Math.round(total * DEPOT_RATE * 100) / 100;
-
-  return { sous_total: sousTotal, tps, tvq, total, depot_requis: depot };
+  const sousTotalCents = dollarsToCents(sousTotal);
+  const { tpsCents, tvqCents, totalCents, depotCents } = taxesFromSubtotalCents(sousTotalCents);
+  return {
+    sous_total: centsToDollars(sousTotalCents),
+    tps: centsToDollars(tpsCents),
+    tvq: centsToDollars(tvqCents),
+    total: centsToDollars(totalCents),
+    depot_requis: centsToDollars(depotCents),
+  };
 }
 
 /**
@@ -137,35 +143,33 @@ export function calculateQuoteWithExtras(opts: {
 }) {
   const { serviceType, superficie, prixPiedCarre, sousTotalService, rabaisPct, extrasTotal } = opts;
 
-  // Service brut: prix * superficie OU sous_total existant si prix fixe
+  // Tout en CENTS (entiers) pour zéro problème d'arrondi flottant.
   const isPrixFixe = (!prixPiedCarre || prixPiedCarre === 0) && sousTotalService > 0;
   const knownPrix = serviceType in SERVICES ? SERVICES[serviceType as ServiceType].prix : (prixPiedCarre ?? 0);
-  const serviceBrut = isPrixFixe
-    ? sousTotalService
-    : Math.round((knownPrix * superficie) * 100) / 100;
 
-  const rabaisMontant = Math.round(serviceBrut * (rabaisPct / 100) * 100) / 100;
-  const serviceNet = Math.round((serviceBrut - rabaisMontant) * 100) / 100;
-  const extrasNet = Math.round(extrasTotal * 100) / 100;
-  const sousTotal = Math.round((serviceNet + extrasNet) * 100) / 100;
+  const serviceBrutCents = isPrixFixe
+    ? dollarsToCents(sousTotalService)
+    : mulCents(dollarsToCents(knownPrix), superficie);
 
-  const tps = Math.round(sousTotal * TPS_RATE * 100) / 100;
-  const tvq = Math.round(sousTotal * TVQ_RATE * 100) / 100;
-  const total = Math.round((sousTotal + tps + tvq) * 100) / 100;
-  const depot = Math.round(total * DEPOT_RATE * 100) / 100;
+  const rabaisCents = pctOfCents(serviceBrutCents, rabaisPct);
+  const serviceNetCents = serviceBrutCents - rabaisCents;
+  const extrasCents = dollarsToCents(extrasTotal);
+  const sousTotalCents = sumCents(serviceNetCents, extrasCents);
+
+  const { tpsCents, tvqCents, totalCents, depotCents } = taxesFromSubtotalCents(sousTotalCents);
 
   return {
     prix_pied_carre: isPrixFixe ? 0 : knownPrix,
-    service_brut: serviceBrut,
-    service_net: serviceNet,
-    extras_total: extrasNet,
+    service_brut: centsToDollars(serviceBrutCents),
+    service_net: centsToDollars(serviceNetCents),
+    extras_total: centsToDollars(extrasCents),
     rabais_pct: rabaisPct,
-    rabais_montant: rabaisMontant,
-    sous_total: sousTotal,
-    tps,
-    tvq,
-    total,
-    depot_requis: depot,
+    rabais_montant: centsToDollars(rabaisCents),
+    sous_total: centsToDollars(sousTotalCents),
+    tps: centsToDollars(tpsCents),
+    tvq: centsToDollars(tvqCents),
+    total: centsToDollars(totalCents),
+    depot_requis: centsToDollars(depotCents),
   };
 }
 
@@ -210,49 +214,44 @@ export function calculateMultiQuote(
   extras: { description: string; quantite: number; prix_unitaire: number }[],
   rabais_pct = 0,
 ) {
-  // Calculate each service item (supports prix_fixe override)
+  // Calcul interne en CENTS. Chaque item garde son sous_total en dollars (interface inchangée),
+  // mais l'agrégation se fait sur les cents pour zéro dérive d'arrondi.
   const calcItems: QuoteItem[] = items.map(item => {
     if (item.prix_fixe && item.prix_fixe > 0) {
-      // Prix fixe — ignore le calcul au pi²
       return { type_service: item.type_service, superficie: item.superficie, prix_pied_carre: 0, sous_total: item.prix_fixe };
     }
     const prix = SERVICES[item.type_service].prix;
-    const st = Math.round(prix * item.superficie * 100) / 100;
-    return { type_service: item.type_service, superficie: item.superficie, prix_pied_carre: prix, sous_total: st };
+    const stCents = mulCents(dollarsToCents(prix), item.superficie);
+    return { type_service: item.type_service, superficie: item.superficie, prix_pied_carre: prix, sous_total: centsToDollars(stCents) };
   });
 
-  // Calculate each extra
   const calcExtras: QuoteExtra[] = extras.map(ex => ({
     description: ex.description,
     quantite: ex.quantite,
     prix_unitaire: ex.prix_unitaire,
-    sous_total: Math.round(ex.quantite * ex.prix_unitaire * 100) / 100,
+    sous_total: centsToDollars(mulCents(dollarsToCents(ex.prix_unitaire), ex.quantite)),
   }));
 
-  const itemsTotal = calcItems.reduce((s, i) => s + i.sous_total, 0);
-  const extrasTotal = calcExtras.reduce((s, e) => s + e.sous_total, 0);
-  const sousTotalBrut = Math.round((itemsTotal + extrasTotal) * 100) / 100;
+  const itemsTotalCents = sumCents(...calcItems.map(i => dollarsToCents(i.sous_total)));
+  const extrasTotalCents = sumCents(...calcExtras.map(e => dollarsToCents(e.sous_total)));
 
-  // Discount applies to services only, not extras
-  const rabaisMontant = Math.round(itemsTotal * (rabais_pct / 100) * 100) / 100;
-  const sousTotal = Math.round((sousTotalBrut - rabaisMontant) * 100) / 100;
-  const tps = Math.round(sousTotal * TPS_RATE * 100) / 100;
-  const tvq = Math.round(sousTotal * TVQ_RATE * 100) / 100;
-  const total = Math.round((sousTotal + tps + tvq) * 100) / 100;
-  const depot = Math.round(total * DEPOT_RATE * 100) / 100;
+  // Rabais sur les services seulement, jamais les extras
+  const rabaisCents = pctOfCents(itemsTotalCents, rabais_pct);
+  const sousTotalCents = (itemsTotalCents - rabaisCents) + extrasTotalCents;
+  const { tpsCents, tvqCents, totalCents, depotCents } = taxesFromSubtotalCents(sousTotalCents);
 
   return {
     items: calcItems,
     extras: calcExtras,
-    items_total: itemsTotal,
-    extras_total: extrasTotal,
+    items_total: centsToDollars(itemsTotalCents),
+    extras_total: centsToDollars(extrasTotalCents),
     rabais_pct,
-    rabais_montant: rabaisMontant,
-    sous_total: sousTotal,
-    tps,
-    tvq,
-    total,
-    depot_requis: depot,
+    rabais_montant: centsToDollars(rabaisCents),
+    sous_total: centsToDollars(sousTotalCents),
+    tps: centsToDollars(tpsCents),
+    tvq: centsToDollars(tvqCents),
+    total: centsToDollars(totalCents),
+    depot_requis: centsToDollars(depotCents),
   };
 }
 
