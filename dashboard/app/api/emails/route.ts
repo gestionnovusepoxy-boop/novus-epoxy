@@ -88,8 +88,14 @@ export async function POST(req: NextRequest) {
   const webhookSecret = process.env.RESEND_WEBHOOK_SECRET ?? '';
   const body          = await req.text();
 
+  // Fail-closed: refuse webhook delivery if the signing secret isn't configured.
+  // (Previously fell through as success when unset → unsigned writes accepted.)
+  if (!webhookSecret) {
+    return NextResponse.json({ error: 'RESEND_WEBHOOK_SECRET not configured' }, { status: 503 });
+  }
+
   // Vérification signature Svix
-  if (webhookSecret) {
+  {
     const svixId        = req.headers.get('svix-id')        ?? '';
     const svixTimestamp = req.headers.get('svix-timestamp') ?? '';
     const svixSignature = req.headers.get('svix-signature') ?? '';

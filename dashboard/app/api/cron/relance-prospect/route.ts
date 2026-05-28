@@ -8,6 +8,32 @@ import pLimit from 'p-limit';
 // Vercel Pro plan supports up to 300s; on Hobby this silently caps at 60s but never fails the deploy.
 export const maxDuration = 300;
 
+// Hard cap per run so we never blow past Gmail's daily sending limit (~500 free / 2000 Workspace).
+// Remaining prospects roll over to the next run.
+const MAX_PER_RUN = 80;
+
+async function alertOnce(key: string, text: string) {
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const dedupKey = `${key}_${today}`;
+    const existing = (await query('SELECT 1 FROM kv_store WHERE key = $1', [dedupKey])) as unknown[];
+    if (existing.length > 0) return;
+    const token = process.env.TELEGRAM_BOT_TOKEN;
+    const chat = process.env.TELEGRAM_GROUP_CHAT_ID;
+    if (token && chat) {
+      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chat, text, parse_mode: 'HTML' }),
+      }).catch(() => {});
+    }
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ($1, $2::jsonb) ON CONFLICT (key) DO NOTHING`,
+      [dedupKey, JSON.stringify({ at: new Date().toISOString() })]
+    );
+  } catch { /* never block the cron on alert delivery */ }
+}
+
 // Aria follow-up on Hunter prospect emails
 // Relance 1: 48h after prospect sent
 // Relance 2: 5 days after prospect sent
@@ -22,6 +48,19 @@ export async function GET(req: NextRequest) {
   // Only run during business hours (8h-20h Quebec)
   const _h = getQuebecHour();
   if (_h < 8 || _h >= 20) return NextResponse.json({ skipped: "outside business hours" });
+
+  // Short-circuit if Gmail OAuth is known-broken — sending would throw 3510x silently.
+  // Alert Luca once per day so he re-auths instead of prospects going dark.
+  const oauthBroken = (await query(
+    `SELECT value FROM kv_store WHERE key = 'gmail_oauth_broken'`
+  )) as Array<{ value: unknown }>;
+  if (oauthBroken[0] && String(oauthBroken[0].value).includes('true')) {
+    await alertOnce(
+      'relance_prospect_oauth',
+      '🚨 relance-prospect SKIP — Gmail OAuth invalide. Aucune relance envoyée. Re-auth requis (/api/auth/google).'
+    );
+    return NextResponse.json({ skipped: 'gmail_oauth_broken' });
+  }
 
   // Relance 1: prospect sent 48h+ ago, still nouveau/contacte, no relance_1
   const r1 = await query(
@@ -56,12 +95,16 @@ export async function GET(req: NextRequest) {
     [],
   );
 
-  let sent1 = 0, sent2 = 0;
+  let sent1 = 0, sent2 = 0, errors = 0;
+
+  // Cap total sends this run to respect Gmail limits. Relance 1 has priority over relance 2.
+  const r1capped = r1.slice(0, MAX_PER_RUN);
+  const r2capped = r2.slice(0, Math.max(0, MAX_PER_RUN - r1capped.length));
 
   // Concurrency cap = 5 so we don't hammer the LLM/email provider but still finish under maxDuration.
   const limit = pLimit(5);
 
-  await Promise.all(r1.map((lead) => limit(async () => {
+  await Promise.all(r1capped.map((lead) => limit(async () => {
     const prenom = (lead.nom as string).split(' ')[0];
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f8fafc;">
 <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
@@ -95,11 +138,12 @@ export async function GET(req: NextRequest) {
       await query(`UPDATE crm_leads SET prospect_relance_1_at = NOW(), updated_at = NOW() WHERE id = $1`, [lead.id]);
       sent1++;
     } catch (err) {
+      errors++;
       console.error('Prospect relance 1 error:', err);
     }
   })));
 
-  await Promise.all(r2.map((lead) => limit(async () => {
+  await Promise.all(r2capped.map((lead) => limit(async () => {
     const prenom = (lead.nom as string).split(' ')[0];
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f8fafc;">
 <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
@@ -135,9 +179,27 @@ export async function GET(req: NextRequest) {
       await query(`UPDATE crm_leads SET prospect_relance_2_at = NOW(), updated_at = NOW() WHERE id = $1`, [lead.id]);
       sent2++;
     } catch (err) {
+      errors++;
       console.error('Prospect relance 2 error:', err);
     }
   })));
 
-  return NextResponse.json({ ok: true, relance_1: { found: r1.length, sent: sent1 }, relance_2: { found: r2.length, sent: sent2 } });
+  const totalFound = r1.length + r2.length;
+  const totalSent = sent1 + sent2;
+  // If we found prospects but sent NONE while errors piled up, something is systemically broken
+  // (OAuth, quota, provider down). Surface it instead of silently shipping zeros.
+  if (totalSent === 0 && errors > 0 && totalFound > 20) {
+    await alertOnce(
+      'relance_prospect_zero',
+      `🚨 relance-prospect: 0 envoyés sur ${totalFound} trouvés (${errors} erreurs). Vérifier OAuth Gmail / quota d'envoi.`
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    relance_1: { found: r1.length, sent: sent1 },
+    relance_2: { found: r2.length, sent: sent2 },
+    errors,
+    capped_at: MAX_PER_RUN,
+  });
 }

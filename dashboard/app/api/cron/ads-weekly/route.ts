@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { buildAdDraft, sendDraftToTelegram } from '@/lib/meta-ads';
 
-export const maxDuration = 180;
+export const maxDuration = 300;
 
 /**
  * Cron lundi 10h Quebec (14:00 UTC) → propose 1 nouvelle pub par semaine
