@@ -177,39 +177,7 @@ export async function GET(req: NextRequest) {
     checks.push({ name: 'Twilio', ok: false, detail: String(err) });
   }
 
-  // 1f.5 Meta leadgen webhook — SELF-HEAL: re-subscribe the page if the subscription dropped.
-  // This is the #1 silent FB-lead killer: if the page loses its leadgen subscription, form-fills
-  // never reach us. META_PAGE_TOKEN is a page token (never expires), so we can fix this server-side.
-  try {
-    const metaToken = process.env.META_PAGE_TOKEN ?? '';
-    const pageId = '636757822863288';
-    if (metaToken) {
-      const subRes = await fetch(`https://graph.facebook.com/v25.0/${pageId}/subscribed_apps?access_token=${metaToken}`);
-      const subData = await subRes.json();
-      const apps = (subData.data ?? []) as Array<{ subscribed_fields?: string[] }>;
-      const hasLeadgen = apps.some(a => (a.subscribed_fields ?? []).includes('leadgen'));
-      if (hasLeadgen) {
-        checks.push({ name: 'Meta leadgen', ok: true, detail: 'Abonné (leads FB arrivent)' });
-      } else {
-        // Auto-heal: re-subscribe to leadgen
-        const fixRes = await fetch(`https://graph.facebook.com/v25.0/${pageId}/subscribed_apps`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ subscribed_fields: ['leadgen'], access_token: metaToken }),
-        });
-        const fixed = fixRes.ok;
-        checks.push({
-          name: 'Meta leadgen',
-          ok: fixed,
-          detail: fixed ? 'Subscription perdue → re-abonné automatiquement ✅' : 'Subscription perdue, re-abonnement ÉCHOUÉ — token Meta à renouveler',
-          autoFixed: fixed,
-          severity: fixed ? undefined : 'critical',
-        });
-      }
-    }
-  } catch (err) {
-    checks.push({ name: 'Meta leadgen', ok: false, detail: String(err) });
-  }
+  // (Meta leadgen self-heal lives at section 3e-bis below — token validity + auto-resubscribe.)
 
   // 1g. Env vars
   // Stripe ne fait plus partie de la stack — Novus Epoxy = Interac/cheque/comptant uniquement.
