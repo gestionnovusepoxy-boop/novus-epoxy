@@ -118,6 +118,9 @@ export default function LeadDetailPage({ params }: { params: Promise<{ id: strin
         <div>
           <Link href="/dashboard/crm" className="text-sm text-slate-400 hover:text-amber-400">← Retour au CRM</Link>
           <h1 className="text-3xl font-bold text-white mt-2">{lead.nom}</h1>
+          <Link href={`/dashboard/crm/${lead.id}/conversations`} className="inline-block mt-2 text-sm bg-amber-500 hover:bg-amber-400 text-slate-900 font-semibold rounded-lg px-3 py-1.5 transition">
+            📜 Toutes les conversations (email, SMS, chat)
+          </Link>
           <div className="flex items-center gap-2 mt-2">
             <span className={`px-2 py-0.5 rounded-full text-xs border ${TEMP_BADGE[lead.temperature] ?? 'bg-slate-500/20 text-slate-300'}`}>
               {lead.temperature === 'chaud' ? '🔥 Chaud' : lead.temperature === 'tiede' ? '🟡 Tiède' : '🔵 Froid'}
