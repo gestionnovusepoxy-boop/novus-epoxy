@@ -110,6 +110,30 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
     setAction('');
   }
 
+  async function handlePartialPayment() {
+    if (!inv) return;
+    const raw = window.prompt('Montant du paiement partiel reçu (ex: 10000)?', '');
+    if (!raw) return;
+    const montant = parseFloat(raw.replace(/[^\d.]/g, ''));
+    if (!Number.isFinite(montant) || montant <= 0) { setError('Montant invalide'); return; }
+    const methode = window.prompt('Méthode? (virement / cheque / comptant / autre)', 'virement') ?? 'virement';
+    setAction('pay'); setError('');
+    try {
+      const res = await fetch(`/api/invoices/${id}/payment`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'partial', montant, methode: methode.trim() || 'virement' }),
+      });
+      if (!res.ok) { setError((await res.json()).error || 'Erreur'); }
+      else {
+        const j = await res.json();
+        showToast(`Partiel de ${formatMoney(j.payment_recorded)} enregistré · Reste ${formatMoney(j.remaining_after)}`);
+        await reload();
+      }
+    } catch { setError('Erreur paiement partiel'); }
+    setAction('');
+  }
+
   async function handleMarkFullyPaid() {
     if (!inv) return;
     if (!confirm(`Confirmer le paiement complet de ${formatMoney(Number(inv.total))} (depot + solde, methode: ${METHODE_LABEL[payMethode]}) ?`)) return;
@@ -296,6 +320,24 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
             </Link>
           </div>
         </div>
+      )}
+
+      {/* Statut "Payé en entier" */}
+      {inv.final_paye && (
+        <div className="rounded-xl p-4 border-2 border-green-500 bg-green-500/10 text-center">
+          <p className="text-green-400 text-lg font-bold">✓ Facture payée en entier — {formatMoney(Number(inv.total))}</p>
+        </div>
+      )}
+
+      {/* Bouton paiement partiel — pour encaisser n'importe quel montant (ex: 10 000$ reçu) sans encore fermer la facture */}
+      {!inv.final_paye && (
+        <button
+          onClick={handlePartialPayment}
+          disabled={!!action}
+          className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-white font-medium rounded-lg px-4 py-2 text-sm transition"
+        >
+          + Paiement partiel reçu
+        </button>
       )}
 
       {/* Paiements */}
