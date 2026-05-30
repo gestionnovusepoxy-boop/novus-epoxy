@@ -58,6 +58,12 @@ export async function handleGmailAuthError(err: unknown): Promise<void> {
  * Fallback: Resend si Gmail fail
  * Resend uniquement pour prospection Aria (via: 'resend')
  */
+export interface EmailAttachment {
+  filename: string;
+  content: Uint8Array | Buffer;
+  contentType?: string;
+}
+
 export async function sendEmail({
   to,
   subject,
@@ -66,6 +72,7 @@ export async function sendEmail({
   cc,
   bcc,
   via,
+  attachments,
 }: {
   to: string;
   subject: string;
@@ -74,33 +81,34 @@ export async function sendEmail({
   cc?: string;
   bcc?: string;
   via?: 'gmail' | 'resend';
+  attachments?: EmailAttachment[];
 }): Promise<{ id: string }> {
   // Resend seulement si explicitement demandé (prospection Aria)
   if (via === 'resend') {
     try {
-      return await sendViaResend({ to, subject, html, replyTo, cc });
+      return await sendViaResend({ to, subject, html, replyTo, cc, attachments });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.log(`[sendEmail] Resend failed (${msg.slice(0, 100)}), fallback Gmail`);
-      return sendViaGmail({ to, subject, html, replyTo, cc, bcc });
+      return sendViaGmail({ to, subject, html, replyTo, cc, bcc, attachments });
     }
   }
   // Default: Gmail (gestionnovusepoxy@gmail.com)
   try {
-    return await sendViaGmail({ to, subject, html, replyTo, cc, bcc });
+    return await sendViaGmail({ to, subject, html, replyTo, cc, bcc, attachments });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     // Fire-and-forget detection: if invalid_grant, persist flag + alert (deduped per day)
     void handleGmailAuthError(err);
     console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
-    return sendViaResend({ to, subject, html, replyTo, cc });
+    return sendViaResend({ to, subject, html, replyTo, cc, attachments });
   }
 }
 
 async function sendViaGmail({
-  to, subject, html, replyTo, cc, bcc,
+  to, subject, html, replyTo, cc, bcc, attachments,
 }: {
-  to: string; subject: string; html: string; replyTo?: string; cc?: string; bcc?: string;
+  to: string; subject: string; html: string; replyTo?: string; cc?: string; bcc?: string; attachments?: EmailAttachment[];
 }): Promise<{ id: string }> {
   let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
   let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
@@ -127,7 +135,7 @@ async function sendViaGmail({
   const gmail = google.gmail({ version: 'v1', auth: oauth2 });
 
   const fromHeader = 'Novus Epoxy <gestionnovusepoxy@gmail.com>';
-  const headerLines = [
+  const baseHeaders = [
     `From: ${fromHeader}`,
     `To: ${to}`,
     cc ? `Cc: ${cc}` : null,
@@ -135,10 +143,40 @@ async function sendViaGmail({
     `Subject: =?UTF-8?B?${Buffer.from(subject, 'utf-8').toString('base64')}?=`,
     replyTo ? `Reply-To: ${replyTo}` : null,
     'MIME-Version: 1.0',
-    'Content-Type: text/html; charset=utf-8',
-  ].filter(Boolean).join('\r\n');
+  ].filter(Boolean);
 
-  const raw = `${headerLines}\r\n\r\n${html}`;
+  let raw: string;
+  if (attachments && attachments.length > 0) {
+    // multipart/mixed: html part + each attachment as base64
+    const boundary = `=_NovusBoundary_${Date.now().toString(36)}`;
+    const headers = [...baseHeaders, `Content-Type: multipart/mixed; boundary="${boundary}"`].join('\r\n');
+    const parts: string[] = [
+      `--${boundary}`,
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: 7bit',
+      '',
+      html,
+    ];
+    for (const att of attachments) {
+      const ctype = att.contentType ?? 'application/octet-stream';
+      const buf = att.content instanceof Buffer ? att.content : Buffer.from(att.content);
+      // base64 wrapped at 76 chars per RFC 2045
+      const b64 = buf.toString('base64').replace(/(.{76})/g, '$1\r\n');
+      parts.push(
+        `--${boundary}`,
+        `Content-Type: ${ctype}; name="${att.filename}"`,
+        `Content-Disposition: attachment; filename="${att.filename}"`,
+        'Content-Transfer-Encoding: base64',
+        '',
+        b64,
+      );
+    }
+    parts.push(`--${boundary}--`);
+    raw = `${headers}\r\n\r\n${parts.join('\r\n')}`;
+  } else {
+    const headers = [...baseHeaders, 'Content-Type: text/html; charset=utf-8'].join('\r\n');
+    raw = `${headers}\r\n\r\n${html}`;
+  }
   const encoded = Buffer.from(raw).toString('base64url');
 
   try {
@@ -155,12 +193,17 @@ async function sendViaGmail({
 }
 
 async function sendViaResend({
-  to, subject, html, replyTo, cc,
+  to, subject, html, replyTo, cc, attachments,
 }: {
-  to: string; subject: string; html: string; replyTo?: string; cc?: string;
+  to: string; subject: string; html: string; replyTo?: string; cc?: string; attachments?: EmailAttachment[];
 }): Promise<{ id: string }> {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) throw new Error('RESEND_API_KEY missing');
+
+  const resendAttachments = attachments?.map(a => ({
+    filename: a.filename,
+    content: (a.content instanceof Buffer ? a.content : Buffer.from(a.content)).toString('base64'),
+  }));
 
   const res = await fetch('https://api.resend.com/emails', {
     method: 'POST',
@@ -176,6 +219,7 @@ async function sendViaResend({
       html,
       reply_to: replyTo ?? 'gestionnovusepoxy@gmail.com',
       bcc: ['gestionnovusepoxy@gmail.com'],
+      ...(resendAttachments && resendAttachments.length > 0 ? { attachments: resendAttachments } : {}),
     }),
   });
 

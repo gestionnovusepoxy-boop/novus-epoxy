@@ -3,8 +3,11 @@ import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { SERVICES, formatMoney, type ServiceType } from '@/lib/pricing';
 import { escapeHtml } from '@/lib/utils';
-import { sendEmail } from '@/lib/send-email';
+import { sendEmail, type EmailAttachment } from '@/lib/send-email';
 import { sendSMS } from '@/lib/sms';
+import { renderInvoicePdf } from '@/lib/render-pdf';
+
+export const maxDuration = 60; // Chromium cold-start + PDF render can take ~10-20s
 
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   // Auth: session OR API key (for internal auto-send from deposit confirmation)
@@ -153,6 +156,23 @@ ${statusBlock}
     return NextResponse.json({ success: smsSent, sms_sent: smsSent });
   }
 
+  // Render the print-ready invoice as a PDF and attach it. If rendering fails
+  // (cold-start timeout, chromium issue, etc.) we still send the email without
+  // the attachment rather than blocking the send.
+  let attachments: EmailAttachment[] | undefined;
+  try {
+    const baseUrl = process.env.NEXTAUTH_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://novus-epoxy.vercel.app');
+    const adminKey = (process.env.ADMIN_API_KEY ?? '').trim();
+    const pdf = await renderInvoicePdf(parseInt(id), baseUrl, adminKey);
+    attachments = [{
+      filename: `Facture-${inv.numero}.pdf`,
+      content: pdf,
+      contentType: 'application/pdf',
+    }];
+  } catch (err) {
+    console.error('PDF render failed (sending email without attachment):', err);
+  }
+
   let emailData: { id: string };
   try {
     emailData = await sendEmail({
@@ -160,6 +180,7 @@ ${statusBlock}
       subject,
       html,
       via: 'gmail',
+      attachments,
     });
   } catch (err) {
     console.error('Gmail send error:', err);

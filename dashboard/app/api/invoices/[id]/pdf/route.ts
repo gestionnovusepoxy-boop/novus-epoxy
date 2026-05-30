@@ -3,9 +3,14 @@ import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { generateInvoiceHtml } from '@/lib/invoice-pdf';
 
-export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  // Auth: session OR x-api-key (so internal services like the send route + PDF renderer can fetch it)
   const session = await auth();
-  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  const apiKey = req.headers.get('x-api-key') ?? '';
+  const validApiKey = (process.env.ADMIN_API_KEY ?? '').trim();
+  if (!session && (!validApiKey || apiKey.trim() !== validApiKey)) {
+    return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  }
 
   const { id } = await params;
   // Pull invoice + client + linked quote (work address, color) + booking (dates if scheduled)
