@@ -97,6 +97,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const newSum = Number((newSumRows[0] as { sum: number | string }).sum);
   const fullyPaid = newSum >= total - 0.01;
 
+  // Detect transition: was the invoice NOT fully paid before, but IS now?
+  const justBecameFullyPaid = fullyPaid && !inv.final_paye;
+
   if (fullyPaid) {
     await query(
       `UPDATE invoices SET final_paye = true, final_paye_at = NOW(), final_methode = $1, statut = 'completee' WHERE id = $2`,
@@ -106,6 +109,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       `UPDATE quotes SET statut = 'complete', balance_paid_at = NOW(), updated_at = NOW() WHERE id = $1`,
       [inv.quote_id],
     );
+  }
+
+  // Auto-send the "facture payée en entier" email to the client the moment the
+  // invoice transitions to fully-paid. Fire-and-forget — never blocks the response.
+  if (justBecameFullyPaid) {
+    const baseUrl = process.env.NEXTAUTH_URL ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'https://novus-epoxy.vercel.app');
+    const adminKey = process.env.ADMIN_API_KEY ?? '';
+    void fetch(`${baseUrl}/api/invoices/${invoiceId}/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': adminKey },
+      body: JSON.stringify({}),
+    }).catch(err => console.error('Auto-send paid-in-full email failed:', err));
   }
 
   const updated = await query(
