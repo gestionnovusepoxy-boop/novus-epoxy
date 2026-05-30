@@ -35,8 +35,8 @@ async function notifyTelegram(message: string) {
 }
 
 async function getGmailClient() {
-  let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
-  let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  let clientId = (process.env.GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '');
+  let clientSecret = (process.env.GOOGLE_WEB_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '');
   let refreshToken = process.env.GOOGLE_REFRESH_TOKEN ?? '';
   try {
     const rows = await query(`SELECT key, value FROM kv_store WHERE key IN ('google_client_id','google_client_secret','google_refresh_token')`);

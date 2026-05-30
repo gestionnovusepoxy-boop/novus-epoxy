@@ -110,8 +110,8 @@ async function sendViaGmail({
 }: {
   to: string; subject: string; html: string; replyTo?: string; cc?: string; bcc?: string; attachments?: EmailAttachment[];
 }): Promise<{ id: string }> {
-  let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
-  let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  let clientId = (process.env.GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '');
+  let clientSecret = (process.env.GOOGLE_WEB_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '');
   let refreshToken = process.env.GOOGLE_REFRESH_TOKEN ?? '';
 
   // kv_store overrides env vars (source de vérité après le flow OAuth Web)

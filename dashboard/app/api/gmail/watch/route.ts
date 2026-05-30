@@ -12,8 +12,8 @@ export const maxDuration = 60;
 const TOPIC_NAME = 'projects/true-orb-491120-j5/topics/gmail-notifications';
 
 async function getGmailClient() {
-  let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
-  let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  let clientId = (process.env.GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '');
+  let clientSecret = (process.env.GOOGLE_WEB_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '');
   let refreshToken = process.env.GOOGLE_REFRESH_TOKEN ?? '';
 
   try {

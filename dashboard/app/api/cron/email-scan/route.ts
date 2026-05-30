@@ -40,8 +40,8 @@ async function sendTelegram(chatId: string, text: string) {
 
 async function getGmailClient() {
   // All 3 values can be overridden by kv_store (shared DB = single source of truth across Vercel + VPS)
-  let clientId = process.env.GOOGLE_CLIENT_ID ?? '';
-  let clientSecret = process.env.GOOGLE_CLIENT_SECRET ?? '';
+  let clientId = (process.env.GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || '');
+  let clientSecret = (process.env.GOOGLE_WEB_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET || '');
   let refreshToken = process.env.GOOGLE_REFRESH_TOKEN ?? '';
 
   try {
