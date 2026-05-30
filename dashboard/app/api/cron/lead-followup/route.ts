@@ -59,7 +59,9 @@ export async function GET(req: NextRequest) {
   let sent = 0;
   let marquesFroid = 0;
 
+  const { isBlocked } = await import('@/lib/lead-blocklist');
   for (const lead of leads as Array<{ id: number; nom: string; email: string; service: string | null; superficie: string | null }>) {
+    if (await isBlocked({ email: lead.email })) continue;
     try {
       // 2. Generate warm follow-up email via OpenRouter
       let followupText: string;

@@ -316,6 +316,18 @@ export async function POST(req: NextRequest) {
       [`sms_optout_${phone}`, JSON.stringify({ phone: from, date: new Date().toISOString(), message: body, complaint: isComplaint })]
     ).catch(() => {});
 
+    // BLOCKLIST: empêche toute relance future via lib/lead-blocklist (utilisé par
+    // relance-prospect, lead-followup, etc.). Block par tel + email connu.
+    try {
+      const { blockLead } = await import('@/lib/lead-blocklist');
+      await blockLead({
+        phone: from,
+        email: clientEmail || null,
+        reason: isComplaint ? 'complaint' : 'unsubscribed',
+        detail: body.slice(0, 200),
+      });
+    } catch { /* ignore */ }
+
     // Also update lead status if exists
     if (leadId) {
       const noteTag = isComplaint

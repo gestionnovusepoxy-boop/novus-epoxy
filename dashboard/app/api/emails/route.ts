@@ -153,5 +153,40 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // AUTO-BLOCK lead on bounce / complaint (mauvais contact)
+  if (statut === 'bounced' || statut === 'complained') {
+    try {
+      const recipient = (event.data.to?.[0] ?? '') as string;
+      if (recipient) {
+        const { blockLead } = await import('@/lib/lead-blocklist');
+        await blockLead({
+          email: recipient,
+          reason: statut === 'bounced' ? 'bounce' : 'spam_report',
+          detail: statut === 'bounced'
+            ? 'Email rejected by recipient server (bad address)'
+            : 'Recipient marked email as spam (Resend complained event)',
+        });
+        // Notify Luca (group) — informational, dedup'd per email per day
+        const today = new Date().toISOString().slice(0, 10);
+        const dedupKey = `lead_block_alert_${recipient.toLowerCase()}_${today}`;
+        const seen = await db(`SELECT 1 FROM kv_store WHERE key = $1`, [dedupKey]).catch(() => []);
+        if ((seen as unknown[]).length === 0) {
+          await db(`INSERT INTO kv_store (key, value) VALUES ($1,'sent') ON CONFLICT (key) DO NOTHING`, [dedupKey]).catch(() => {});
+          const tok = process.env.TELEGRAM_BOT_TOKEN; const chat = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+          if (tok && chat) {
+            void fetch(`https://api.telegram.org/bot${tok}/sendMessage`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                chat_id: chat,
+                text: `🚫 <b>Lead bloqué automatiquement</b>\n\n📧 ${recipient}\nRaison: ${statut === 'bounced' ? 'email bounce (mauvaise adresse)' : 'marqué spam'}\n\nNe sera plus contacté en auto.`,
+                parse_mode: 'HTML',
+              }),
+            }).catch(() => {});
+          }
+        }
+      }
+    } catch (err) { console.error('Auto-block on bounce/complaint failed:', err); }
+  }
+
   return new NextResponse(null, { status: 204 });
 }

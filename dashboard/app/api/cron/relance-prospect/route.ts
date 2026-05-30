@@ -2,6 +2,7 @@ import { getQuebecHour } from '@/lib/timezone';
 import { NextRequest, NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
+import { isBlocked } from '@/lib/lead-blocklist';
 import pLimit from 'p-limit';
 
 // Bumped from 60 → 300 to absorb sequential LLM/email calls on busy days.
@@ -104,7 +105,10 @@ export async function GET(req: NextRequest) {
   // Concurrency cap = 5 so we don't hammer the LLM/email provider but still finish under maxDuration.
   const limit = pLimit(5);
 
+  let skipped_blocked = 0;
   await Promise.all(r1capped.map((lead) => limit(async () => {
+    // Skip leads that are blocked (complaint, bounce, unsubscribed, spam_report)
+    if (await isBlocked({ email: lead.email as string })) { skipped_blocked++; return; }
     const prenom = (lead.nom as string).split(' ')[0];
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f8fafc;">
 <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
@@ -144,6 +148,7 @@ export async function GET(req: NextRequest) {
   })));
 
   await Promise.all(r2capped.map((lead) => limit(async () => {
+    if (await isBlocked({ email: lead.email as string })) { skipped_blocked++; return; }
     const prenom = (lead.nom as string).split(' ')[0];
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#f8fafc;">
 <div style="font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
@@ -200,6 +205,7 @@ export async function GET(req: NextRequest) {
     relance_1: { found: r1.length, sent: sent1 },
     relance_2: { found: r2.length, sent: sent2 },
     errors,
+    skipped_blocked,
     capped_at: MAX_PER_RUN,
   });
 }
