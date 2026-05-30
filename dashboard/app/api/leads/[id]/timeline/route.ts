@@ -50,15 +50,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const events: TimelineEvent[] = [];
 
-  // 1. emails — match destinataire OR reply_body recipient
-  if (emailLower) {
-    const emails = await query(
-      `SELECT id, destinataire, sujet, statut, direction, html_body, reply_body, created_at, opened_at, clicked_at
-       FROM email_logs
-       WHERE LOWER(destinataire) = $1
-       ORDER BY created_at DESC LIMIT 200`,
-      [emailLower]
-    ) as Array<{ id: number; destinataire: string; sujet: string; statut: string; direction: string | null; html_body: string | null; reply_body: string | null; created_at: Date; opened_at: Date | null; clicked_at: Date | null }>;
+  // 1. emails — préfère lead_id direct (indexé), fallback sur match email pour les rows pré-backfill
+  const emails = await query(
+    `SELECT id, destinataire, sujet, statut, direction, html_body, reply_body, created_at, opened_at, clicked_at
+     FROM email_logs
+     WHERE lead_id = $1
+        OR ($2 != '' AND lead_id IS NULL AND LOWER(destinataire) = $2)
+     ORDER BY created_at DESC LIMIT 200`,
+    [leadId, emailLower]
+  ) as Array<{ id: number; destinataire: string; sujet: string; statut: string; direction: string | null; html_body: string | null; reply_body: string | null; created_at: Date; opened_at: Date | null; clicked_at: Date | null }>;
+  {
     for (const e of emails) {
       const isInbound = e.direction === 'inbound';
       events.push({
@@ -100,16 +101,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     });
   }
 
-  // 3. chatbot widget conversations (match by email or phone)
-  if (emailLower || phoneDigits) {
+  // 3. chatbot widget conversations — préfère lead_id direct, fallback email/phone
+  {
     const convos = await query(
       `SELECT c.id, c.channel, c.created_at, c.status, m.role, m.content, m.created_at AS msg_at
        FROM conversations c
        JOIN messages m ON m.conversation_id = c.id
-       WHERE ($1 != '' AND LOWER(c.visitor_email) = $1)
-          OR ($2 != '' AND regexp_replace(COALESCE(c.visitor_tel,''), '[^0-9]', '', 'g') LIKE '%' || $2)
+       WHERE c.lead_id = $1
+          OR (c.lead_id IS NULL AND (
+                ($2 != '' AND LOWER(c.visitor_email) = $2)
+             OR ($3 != '' AND regexp_replace(COALESCE(c.visitor_tel,''), '[^0-9]', '', 'g') LIKE '%' || $3)))
        ORDER BY m.created_at DESC LIMIT 300`,
-      [emailLower, phoneDigits]
+      [leadId, emailLower, phoneDigits]
     ) as Array<{ id: number; channel: string; created_at: Date; status: string; role: string; content: string; msg_at: Date }>;
     for (const m of convos) {
       events.push({
@@ -122,14 +125,16 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
-  // 4. quotes
+  // 4. quotes — préfère lead_id direct
   const quoteRows = await query(
     `SELECT id, type_service, total, statut, created_at, sent_at
      FROM quotes
-     WHERE ($1 != '' AND LOWER(client_email) = $1)
-        OR ($2 != '' AND regexp_replace(COALESCE(client_tel,''), '[^0-9]', '', 'g') LIKE '%' || $2)
+     WHERE lead_id = $1
+        OR (lead_id IS NULL AND (
+              ($2 != '' AND LOWER(client_email) = $2)
+           OR ($3 != '' AND regexp_replace(COALESCE(client_tel,''), '[^0-9]', '', 'g') LIKE '%' || $3)))
      ORDER BY created_at DESC LIMIT 50`,
-    [emailLower, phoneDigits]
+    [leadId, emailLower, phoneDigits]
   ) as Array<{ id: number; type_service: string; total: number; statut: string; created_at: Date; sent_at: Date | null }>;
   for (const q of quoteRows) {
     events.push({
