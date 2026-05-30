@@ -32,11 +32,25 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const inv = rows[0];
   if (!inv) return NextResponse.json({ error: 'Facture introuvable' }, { status: 404 });
 
+  // Pull quote_items + quote_extras so the email matches the PDF (full line-item breakdown).
+  const [itemRows, extraRows] = await Promise.all([
+    inv.quote_id ? query(
+      `SELECT type_service, superficie, prix_pied_carre, sous_total, description FROM quote_items WHERE quote_id = $1 ORDER BY sort_order, id`,
+      [inv.quote_id]
+    ).catch(() => []) : Promise.resolve([]),
+    inv.quote_id ? query(
+      `SELECT description, quantite, prix_unitaire, sous_total FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order, id`,
+      [inv.quote_id]
+    ).catch(() => []) : Promise.resolve([]),
+  ]);
+
   const service = SERVICES[inv.type_service as ServiceType];
   const logoSrc = 'https://novus-epoxy.vercel.app/logo-email.jpg';
   const ts = Date.now();
   const depositPaid = !!inv.depot_paye;
   const solde = Number(inv.final_montant);
+  const TAX_NUMBERS_FOOTER = 'RBQ : 5861-8471-01  ·  No TPS : 704712017 RT0001  ·  No TVQ : 1231257078 TQ0001';
+  const isForfait = Number(inv.prix_pied_carre) === 0 && Number(inv.superficie) === 0;
 
   // Build payment link via quote page if available
   const paymentLink = inv.quote_token
@@ -75,7 +89,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 <strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
 <strong>Chantier :</strong> Jason — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>
 </div>
-<p style="color:#94a3b8;font-size:11px;margin:8px 0 0;">Ref: ${ts}</p>
+<p style="color:#94a3b8;font-size:11px;margin:8px 0 4px;text-align:center;">${TAX_NUMBERS_FOOTER}</p>
+<p style="color:#94a3b8;font-size:11px;margin:0;">Ref: ${ts}</p>
 </div>
 </body></html>`;
   } else {
@@ -91,15 +106,32 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
 <h2 style="color:#1e293b;margin:0 0 12px;font-size:20px;">Facture ${escapeHtml(inv.numero as string)}</h2>
 <p style="margin:0 0 4px;">Bonjour ${escapeHtml(inv.client_nom as string)},</p>
 <p style="margin:0 0 16px;color:#475569;">Veuillez trouver ci-dessous le détail de votre facture :</p>
-<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;">
-<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">Service</td><td style="padding:8px 0;text-align:right;font-weight:600;font-size:14px;">${service.label}</td></tr>
-<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">Superficie</td><td style="padding:8px 0;text-align:right;font-size:14px;">${inv.superficie} pi²</td></tr>
-<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">Prix/pi²</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.prix_pied_carre))}</td></tr>
-<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">${inv.superficie} pi² x ${formatMoney(Number(inv.prix_pied_carre))}</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.prix_pied_carre) * Number(inv.superficie))}</td></tr>
+<table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 16px;border-collapse:collapse;">
+${(() => {
+  // Build the line-items table that mirrors the PDF: each service (item) + each extra.
+  // Falls back to the legacy single-service row if no quote_items exist.
+  const rows: string[] = [];
+  if (itemRows.length > 0) {
+    for (const it of itemRows as Array<{ type_service: string; superficie: number; prix_pied_carre: number; sous_total: number; description: string | null }>) {
+      const lbl = SERVICES[it.type_service as ServiceType]?.label ?? it.type_service;
+      const qty = Number(it.superficie) > 0 ? `${it.superficie} pi² × ${formatMoney(Number(it.prix_pied_carre))}` : 'Forfait';
+      rows.push(`<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#1e293b;font-size:14px;"><strong>${escapeHtml(lbl)}</strong>${it.description ? `<br/><span style="color:#64748b;font-size:12px;">${escapeHtml(it.description)}</span>` : ''}<br/><span style="color:#94a3b8;font-size:12px;">${qty}</span></td><td style="padding:8px 0;text-align:right;font-size:14px;vertical-align:top;">${formatMoney(Number(it.sous_total))}</td></tr>`);
+    }
+  } else {
+    // Legacy single-service invoice
+    const qtyTxt = isForfait ? 'Forfait' : `${inv.superficie} pi² × ${formatMoney(Number(inv.prix_pied_carre))}`;
+    rows.push(`<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#1e293b;font-size:14px;"><strong>${escapeHtml(service?.label ?? 'Travaux')}</strong><br/><span style="color:#94a3b8;font-size:12px;">${qtyTxt}</span></td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.sous_total) + (Number(inv.rabais_montant) || 0))}</td></tr>`);
+  }
+  for (const ex of extraRows as Array<{ description: string; quantite: number; prix_unitaire: number; sous_total: number }>) {
+    const qty = ex.quantite && Number(ex.quantite) !== 1 ? `${ex.quantite} × ${formatMoney(Number(ex.prix_unitaire))}` : '';
+    rows.push(`<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#1e293b;font-size:14px;">${escapeHtml(ex.description)}${qty ? `<br/><span style="color:#94a3b8;font-size:12px;">${qty}</span>` : ''}</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(ex.sous_total))}</td></tr>`);
+  }
+  return rows.join('');
+})()}
 ${Number(inv.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#16a34a;font-size:14px;font-weight:600;">Rabais ${inv.rabais_pct}%</td><td style="padding:8px 0;text-align:right;font-size:14px;color:#16a34a;font-weight:600;">-${formatMoney(Number(inv.rabais_montant))}</td></tr>` : ''}
 <tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">Sous-total</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.sous_total))}</td></tr>
-<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">TPS (5%)</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.tps))}</td></tr>
-<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">TVQ (9,975%)</td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.tvq))}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">TPS (5%) <span style="color:#94a3b8;font-size:11px;">— No 704712017 RT0001</span></td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.tps))}</td></tr>
+<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:8px 0;color:#64748b;font-size:14px;">TVQ (9,975%) <span style="color:#94a3b8;font-size:11px;">— No 1231257078 TQ0001</span></td><td style="padding:8px 0;text-align:right;font-size:14px;">${formatMoney(Number(inv.tvq))}</td></tr>
 <tr style="border-bottom:2px solid #1e293b;"><td style="padding:10px 0;font-weight:700;font-size:17px;">Total</td><td style="padding:10px 0;text-align:right;font-weight:700;font-size:17px;">${formatMoney(Number(inv.total))}</td></tr>
 </table>
 <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:6px;padding:12px;margin:0 0 16px;">
@@ -111,7 +143,8 @@ ${paymentLink ? `<div style="text-align:center;margin:0 0 16px;"><a href="${paym
 <strong>Facturation :</strong> Luca — <a href="tel:5813075983" style="color:#2563eb;">581-307-5983</a><br/>
 <strong>Chantier :</strong> Jason — <a href="tel:5813072678" style="color:#2563eb;">581-307-2678</a>
 </div>
-<p style="color:#94a3b8;font-size:11px;margin:8px 0 0;">Ref: ${ts}</p>
+<p style="color:#94a3b8;font-size:11px;margin:8px 0 4px;text-align:center;">${TAX_NUMBERS_FOOTER}</p>
+<p style="color:#94a3b8;font-size:11px;margin:0;">Ref: ${ts}</p>
 </div>
 </body></html>`;
   }

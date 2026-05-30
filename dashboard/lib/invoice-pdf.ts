@@ -338,11 +338,11 @@ export function generateInvoiceHtml(invoice: InvoiceData, client: ClientData): s
       <span>${formatMoney(Number(invoice.sous_total))}</span>
     </div>
     <div class="row tax">
-      <span>TPS (5%)</span>
+      <span>TPS (5%) <span style="color:#94a3b8;font-size:11px;">— No 704712017 RT0001</span></span>
       <span>${formatMoney(Number(invoice.tps))}</span>
     </div>
     <div class="row tax">
-      <span>TVQ (9,975%)</span>
+      <span>TVQ (9,975%) <span style="color:#94a3b8;font-size:11px;">— No 1231257078 TQ0001</span></span>
       <span>${formatMoney(Number(invoice.tvq))}</span>
     </div>
     <div class="row total">
