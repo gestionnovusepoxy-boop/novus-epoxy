@@ -425,11 +425,11 @@ export default function NouveauDevisPage() {
                 <span>{formatMoney(preview.sous_total)}</span>
               </div>
               <div className="flex justify-between text-slate-400">
-                <span>TPS (5%)</span>
+                <span>TPS (5%) — No 704712017 RT0001</span>
                 <span>{formatMoney(preview.tps)}</span>
               </div>
               <div className="flex justify-between text-slate-400">
-                <span>TVQ (9,975%)</span>
+                <span>TVQ (9,975%) — No 1231257078 TQ0001</span>
                 <span>{formatMoney(preview.tvq)}</span>
               </div>
               <div className="flex justify-between text-white font-bold text-lg pt-2 border-t border-slate-700">

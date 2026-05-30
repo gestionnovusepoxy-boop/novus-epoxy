@@ -783,11 +783,11 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
             <span>{formatMoney(Number(quote.sous_total))}</span>
           </div>
           <div className="flex justify-between text-slate-400">
-            <span>TPS (5%)</span>
+            <span>TPS (5%) <span className="text-slate-500 text-xs">— No 704712017 RT0001</span></span>
             <span>{formatMoney(Number(quote.tps))}</span>
           </div>
           <div className="flex justify-between text-slate-400">
-            <span>TVQ (9,975%)</span>
+            <span>TVQ (9,975%) <span className="text-slate-500 text-xs">— No 1231257078 TQ0001</span></span>
             <span>{formatMoney(Number(quote.tvq))}</span>
           </div>
           <div className="flex justify-between text-white font-bold text-lg pt-3 border-t border-slate-700">

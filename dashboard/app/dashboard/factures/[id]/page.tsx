@@ -274,8 +274,8 @@ export default function FactureDetailPage({ params }: { params: Promise<{ id: st
             <span>Sous-total</span>
             <span>{formatMoney(Number(inv.sous_total))}</span>
           </div>
-          <div className="flex justify-between text-slate-400"><span>TPS (5%)</span><span>{formatMoney(Number(inv.tps))}</span></div>
-          <div className="flex justify-between text-slate-400"><span>TVQ (9,975%)</span><span>{formatMoney(Number(inv.tvq))}</span></div>
+          <div className="flex justify-between text-slate-400"><span>TPS (5%) — No 704712017 RT0001</span><span>{formatMoney(Number(inv.tps))}</span></div>
+          <div className="flex justify-between text-slate-400"><span>TVQ (9,975%) — No 1231257078 TQ0001</span><span>{formatMoney(Number(inv.tvq))}</span></div>
           <div className="flex justify-between text-white font-bold text-lg pt-3 border-t border-slate-700">
             <span>Total</span><span>{formatMoney(Number(inv.total))}</span>
           </div>

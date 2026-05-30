@@ -400,10 +400,10 @@ export default function ContratPage() {
                 <span style={{ color: '#94a3b8' }}>Sous-total</span><span>{formatMoney(Number(quote.sous_total))}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #334155' }}>
-                <span style={{ color: '#94a3b8' }}>TPS (5%)</span><span>{formatMoney(Number(quote.tps))}</span>
+                <span style={{ color: '#94a3b8' }}>TPS (5%) — No 704712017 RT0001</span><span>{formatMoney(Number(quote.tps))}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0', borderBottom: '1px solid #334155' }}>
-                <span style={{ color: '#94a3b8' }}>TVQ (9,975%)</span><span>{formatMoney(Number(quote.tvq))}</span>
+                <span style={{ color: '#94a3b8' }}>TVQ (9,975%) — No 1231257078 TQ0001</span><span>{formatMoney(Number(quote.tvq))}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', fontWeight: 700, fontSize: '16px' }}>
                 <span>Total</span><span>{formatMoney(Number(quote.total))}</span>

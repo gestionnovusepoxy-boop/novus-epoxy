@@ -274,11 +274,11 @@ export default function ClientPortalPage() {
             <span style={{ fontSize: '13px' }}>{formatMoney(Number(data.sous_total))}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
-            <span style={{ color: '#94a3b8', fontSize: '13px' }}>TPS (5%)</span>
+            <span style={{ color: '#94a3b8', fontSize: '13px' }}>TPS (5%) — No 704712017 RT0001</span>
             <span style={{ fontSize: '13px' }}>{formatMoney(Number(data.tps))}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #334155' }}>
-            <span style={{ color: '#94a3b8', fontSize: '13px' }}>TVQ (9.975%)</span>
+            <span style={{ color: '#94a3b8', fontSize: '13px' }}>TVQ (9,975%) — No 1231257078 TQ0001</span>
             <span style={{ fontSize: '13px' }}>{formatMoney(Number(data.tvq))}</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', fontWeight: 700, fontSize: '17px' }}>
