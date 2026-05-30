@@ -19,9 +19,24 @@ export async function sendProspectEmail({
   idempotencyKey?: string;
   scheduledAt?: string;
 }): Promise<{ id: string }> {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  // Use WEB client first (matches the OAuth re-consent flow at /api/auth/google).
+  // Fall back to legacy GOOGLE/GMAIL clients for older tokens.
+  let clientId = process.env.GOOGLE_WEB_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
+  let clientSecret = process.env.GOOGLE_WEB_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
+  let refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+  // kv_store overrides (source de vérité après re-auth via /api/auth/google/callback)
+  try {
+    const { query } = await import('@/lib/db');
+    const rows = await query(
+      `SELECT key, value FROM kv_store WHERE key IN ('google_client_id','google_client_secret','google_refresh_token')`
+    );
+    for (const row of (rows ?? [])) {
+      if (row.key === 'google_client_id' && row.value) clientId = row.value as string;
+      if (row.key === 'google_client_secret' && row.value) clientSecret = row.value as string;
+      if (row.key === 'google_refresh_token' && row.value) refreshToken = row.value as string;
+    }
+  } catch { /* fallback to env */ }
 
   if (!clientId || !clientSecret || !refreshToken) {
     throw new Error('Gmail credentials missing');
