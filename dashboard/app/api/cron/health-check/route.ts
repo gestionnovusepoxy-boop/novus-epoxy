@@ -401,7 +401,9 @@ export async function GET(req: NextRequest) {
     if (lastAt) {
       const hoursAgo = (Date.now() - lastAt.getTime()) / 3600000;
       if (hoursAgo > 48) {
-        checks.push({ name: 'Leads FB', ok: false, detail: `Aucun lead Facebook depuis ${Math.round(hoursAgo)}h — verifie Zapier et les pubs actives!`, severity: 'critical' });
+        // Severity 'warning' (pas 'critical') pour ne PAS spam Telegram à chaque run.
+        // Visible dashboard, fire seulement si ≥2 warnings combinés.
+        checks.push({ name: 'Leads FB', ok: false, detail: `Aucun lead Facebook depuis ${Math.round(hoursAgo)}h — verifie Zapier et les pubs actives!`, severity: 'warning' });
       } else {
         checks.push({ name: 'Leads FB', ok: true, detail: `Dernier lead il y a ${hoursAgo.toFixed(1)}h` });
       }

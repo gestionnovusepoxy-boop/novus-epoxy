@@ -25,6 +25,10 @@
       "schedule": "0 11 * * *"
     },
     {
+      "path": "/api/cron/ads-performance",
+      "schedule": "0 12 * * *"
+    },
+    {
       "path": "/api/cron/email-scan",
       "schedule": "0,30 * * * *"
     },

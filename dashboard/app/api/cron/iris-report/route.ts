@@ -34,15 +34,17 @@ export async function GET(req: NextRequest) {
 
   if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
-  // --- Revenue ---
+  // --- Revenue (avec mois précédent — pour pas se retrouver à $0 en début de mois courant) ---
   const revenueRows = await query(`
     SELECT
       COALESCE(SUM(CASE WHEN p.paid_at::date = CURRENT_DATE THEN p.montant ELSE 0 END), 0) AS rev_today,
       COALESCE(SUM(CASE WHEN p.paid_at >= DATE_TRUNC('week', CURRENT_DATE) THEN p.montant ELSE 0 END), 0) AS rev_week,
-      COALESCE(SUM(CASE WHEN p.paid_at >= DATE_TRUNC('month', CURRENT_DATE) THEN p.montant ELSE 0 END), 0) AS rev_month
+      COALESCE(SUM(CASE WHEN p.paid_at >= DATE_TRUNC('month', CURRENT_DATE) THEN p.montant ELSE 0 END), 0) AS rev_month,
+      COALESCE(SUM(CASE WHEN p.paid_at >= DATE_TRUNC('month', CURRENT_DATE - INTERVAL '1 month')
+                          AND p.paid_at <  DATE_TRUNC('month', CURRENT_DATE) THEN p.montant ELSE 0 END), 0) AS rev_last_month
     FROM payments p
   `);
-  const rev = revenueRows[0] as { rev_today: string; rev_week: string; rev_month: string };
+  const rev = revenueRows[0] as { rev_today: string; rev_week: string; rev_month: string; rev_last_month: string };
 
   // --- Expenses ---
   const expenseRows = await query(`
@@ -107,6 +109,7 @@ export async function GET(req: NextRequest) {
   lines.push(`Aujourd'hui: ${formatMoney(Number(rev.rev_today))}`);
   lines.push(`Cette semaine: ${formatMoney(Number(rev.rev_week))}`);
   lines.push(`Ce mois: ${formatMoney(Number(rev.rev_month))}`);
+  lines.push(`Mois passé: ${formatMoney(Number(rev.rev_last_month))}`);
   lines.push(``);
 
   lines.push(`<b>Depenses</b>`);
