@@ -1504,6 +1504,14 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
           [quoteId]
         );
 
+        // Crée la facture + enregistre le paiement de dépôt (idempotent) — sinon la compta reste vide.
+        try {
+          const { ensureInvoiceForQuote } = await import('@/lib/ensure-invoice');
+          await ensureInvoiceForQuote(quoteId);
+        } catch (e) {
+          console.error('ensureInvoiceForQuote (telegram confirm_deposit):', e);
+        }
+
         // Send confirmation email to client
         if (q.client_email) {
           const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:0;background:#ffffff;">
@@ -1544,6 +1552,22 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       } catch (err) {
         console.error('Confirm deposit error:', err);
         await sendTelegram(cbChatId, `Erreur: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // call:5811234567 — "Marquer rappelé" depuis l'alerte LEAD CHAUD (sms/incoming)
+    if (cbData.startsWith('call:')) {
+      const phone = cbData.slice(5);
+      const last10 = phone.replace(/\D/g, '').slice(-10);
+      try {
+        await query(
+          `UPDATE crm_leads SET statut = 'contacte', updated_at = NOW() WHERE telephone LIKE $1`,
+          ['%' + last10 + '%']
+        );
+        await sendTelegram(cbChatId, `✅ Marqué comme rappelé — ${phone}.`);
+      } catch (err) {
+        console.error('call: handler error:', err);
       }
       return NextResponse.json({ ok: true });
     }

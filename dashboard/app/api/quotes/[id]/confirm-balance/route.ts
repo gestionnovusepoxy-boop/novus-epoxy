@@ -23,5 +23,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     [quoteId]
   );
 
+  // Marque la facture payée en entier + enregistre le paiement final (idempotent).
+  const { ensureInvoiceForQuote } = await import('@/lib/ensure-invoice');
+  await ensureInvoiceForQuote(quoteId).catch((e) => console.error('ensureInvoiceForQuote (confirm-balance):', e));
+
   return NextResponse.json({ success: true });
 }

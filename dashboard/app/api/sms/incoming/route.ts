@@ -244,14 +244,16 @@ export async function POST(req: NextRequest) {
     // Phone embedded visibly in the message text so Luca can long-press to copy/dial.
     // Telegram inline_keyboard rejects tel:/sms: URLs (returns 400 "Wrong port number")
     // and silently swallowed the failure — see commit 983c899.
+    // PLAIN TEXT (pas de parse_mode) — le body client brut contient souvent des * _ [ ` qui
+    // font planter Telegram en 400 avec parse_mode Markdown → l'alerte la plus critique était perdue.
     const msg = [
       `🔥🔥 LEAD CHAUD — ${clientName} a répondu par SMS!`,
       ``,
-      `*Message:* ${body}`,
-      `*Tél (long-press pour appeler):* ${from}`,
-      clientEmail ? `*Email:* ${clientEmail}` : '',
-      leadId ? `*Lead CRM:* #${leadId}` : '',
-      quoteId ? `*Devis:* #${quoteId}` : '',
+      `Message: ${body}`,
+      `Tél (long-press pour appeler): ${from}`,
+      clientEmail ? `Email: ${clientEmail}` : '',
+      leadId ? `Lead CRM: #${leadId}` : '',
+      quoteId ? `Devis: #${quoteId}` : '',
     ].filter(Boolean).join('\n');
 
     const inlineKeyboard = {
@@ -270,7 +272,6 @@ export async function POST(req: NextRequest) {
         body: JSON.stringify({
           chat_id: groupChatId,
           text: msg,
-          parse_mode: 'Markdown',
           reply_markup: inlineKeyboard,
         }),
       });
@@ -340,11 +341,12 @@ export async function POST(req: NextRequest) {
 
     // Urgent Telegram ping on complaints (bypass quiet hours — legal risk)
     if (isComplaint && botToken && groupChatId) {
+      // PLAIN TEXT (pas de parse_mode) — le body client brut casserait Markdown (400) et l'alerte légale serait perdue.
       const complaintMsg = [
         `🚨 PLAINTE CLIENT — ${clientName} (${from})`,
         ``,
-        `*Message:* ${body}`,
-        leadId ? `*Lead CRM:* #${leadId}` : '',
+        `Message: ${body}`,
+        leadId ? `Lead CRM: #${leadId}` : '',
         ``,
         `Opt-out enregistré. Vérifier immédiatement.`,
       ].filter(Boolean).join('\n');
@@ -352,7 +354,7 @@ export async function POST(req: NextRequest) {
         const r = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ chat_id: groupChatId, text: complaintMsg, parse_mode: 'Markdown' }),
+          body: JSON.stringify({ chat_id: groupChatId, text: complaintMsg }),
         });
         if (!r.ok) {
           const err = await r.text();

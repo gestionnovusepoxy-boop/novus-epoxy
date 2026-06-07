@@ -14,7 +14,7 @@ export const maxDuration = 60;
  */
 export async function GET(req: NextRequest) {
   const secret = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
-  if (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? '')) {
+  if (!secret || (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? ''))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -49,9 +49,9 @@ export async function GET(req: NextRequest) {
     ),
     query(
       `SELECT COUNT(*)::int AS n, COALESCE(SUM(montant),0)::numeric(12,2) AS total
-         FROM payments WHERE date_paiement BETWEEN $1 AND $2 AND statut = 'recu'`,
+         FROM payments WHERE type = 'depot' AND paid_at::date BETWEEN $1 AND $2`,
       [start, end]
-    ).catch(() => [{ n: 0, total: 0 }] as Array<Record<string, unknown>>),
+    ),
   ]);
 
   const rev = revRows[0] as Record<string, unknown>;

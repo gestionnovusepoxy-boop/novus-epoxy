@@ -83,7 +83,7 @@ export async function GET(req: NextRequest) {
   const r2 = await query(
     `SELECT id, nom, email, notes, service, type FROM crm_leads
      WHERE prospect_sent_at IS NOT NULL
-       AND prospect_relance_1_at <= NOW() - INTERVAL '5 days'
+       AND prospect_sent_at <= NOW() - INTERVAL '5 days'
        AND prospect_relance_1_at IS NOT NULL
        AND prospect_relance_2_at IS NULL
        AND statut IN ('nouveau', 'contacte', 'offre_envoyee')

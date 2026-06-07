@@ -52,7 +52,7 @@ export async function ensureInvoiceForQuote(quoteId: number): Promise<{ invoice_
       query(
         `INSERT INTO invoices (numero, quote_id, client_id, type_service, superficie, prix_pied_carre,
                                rabais_pct, rabais_montant, sous_total, tps, tvq, total, depot_montant, statut)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'en_cours')
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 'depot_recu')
          RETURNING id`,
         [numero, quoteId, clientId,
          q.type_service, q.superficie, q.prix_pied_carre,

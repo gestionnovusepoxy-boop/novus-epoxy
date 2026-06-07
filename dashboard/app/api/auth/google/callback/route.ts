@@ -30,6 +30,27 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    // SÉCURITÉ: vérifie que le compte autorisé est bien le nôtre AVANT d'écrire le token.
+    // Empêche quelqu'un d'écraser notre refresh_token avec son propre compte Google.
+    const ALLOWED_GOOGLE_ACCOUNT = 'gestionnovusepoxy@gmail.com';
+    try {
+      oauth2.setCredentials(tokens);
+      const gmailCheck = google.gmail({ version: 'v1', auth: oauth2 });
+      const profile = await gmailCheck.users.getProfile({ userId: 'me' });
+      const grantedEmail = (profile.data.emailAddress ?? '').toLowerCase();
+      if (grantedEmail !== ALLOWED_GOOGLE_ACCOUNT) {
+        return new NextResponse(
+          `<h1>Compte refusé</h1><p>Ce flow doit être autorisé avec <b>${ALLOWED_GOOGLE_ACCOUNT}</b>, pas <b>${grantedEmail || 'inconnu'}</b>. Aucun token n'a été enregistré.</p>`,
+          { status: 403, headers: { 'Content-Type': 'text/html' } }
+        );
+      }
+    } catch (e) {
+      return new NextResponse(
+        `<h1>Erreur de vérification du compte</h1><pre>${e instanceof Error ? e.message : String(e)}</pre><p>Aucun token enregistré.</p>`,
+        { status: 500, headers: { 'Content-Type': 'text/html' } }
+      );
+    }
+
     // Save to shared DB (works for both Vercel and VPS)
     await query(
       `INSERT INTO kv_store (key, value) VALUES ('google_refresh_token', $1)

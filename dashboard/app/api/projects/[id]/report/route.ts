@@ -87,7 +87,7 @@ export async function GET(
     quote: {
       id: quote.id,
       client_nom: quote.client_nom,
-      service: quote.service,
+      service: quote.type_service,
       superficie: quote.superficie,
       total: quote.total,
       statut: quote.statut,

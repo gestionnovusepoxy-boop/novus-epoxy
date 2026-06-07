@@ -59,10 +59,16 @@ export async function sendProspectEmail({
   const raw = `${headerLines}\r\n\r\n${content}`;
   const encoded = Buffer.from(raw).toString('base64url');
 
-  const res = await gmail.users.messages.send({
-    userId: 'me',
-    requestBody: { raw: encoded },
-  });
-
-  return { id: res.data.id ?? `gmail-${Date.now()}` };
+  try {
+    const res = await gmail.users.messages.send({
+      userId: 'me',
+      requestBody: { raw: encoded },
+    });
+    return { id: res.data.id ?? `gmail-${Date.now()}` };
+  } catch (err) {
+    // Même gestion d'erreur OAuth que sendEmail: persiste gmail_oauth_broken + alerte Telegram.
+    const { handleGmailAuthError } = await import('@/lib/send-email');
+    void handleGmailAuthError(err);
+    throw err;
+  }
 }

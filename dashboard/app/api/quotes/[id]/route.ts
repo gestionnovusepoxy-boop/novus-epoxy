@@ -26,6 +26,11 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json();
   const allowed = ['statut', 'client_nom', 'client_email', 'client_tel', 'client_adresse', 'type_service', 'superficie', 'etat_plancher', 'notes', 'description_travaux', 'couleur_flake', 'contrat_signature_nom', 'rabais_pct', 'sous_total'];
 
+  // Valide type_service contre SERVICES — un service inconnu ferait planter send/send-sms (SERVICES[x].label).
+  if (body.type_service !== undefined && !(body.type_service in SERVICES)) {
+    return NextResponse.json({ error: `type_service invalide: ${body.type_service}` }, { status: 400 });
+  }
+
   const sets: string[] = [];
   const values: unknown[] = [];
   let i = 1;

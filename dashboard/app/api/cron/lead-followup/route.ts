@@ -45,6 +45,7 @@ export async function GET(req: NextRequest) {
      WHERE statut = 'contacte'
        AND email IS NOT NULL
        AND TRIM(email) != ''
+       AND temperature IS DISTINCT FROM 'chaud'
        AND (last_agent_reply_at IS NULL OR last_agent_reply_at < NOW() - INTERVAL '4 days')
        AND created_at < NOW() - INTERVAL '4 days'
        AND COALESCE(followup_count, 0) < 2

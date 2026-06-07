@@ -205,6 +205,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, message: `Hors heures (${quebecHour}h). Aucun envoi.` });
   }
 
+  // Gmail cassé? On saute les touches EMAIL (touch-3 / touch-5) mais on garde les SMS (touch-4),
+  // pour ne pas brûler des leads sur une boîte morte. Les touches reprendront après ré-auth.
+  const emailBrokenRows = await query(`SELECT value FROM kv_store WHERE key = 'gmail_oauth_broken'`).catch(() => []);
+  const emailBroken = emailBrokenRows.length > 0;
+
   const today = getQuebecDate();
   const portfolio = await loadPortfolio();
   const photos = pickPhotos(portfolio, 3);
@@ -227,6 +232,7 @@ export async function GET(req: NextRequest) {
   // TOUCH 3 — Day ~10: Value-add email (2+ days after relance 2)
   // =========================================================================
   try {
+    if (emailBroken) throw new Error('SKIP_EMAIL: gmail_oauth_broken');
     const touch3Leads = await query(
       `SELECT id, nom, email, telephone, notes, statut FROM crm_leads
        WHERE prospect_relance_2_at IS NOT NULL
@@ -325,6 +331,7 @@ export async function GET(req: NextRequest) {
   // TOUCH 5 — Day ~25: Last chance email (8+ days after Touch 4)
   // =========================================================================
   try {
+    if (emailBroken) throw new Error('SKIP_EMAIL: gmail_oauth_broken');
     const touch5Leads = await query(
       `SELECT id, nom, email, telephone, notes, statut FROM crm_leads
        WHERE notes LIKE '%Nurture-4 SMS%'

@@ -117,38 +117,48 @@ export async function POST(req: NextRequest) {
   // --- Auto-score temperature (chaud/tiède/froid) ---
   const scoring = scoreLead({ nom, email, telephone, service, superficie, espace, adresse, source: 'facebook-zapier' });
 
-  // --- Atomic dedupe via INSERT ... ON CONFLICT (race-condition safe) ---
+  // --- Dedupe ---
   let newLeadId: number | undefined;
+  let isDuplicate = false;
   const notesWithScore = `${notes} — Score ${scoring.score} [${scoring.reasons.join(',')}]`;
-  const crmResult = await query(
-    `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, adresse, source, statut, temperature, notes, type)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-     ON CONFLICT (email) WHERE email IS NOT NULL AND email != '' DO NOTHING
-     RETURNING id`,
-    [
-      nom,
-      email || null,
-      telephone,
-      service,
-      superficie,
-      ville,
-      adresse,
-      'facebook-zapier',
-      'nouveau',
-      scoring.temperature,
-      notesWithScore,
-      'residential',
-    ],
-  );
-  newLeadId = (crmResult?.[0] as { id?: number } | undefined)?.id;
 
-  // If ON CONFLICT hit on email, also check phone dedup
-  if (!newLeadId && !email && telephone) {
+  // Quand il n'y a PAS d'email, l'index unique sur email ne protège pas → on déduplique
+  // sur le téléphone AVANT l'insert (l'ancien check post-insert était un no-op).
+  if (!email && telephone) {
     const dupRows = await query(
       `SELECT id FROM crm_leads WHERE telephone = $1 LIMIT 1`,
       [telephone],
     );
-    if (dupRows.length > 0) newLeadId = undefined; // duplicate
+    if (dupRows.length > 0) {
+      newLeadId = (dupRows[0] as { id: number }).id;
+      isDuplicate = true;
+    }
+  }
+
+  if (!isDuplicate) {
+    // Atomic dedupe via INSERT ... ON CONFLICT sur email (race-condition safe)
+    const crmResult = await query(
+      `INSERT INTO crm_leads (nom, email, telephone, service, superficie, ville, adresse, source, statut, temperature, notes, type)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+       ON CONFLICT (email) WHERE email IS NOT NULL AND email != '' DO NOTHING
+       RETURNING id`,
+      [
+        nom,
+        email || null,
+        telephone,
+        service,
+        superficie,
+        ville,
+        adresse,
+        'facebook-zapier',
+        'nouveau',
+        scoring.temperature,
+        notesWithScore,
+        'residentiel',
+      ],
+    );
+    newLeadId = (crmResult?.[0] as { id?: number } | undefined)?.id;
+    if (!newLeadId) isDuplicate = true; // ON CONFLICT a frappé (email déjà présent)
   }
 
   // Also insert into submissions (backwards compat)
@@ -236,7 +246,8 @@ export async function POST(req: NextRequest) {
       }));
     }
 
-    // SMS to Luca + Jason (sendSMS respects 8h-21h quiet hours internally)
+    // SMS to Luca + Jason — RESPECTE les heures calmes 8h-21h (plus de skipQuietHours).
+    // Un lead FB à 2h du matin ne réveille personne par SMS; Telegram reste le canal temps réel.
     const smsLines = [
       `🔥 LEAD FB - Contacte ASAP!`,
       nom,
@@ -247,8 +258,8 @@ export async function POST(req: NextRequest) {
     const smsMsg = smsLines.join(' | ');
     const adminPhone = process.env.ADMIN_PHONE;
     const jasonPhone = process.env.JASON_PHONE;
-    if (adminPhone) sendSMS(adminPhone, smsMsg, undefined, true).catch(() => {});
-    if (jasonPhone) sendSMS(jasonPhone, smsMsg, undefined, true).catch(() => {});
+    if (adminPhone) sendSMS(adminPhone, smsMsg).catch(() => {});
+    if (jasonPhone) sendSMS(jasonPhone, smsMsg).catch(() => {});
   }
 
   return NextResponse.json({
