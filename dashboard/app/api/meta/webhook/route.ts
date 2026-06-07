@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
 // Verify Meta webhook signature (X-Hub-Signature-256)
 function verifyMetaSignature(payload: string, signature: string | null): boolean {
   const appSecret = (process.env.META_APP_SECRET ?? '').trim(); // .trim() — env vars can carry trailing \n
-  if (!appSecret) return true; // If secret not configured, allow through (cron sync is backup)
+  if (!appSecret) return false; // FAIL-CLOSED: pas de secret = on refuse les payloads non signés (cron fb-leads-sync = backup)
   if (!signature) return false;
 
   const expected = 'sha256=' + createHmac('sha256', appSecret).update(payload).digest('hex');
@@ -302,7 +302,7 @@ async function handleLeadgen(change: Record<string, unknown>) {
         'nouveau',
         scoring.temperature,
         notesWithScore,
-        'residential',
+        'residentiel',
       ],
     );
 
@@ -365,8 +365,8 @@ async function handleLeadgen(change: Record<string, unknown>) {
       const smsMsg = `🔥 LEAD FB - Contacte ASAP! ${nom} - ${telephone ?? 'N/A'} - ${email}${quoteId ? ` — Devis #${quoteId} prêt` : ''}`;
       const adminPhone = process.env.ADMIN_PHONE;
       const jasonPhone = process.env.JASON_PHONE;
-      if (adminPhone) sendSMS(adminPhone, smsMsg, undefined, true).catch(() => {});
-      if (jasonPhone) sendSMS(jasonPhone, smsMsg, undefined, true).catch(() => {});
+      if (adminPhone) sendSMS(adminPhone, smsMsg).catch(() => {});
+      if (jasonPhone) sendSMS(jasonPhone, smsMsg).catch(() => {});
 
       // NOTE: Aria auto-contact DISABLED — Luca/Jason contactent les leads eux-mêmes
     }

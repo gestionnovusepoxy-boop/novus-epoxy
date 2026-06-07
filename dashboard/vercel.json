@@ -38,7 +38,7 @@
     },
     {
       "path": "/api/cron/morning-summary",
-      "schedule": "0 11 * * *"
+      "schedule": "0 12 * * *"
     },
     {
       "path": "/api/cron/morning-summary?evening=true",
@@ -86,7 +86,7 @@
     },
     {
       "path": "/api/cron/aria-prospect",
-      "schedule": "0 9 * * *"
+      "schedule": "0 13 * * *"
     },
     {
       "path": "/api/cron/sync-submissions",

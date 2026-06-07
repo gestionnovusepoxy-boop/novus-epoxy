@@ -16,7 +16,7 @@ export const maxDuration = 60;
  */
 export async function GET(req: NextRequest) {
   const secret = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
-  if (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? '')) {
+  if (!secret || (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? ''))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
 
   // 3) Lead count for yesterday from CRM (leads that actually synced into our DB)
   const leadRows = await query(
-    `SELECT COUNT(*)::int AS n FROM crm_leads WHERE source IN ('facebook-leadad', 'facebook-zapier') AND created_at::date = $1::date`,
+    `SELECT COUNT(*)::int AS n FROM crm_leads WHERE source IN ('facebook-leadad', 'facebook-zapier') AND (created_at AT TIME ZONE 'America/Toronto')::date = $1::date`,
     [dateStr]
   );
   const totalLeads = Number((leadRows[0] as Record<string, unknown>).n ?? 0);
@@ -106,9 +106,10 @@ export async function GET(req: NextRequest) {
             SET spend_usd = $1,
                 impressions = $2,
                 clicks = $3,
+                leads_generated = $5,
                 updated_at = NOW()
           WHERE meta_campaign_id = $4`,
-        [spendUsd, Number(item.impressions ?? 0), Number(item.clicks ?? 0), item.campaign_id]
+        [spendUsd, Number(item.impressions ?? 0), Number(item.clicks ?? 0), item.campaign_id, metaFormFills(item)]
       ).catch(() => {});
     }
   }

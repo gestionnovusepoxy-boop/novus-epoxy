@@ -22,12 +22,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const depotAmount = formatMoney(Number(quote.depot_requis));
   const clientNom = escapeHtml(quote.client_nom as string);
 
-  // Notify admins on Telegram
+  // Notify admins on Telegram — UNE SEULE FOIS par jour (les liens sont prefetch/refresh par les
+  // clients et webmails, ce qui spammait le groupe + risquait des "Confirmer dépôt" accidentels).
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
   const adminIds = getAdminChatIds();
   const chatIds = groupId ? [groupId] : adminIds;
-  if (botToken) {
+  const today = new Date().toISOString().split('T')[0];
+  const alertKey = `interac_alert_${quoteId}`;
+  const lastAlert = await query(`SELECT value FROM kv_store WHERE key = $1`, [alertKey]).catch(() => []);
+  const alreadyAlerted = lastAlert.length > 0 && String(lastAlert[0].value ?? '').includes(today);
+  if (botToken && !alreadyAlerted) {
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [alertKey, JSON.stringify({ alerted_at: today })]
+    ).catch(() => {});
     const tgMsg = [
       `💸 <b>Virement Interac en route!</b>`,
       ``,

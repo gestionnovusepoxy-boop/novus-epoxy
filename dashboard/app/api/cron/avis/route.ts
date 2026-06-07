@@ -66,7 +66,13 @@ export async function GET(req: NextRequest) {
       );
       if (!details.length) continue;
       const d = details[0];
-      const balance = Number(d.total ?? 0) - Number(d.depot_requis ?? 0);
+      // Balance RÉELLE depuis les paiements (pas total - depot_requis qui assume un dépôt exact).
+      const paidRows = await query(
+        `SELECT COALESCE(SUM(p.montant),0) AS paid FROM payments p JOIN invoices i ON i.id = p.invoice_id WHERE i.quote_id = $1`,
+        [b.quote_id]
+      ).catch(() => [{ paid: 0 }]);
+      const totalPaid = Number((paidRows[0] as Record<string, unknown>)?.paid ?? 0);
+      const balance = Number(d.total ?? 0) - totalPaid;
       const prenom = (d.client_nom as string).split(' ')[0];
 
       // Telegram alert to admins — job done, balance pending
@@ -75,7 +81,7 @@ export async function GET(req: NextRequest) {
           `✅ <b>Travaux terminés!</b>`,
           ``,
           `👤 ${d.client_nom}`,
-          `💰 Balance en attente: <b>${formatMoney(balance)}</b>`,
+          balance > 0 ? `💰 Balance en attente: <b>${formatMoney(balance)}</b>` : `✅ Payé en entier`,
           `📋 Devis #${b.quote_id}`,
         ].join('\n'),
         {

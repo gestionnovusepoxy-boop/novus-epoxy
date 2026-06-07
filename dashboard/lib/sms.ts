@@ -1,6 +1,7 @@
 // Twilio SMS integration for Novus Epoxy
 // Sends notifications to admin and follow-ups to clients
 import { getQuebecHour } from '@/lib/timezone';
+import { createHash } from 'crypto';
 
 const TWILIO_SID = () => process.env.TWILIO_ACCOUNT_SID ?? '';
 const TWILIO_TOKEN = () => process.env.TWILIO_AUTH_TOKEN ?? '';
@@ -62,7 +63,9 @@ export async function sendSMS(to: string, body: string, fromOverride?: string, s
   } catch { /* daily limit check failed — proceed */ }
 
   // Dedup check — prevent sending same SMS to same number within 6 hours
-  const dedupeKey = `sms_dedup_${phone}_${Buffer.from(body.substring(0, 50)).toString('base64').substring(0, 20)}`;
+  // Hash du body COMPLET — sinon deux messages qui partagent le même préfixe ("Salut {prenom}...")
+  // collisionnent et le 2e (ex: rappel jour-2) est silencieusement supprimé.
+  const dedupeKey = `sms_dedup_${phone}_${createHash('sha1').update(body).digest('hex').slice(0, 24)}`;
   try {
     const { query: dbQ } = await import('@/lib/db');
     const existing = await dbQ(

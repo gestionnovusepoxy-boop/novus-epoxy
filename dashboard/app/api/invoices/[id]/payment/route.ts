@@ -29,9 +29,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!type || !methode) {
     return NextResponse.json({ error: 'type et methode requis' }, { status: 400 });
   }
-  if (!['depot', 'partial', 'final'].includes(type)) {
-    return NextResponse.json({ error: 'Type invalide (depot, partial ou final)' }, { status: 400 });
+  if (!['depot', 'partial', 'partiel', 'final'].includes(type)) {
+    return NextResponse.json({ error: 'Type invalide (depot, partiel ou final)' }, { status: 400 });
   }
+  // La contrainte DB attend 'partiel' (français) — on normalise 'partial' -> 'partiel'.
+  const dbType = type === 'partial' ? 'partiel' : type;
   if (!['virement', 'cheque', 'comptant', 'autre'].includes(methode)) {
     return NextResponse.json({ error: 'Méthode de paiement invalide' }, { status: 400 });
   }
@@ -72,7 +74,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   await query(
     `INSERT INTO payments (invoice_id, type, montant, methode, reference, notes, paid_at)
      VALUES ($1,$2,$3,$4,$5,$6,NOW())`,
-    [invoiceId, type, amountToRecord, methode, reference ?? null, notes ?? null],
+    [invoiceId, dbType, amountToRecord, methode, reference ?? null, notes ?? null],
   );
 
   // Mises à jour facture selon le type

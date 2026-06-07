@@ -29,7 +29,11 @@ export async function GET(req: NextRequest) {
     // Check if today is the right day
     let shouldCreate = false;
     if (freq === 'mensuel' && dayOfMonth === targetDay) {
-      shouldCreate = true;
+      // Garde anti-doublon: ne pas re-créer si une dépense a déjà été créée ce mois-ci.
+      const dc = r.derniere_creation ? new Date(r.derniere_creation as string) : null;
+      const nowQc = getQuebecNow();
+      const alreadyThisMonth = !!dc && dc.getMonth() === nowQc.getMonth() && dc.getFullYear() === nowQc.getFullYear();
+      shouldCreate = !alreadyThisMonth;
     } else if (freq === 'hebdomadaire') {
       // Create every week on the same weekday as jour_du_mois (1=Monday...7=Sunday)
       const todayWeekday = getQuebecDay() || 7; // Convert 0 (Sunday) to 7

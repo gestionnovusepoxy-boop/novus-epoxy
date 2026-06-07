@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 
-const VALID_STATUT = ['nouveau', 'offre_envoyee', 'contacte', 'devis_envoye', 'rdv_pris', 'ferme', 'gagne'] as const;
+const VALID_STATUT = ['nouveau', 'offre_envoyee', 'contacte', 'devis_envoye', 'rdv_pris', 'ferme', 'gagne', 'mauvais_contact', 'perdu', 'interesse', 'converti', 'complete'] as const;
 const VALID_TEMP   = ['chaud', 'tiede', 'froid'] as const;
 
 // --- Lead validation ---

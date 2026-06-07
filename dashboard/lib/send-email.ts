@@ -98,10 +98,13 @@ export async function sendEmail({
     return await sendViaGmail({ to, subject, html, replyTo, cc, bcc, attachments });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    // Fire-and-forget detection: if invalid_grant, persist flag + alert (deduped per day)
+    // RÈGLE DURE: tous les emails partent de gestionnovusepoxy@gmail.com via Gmail.
+    // JAMAIS de fallback Resend (info@novusepoxy.shop violerait la règle d'identité).
+    // handleGmailAuthError persiste le flag gmail_oauth_broken + alerte Telegram (dédupé/jour)
+    // pour qu'un humain ré-autorise. On relance l'erreur au lieu d'envoyer du mauvais expéditeur.
     void handleGmailAuthError(err);
-    console.log(`[sendEmail] Gmail failed (${msg.slice(0, 100)}), fallback Resend`);
-    return sendViaResend({ to, subject, html, replyTo, cc, attachments });
+    console.error(`[sendEmail] Gmail failed (${msg.slice(0, 120)}) — NO Resend fallback, rethrowing`);
+    throw err;
   }
 }
 

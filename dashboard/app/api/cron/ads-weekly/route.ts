@@ -16,7 +16,7 @@ export const maxDuration = 300;
  */
 export async function GET(req: NextRequest) {
   const secret = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
-  if (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? '')) {
+  if (!secret || (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? ''))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -35,8 +35,15 @@ export async function GET(req: NextRequest) {
     if (rows[0]?.service) pickedService = String(rows[0].service);
   } catch { /* fallback to default */ }
 
+  // crm_leads.service est du texte libre — on valide contre la liste permise sinon buildAdDraft
+  // reçoit un service bidon (ex: "Facebook Lead Ad") et casse les labels/heros.
+  const ALLOWED_AD_SERVICES = ['flake', 'metallique', 'quartz', 'couleur_unie', 'antiderapant', 'commercial', 'meulage', 'vinyl_click'] as const;
+  const safeService = (ALLOWED_AD_SERVICES as readonly string[]).includes(pickedService)
+    ? (pickedService as (typeof ALLOWED_AD_SERVICES)[number])
+    : 'flake';
+
   try {
-    const draft = await buildAdDraft({ service: pickedService as 'flake', dailyBudgetUsd: 50, durationDays: 7 });
+    const draft = await buildAdDraft({ service: safeService, dailyBudgetUsd: 50, durationDays: 7 });
     const chatId = process.env.TELEGRAM_GROUP_CHAT_ID;
     if (chatId) await sendDraftToTelegram(draft, chatId);
     return NextResponse.json({ ok: true, picked: pickedService, draft_id: draft.id });

@@ -24,7 +24,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const smsOnly = !!(body as Record<string, unknown>).sms_only;
 
   const rows = await query(
-    `SELECT inv.*, c.nom AS client_nom, c.email AS client_email,
+    `SELECT inv.*, c.nom AS client_nom, c.email AS client_email, c.telephone AS client_tel,
             q.secret_token AS quote_token, q.id AS quote_id
      FROM invoices inv
      JOIN clients c ON c.id = inv.client_id

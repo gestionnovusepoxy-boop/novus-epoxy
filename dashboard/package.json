@@ -8,7 +8,7 @@
     "postbuild": "next-sitemap",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/pricing.invariants.test.mjs tests/sms-classifier.test.mjs"
+    "test": "node --test tests/pricing.invariants.test.mjs tests/sms-classifier.test.mjs tests/money.test.mjs tests/lead-scoring.test.mjs tests/calendar-links.test.mjs tests/auto-description.test.mjs tests/promotions.test.mjs tests/invoice-numero.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",

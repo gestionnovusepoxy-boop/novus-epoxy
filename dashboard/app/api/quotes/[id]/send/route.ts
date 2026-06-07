@@ -37,7 +37,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     }
   }
 
-  const service = SERVICES[quote.type_service as ServiceType];
+  // Fallback si type_service inconnu (un PATCH a pu mettre une valeur hors SERVICES) — évite le crash sur .label
+  const service = SERVICES[quote.type_service as ServiceType]
+    ?? ({ label: String(quote.type_service ?? 'Service') } as unknown as (typeof SERVICES)[ServiceType]);
   const secretToken = quote.secret_token as string;
   const logoSrc = 'https://novus-epoxy.vercel.app/logo-email.jpg';
   const ts = Date.now();

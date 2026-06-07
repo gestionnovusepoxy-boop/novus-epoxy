@@ -47,7 +47,6 @@ export async function GET(req: NextRequest) {
 <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
 <p style="margin:0 0 4px;font-weight:700;color:#92400e;">Modes de paiement:</p>
 <p style="margin:2px 0;color:#78716c;font-size:13px;">Virement Interac (0 frais): gestionnovusepoxy@gmail.com</p>
-<p style="margin:2px 0;color:#78716c;font-size:13px;">Carte de credit via le lien dans votre espace client</p>
 </div>
 <p style="color:#64748b;font-size:13px;">Questions? Appelez Luca: 581-307-5983</p>
 </div>`,
@@ -93,7 +92,6 @@ export async function GET(req: NextRequest) {
 <div style="background:#fffbeb;border:1px solid #f59e0b;border-radius:8px;padding:16px;margin:16px 0;">
 <p style="margin:0 0 4px;font-weight:700;color:#92400e;">Modes de paiement:</p>
 <p style="margin:2px 0;color:#78716c;font-size:13px;">Virement Interac (0 frais): gestionnovusepoxy@gmail.com</p>
-<p style="margin:2px 0;color:#78716c;font-size:13px;">Carte de credit via votre espace client</p>
 </div>
 <p style="color:#64748b;font-size:13px;">Questions? Appelez Luca: 581-307-5983</p>
 </div>`,

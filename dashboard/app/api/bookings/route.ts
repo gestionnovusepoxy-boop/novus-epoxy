@@ -320,7 +320,7 @@ export async function POST(req: NextRequest) {
             </div>
             <div style="background:white;padding:16px;border-radius:8px;margin:16px 0;">
               <p style="margin:4px 0;font-size:16px;"><strong>Jour 1 (prep):</strong> ${fmt(j1)} — ${slot1Label}</p>
-              <p style="margin:4px 0;font-size:16px;"><strong>Jour 2 (finition):</strong> ${fmt(j2)} — ${slotLabel}</p>
+              ${jour2Date ? `<p style="margin:4px 0;font-size:16px;"><strong>Jour 2 (finition):</strong> ${fmt(j2)} — ${slotLabel}</p>` : ''}
             </div>
             <a href="https://novus-epoxy.vercel.app/dashboard/calendrier" style="background:#f59e0b;color:#0f172a;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;margin-right:8px;">Voir le calendrier</a>
             <a href="https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}" style="background:#1e293b;color:white;padding:12px 24px;border-radius:8px;text-decoration:none;font-weight:600;display:inline-block;">Voir le devis</a>
@@ -353,7 +353,7 @@ export async function POST(req: NextRequest) {
 <div style="background:#f0fdf4;border:1px solid #22c55e;border-radius:8px;padding:16px;margin:0 0 16px;">
 <p style="margin:0 0 6px;font-weight:700;color:#166534;">Dates provisoires :</p>
 <p style="margin:0 0 4px;color:#1e293b;">📆 <strong>Jour 1 (preparation):</strong> ${fmtDate(j1)} — ${slot1Text}</p>
-<p style="margin:0;color:#1e293b;">📆 <strong>Jour 2 (finition):</strong> ${fmtDate(j2)} — ${slotText}</p>
+${jour2Date ? `<p style="margin:0;color:#1e293b;">📆 <strong>Jour 2 (finition):</strong> ${fmtDate(j2)} — ${slotText}</p>` : ''}
 </div>
 <div style="background:#f1f5f9;border-radius:8px;padding:16px;margin:0 0 16px;">
 <p style="margin:0 0 4px;color:#1e293b;font-weight:700;">Prochaine etape :</p>
@@ -376,7 +376,7 @@ export async function POST(req: NextRequest) {
 
   // SMS to admins (both Luca + Jason) with dashboard link
   const adminPhones = [process.env.ADMIN_PHONE, process.env.JASON_PHONE].filter(Boolean) as string[];
-  const smsText = `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} ${slotShortOf(jour1Slot)}, Jour 2: ${jour2Date} ${slotShortOf(jour2Slot)}. Devis #${quoteId}\n${process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app'}/dashboard/devis`;
+  const smsText = `Novus Epoxy: ${q.client_nom} a reserve ses travaux! Jour 1: ${jour1Date} ${slotShortOf(jour1Slot)}${jour2Date ? `, Jour 2: ${jour2Date} ${slotShortOf(jour2Slot)}` : ''}. Devis #${quoteId}\n${process.env.NEXTAUTH_URL ?? 'https://novus-epoxy.vercel.app'}/dashboard/devis`;
   await Promise.all(adminPhones.map(phone => sendSMS(phone, smsText).catch(() => {})));
 
   // Telegram to admins

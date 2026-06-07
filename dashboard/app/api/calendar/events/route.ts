@@ -163,12 +163,12 @@ export async function PUT(req: NextRequest) {
 
   // Check if it's a booking event or manual event
   if (String(id).startsWith('booking-')) {
-    // Parse booking ID and jour
-    const match = String(id).match(/booking-(\d+)-(j[12])/);
+    // Parse booking ID and jour — supporte j1, j2 ET j3+ (extra_days des chantiers multi-jours)
+    const match = String(id).match(/booking-(\d+)-j(\d+)/);
     if (!match) return NextResponse.json({ error: 'ID invalide' }, { status: 400 });
 
     const bookingId = parseInt(match[1]);
-    const jour = match[2]; // j1 or j2
+    const jourNum = parseInt(match[2]); // 1, 2, 3, ...
 
     // Extract date and time directly from the ISO string to avoid timezone shifts
     const dateStr = String(start).slice(0, 10); // "2026-05-09"
@@ -180,10 +180,20 @@ export async function PUT(req: NextRequest) {
     const isFullDay = startHour <= 8 && endHour >= 16;
     const slot = isFullDay ? 'journee' : startHour < 12 ? 'matin' : 'apres-midi';
 
-    if (jour === 'j1') {
+    if (jourNum === 1) {
       await query(`UPDATE bookings SET jour1_date = $1, jour1_slot = $2 WHERE id = $3`, [dateStr, slot, bookingId]);
-    } else {
+    } else if (jourNum === 2) {
       await query(`UPDATE bookings SET jour2_date = $1, jour2_slot = $2 WHERE id = $3`, [dateStr, slot, bookingId]);
+    } else {
+      // jour 3+ → met à jour l'entrée correspondante dans extra_days (JSONB), index = jourNum-3
+      const idx = jourNum - 3;
+      const bRows = await query(`SELECT extra_days FROM bookings WHERE id = $1`, [bookingId]);
+      const extra = Array.isArray(bRows[0]?.extra_days) ? (bRows[0].extra_days as Array<{ date: string; slot: string }>) : [];
+      if (idx < 0 || idx >= extra.length) {
+        return NextResponse.json({ error: 'Jour hors limites' }, { status: 400 });
+      }
+      extra[idx] = { date: dateStr, slot };
+      await query(`UPDATE bookings SET extra_days = $1 WHERE id = $2`, [JSON.stringify(extra), bookingId]);
     }
 
     return NextResponse.json({ ok: true });
