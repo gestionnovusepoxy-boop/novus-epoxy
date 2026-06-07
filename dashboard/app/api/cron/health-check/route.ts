@@ -552,28 +552,53 @@ export async function GET(req: NextRequest) {
   const warnings = failures.filter(c => c.severity === 'warning');
   const autoFixes = checks.filter(c => c.autoFixed);
 
-  // Alert on critical or multiple warnings
-  if (criticals.length > 0) {
+  // ── ANTI-SPAM ──────────────────────────────────────────────────────────────
+  // Le cron roule CHAQUE HEURE. Sans dédup, un problème persistant (ex: "aucun lead
+  // FB depuis 145h") était renvoyé 24x/jour. On envoie seulement quand l'ENSEMBLE des
+  // problèmes CHANGE, ou une fois par jour max (rappel quotidien). L'empreinte ignore
+  // le détail (qui contient les heures qui défilent) — uniquement les NOMS + sévérité.
+  const wantsAlert = criticals.length > 0 || warnings.length >= 2;
+  const fingerprint = failures.map(f => `${f.severity ?? 'info'}:${f.name}`).sort().join('|');
+  const today = new Date().toISOString().split('T')[0];
+  let shouldAlert = false;
+  if (wantsAlert) {
+    const prev = await query(`SELECT value FROM kv_store WHERE key = 'echo_last_alert'`).catch(() => []);
+    let prevFp = '', prevDate = '';
+    if (prev.length) {
+      try { const o = JSON.parse(String(prev[0].value)); prevFp = o.fp ?? ''; prevDate = o.date ?? ''; } catch { /* ignore */ }
+    }
+    // Alerte si: nouvel ensemble de problèmes, OU nouveau jour (1 rappel/jour pour un problème persistant).
+    shouldAlert = fingerprint !== prevFp || today !== prevDate;
+    if (shouldAlert) {
+      await query(
+        `INSERT INTO kv_store (key, value) VALUES ('echo_last_alert', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+        [JSON.stringify({ fp: fingerprint, date: today })]
+      ).catch(() => {});
+    }
+  }
+
+  if (shouldAlert && criticals.length > 0) {
     const msg = [
-      `🚨 *ECHO — ALERTE CRITIQUE*`,
+      `🚨 ECHO — ALERTE CRITIQUE`,
       ``,
-      ...criticals.map(f => `❌ *${f.name}*: ${f.detail}`),
-      ...(warnings.length > 0 ? ['', ...warnings.map(f => `⚠️ *${f.name}*: ${f.detail}`)] : []),
+      ...criticals.map(f => `❌ ${f.name}: ${f.detail}`),
+      ...(warnings.length > 0 ? ['', ...warnings.map(f => `⚠️ ${f.name}: ${f.detail}`)] : []),
       ...(autoFixes.length > 0 ? ['', `🔧 Auto-repare: ${autoFixes.map(f => f.name).join(', ')}`] : []),
       '',
       `Score: ${checks.length - failures.length}/${checks.length}`,
     ].join('\n');
     await notifyTelegram(msg);
-  } else if (warnings.length >= 2) {
+  } else if (shouldAlert && warnings.length >= 2) {
     const msg = [
-      `⚠️ *ECHO — Avertissements*`,
+      `⚠️ ECHO — Avertissements`,
       ``,
-      ...warnings.map(f => `⚠️ *${f.name}*: ${f.detail}`),
+      ...warnings.map(f => `⚠️ ${f.name}: ${f.detail}`),
       ...(autoFixes.length > 0 ? ['', `🔧 Auto-repare: ${autoFixes.map(f => f.name).join(', ')}`] : []),
     ].join('\n');
     await notifyTelegram(msg);
   }
-  // Si tout va bien (même avec auto-fixes) → pas de message. Echo parle seulement quand ça casse.
+  // Si tout va bien, ou si le même problème a déjà été signalé aujourd'hui → silence.
+  // Echo parle seulement quand ça casse, et UNE fois par problème par jour.
 
   return NextResponse.json({
     ok: failures.length === 0,
