@@ -20,6 +20,12 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Génération auto de pubs DÉSACTIVÉE — Luca gère ses pubs manuellement dans Ads Manager.
+  // Réactiver via ADS_AUTOMATION_ENABLED=true.
+  if (process.env.ADS_AUTOMATION_ENABLED !== 'true') {
+    return NextResponse.json({ ok: true, skipped: 'ads automation disabled' });
+  }
+
   // Pick the service with most converting leads in last 30d (chaud + has quote)
   let pickedService = 'flake'; // default
   try {

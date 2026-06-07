@@ -15,6 +15,11 @@ const NOVUS_PAGE_ID = '636757822863288';
 // Default Lead Ad form (already active, wired to /api/meta/webhook)
 const DEFAULT_LEAD_FORM_ID = '1645385520039445';
 
+// KILL-SWITCH: l'automation des pubs (créer/publier/pauser des campagnes sur Meta) est
+// DÉSACTIVÉE par défaut. Les pubs auto-générées performaient mal et brûlaient le budget.
+// Luca gère ses pubs manuellement dans Ads Manager. Pour réactiver: ADS_AUTOMATION_ENABLED=true.
+const ADS_AUTOMATION_ENABLED = process.env.ADS_AUTOMATION_ENABLED === 'true';
+
 export interface AdDraftInput {
   service: 'flake' | 'metallique' | 'quartz' | 'couleur_unie' | 'antiderapant' | 'commercial' | 'meulage' | 'vinyl_click';
   dailyBudgetUsd?: number;
@@ -519,6 +524,7 @@ export async function sendDraftToTelegram(draft: AdDraft, chatId: string): Promi
  * Returns array of paused campaign IDs.
  */
 export async function pausePreviousLaunchedAds(service?: string): Promise<{ paused: string[]; failed: Array<{ id: string; error: string }> }> {
+  if (!ADS_AUTOMATION_ENABLED) return { paused: [], failed: [] }; // kill-switch: ne touche plus aux campagnes Meta
   const token = (process.env.META_PAGE_TOKEN ?? '').trim();
   if (!token) return { paused: [], failed: [] };
 
@@ -566,6 +572,7 @@ export async function pausePreviousLaunchedAds(service?: string): Promise<{ paus
  * has limited access. Returns what was found + paused.
  */
 export async function pauseAllActiveCampaigns(): Promise<{ paused: string[]; failed: Array<{ id: string; error: string }>; listError?: string }> {
+  if (!ADS_AUTOMATION_ENABLED) return { paused: [], failed: [], listError: 'Automation pubs désactivée' };
   const token = (process.env.META_PAGE_TOKEN ?? '').trim();
   const adAccountId = (process.env.META_AD_ACCOUNT_ID ?? '').trim().replace(/^act_/, '');
   if (!token || !adAccountId) return { paused: [], failed: [], listError: 'token or ad account missing' };
@@ -655,6 +662,9 @@ export async function buildAdsManagerPrefillUrl(draftId: number): Promise<string
  * Requires AD_ACCOUNT_ID env. Returns Meta IDs.
  */
 export async function createMetaCampaignPaused(draftId: number): Promise<{ campaignId?: string; adsetId?: string; adId?: string; error?: string; needsAdsManagement?: boolean }> {
+  if (!ADS_AUTOMATION_ENABLED) {
+    return { error: '🛑 Automation des pubs DÉSACTIVÉE. Crée la pub manuellement dans Ads Manager — le système ne publie plus sur Meta.', needsAdsManagement: true };
+  }
   const token = (process.env.META_PAGE_TOKEN ?? '').trim();
   const adAccountId = (process.env.META_AD_ACCOUNT_ID ?? '').trim().replace(/^act_/, '');
   if (!token) return { error: 'META_PAGE_TOKEN missing' };
@@ -669,9 +679,8 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
   // when we let user customize targeting via UI.
   const targeting = DEFAULT_TARGETING;
 
-  // All entities use same status — ACTIVE by default (user approved via Telegram),
-  // override via META_ADS_DEFAULT_STATUS=PAUSED for safety gate.
-  const entityStatus = (process.env.META_ADS_DEFAULT_STATUS ?? 'ACTIVE').toUpperCase();
+  // PAUSED par défaut — JAMAIS publier ACTIVE automatiquement (ça brûlait le budget sur du créatif poche).
+  const entityStatus = (process.env.META_ADS_DEFAULT_STATUS ?? 'PAUSED').toUpperCase();
 
   try {
     // 1) Create campaign — ACTIVE by default

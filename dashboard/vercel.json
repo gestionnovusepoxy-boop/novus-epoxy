@@ -115,10 +115,6 @@
     {
       "path": "/api/cron/meta-ads-spend",
       "schedule": "0 10 * * *"
-    },
-    {
-      "path": "/api/cron/ads-weekly",
-      "schedule": "0 14 * * 1"
     }
   ],
   "headers": [
