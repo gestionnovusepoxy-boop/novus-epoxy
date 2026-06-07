@@ -95,7 +95,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   };
   const j1Fmt = booking ? fmt(booking.jour1_date) : '';
   const j2Fmt = booking ? fmt(booking.jour2_date) : '';
-  const slotLabel = booking ? (booking.jour2_slot === 'matin' ? '8h-12h' : '12h-16h') : '';
+  const slotLabel = booking
+    ? (booking.jour2_slot === 'matin' ? '8h-12h' : booking.jour2_slot === 'journee' ? '8h-17h' : '13h-17h')
+    : '';
 
   // Send confirmation email to client
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 'https://novus-epoxy.vercel.app';

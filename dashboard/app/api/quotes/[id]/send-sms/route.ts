@@ -17,7 +17,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     return NextResponse.json({ error: 'Pas de numero de telephone pour ce client' }, { status: 400 });
   }
 
-  const service = SERVICES[quote.type_service as ServiceType];
+  const service = SERVICES[quote.type_service as ServiceType]
+    ?? ({ label: String(quote.type_service ?? 'Service') } as unknown as (typeof SERVICES)[ServiceType]);
   const secretToken = quote.secret_token as string;
   const solde70 = formatMoney(Number(quote.total) - Number(quote.depot_requis));
 

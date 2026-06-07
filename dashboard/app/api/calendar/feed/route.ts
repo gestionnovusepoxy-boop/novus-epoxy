@@ -34,11 +34,13 @@ export async function GET(req: NextRequest) {
   ];
 
   for (const b of bookings) {
-    const clientName = b.client_nom as string;
-    const address = (b.client_adresse as string) || 'Adresse non specifiee';
-    const tel = (b.client_tel as string) || '';
-    const service = b.type_service as string;
-    const sqft = b.superficie;
+    // Échappement iCal RFC 5545 — les adresses québécoises contiennent des virgules qui corrompaient le feed.
+    const esc = (s: unknown) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+    const clientName = esc(b.client_nom as string);
+    const address = esc((b.client_adresse as string) || 'Adresse non specifiee');
+    const tel = esc((b.client_tel as string) || '');
+    const service = esc(b.type_service as string);
+    const sqft = esc(b.superficie);
     const quoteId = b.quote_id;
 
     const slotTimes = (s: string): [string, string, string] =>

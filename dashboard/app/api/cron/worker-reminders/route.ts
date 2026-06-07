@@ -17,7 +17,7 @@ export const maxDuration = 60;
  */
 export async function GET(req: NextRequest) {
   const secret = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
-  if (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? '')) {
+  if (!secret || (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? ''))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -49,11 +49,19 @@ export async function GET(req: NextRequest) {
     const employeeIds = (r.employees_assignes ?? []) as number[];
     if (!employeeIds.length) continue;
 
+    // Élargi: pas seulement 'sous-traitant' — un worker assigné avec un autre rôle recevait rien.
+    // Requiert seulement: actif + un téléphone valide.
     const empRows = await query(
-      `SELECT id, nom, telephone, role FROM employees WHERE id = ANY($1::int[]) AND actif = TRUE AND role = 'sous-traitant'`,
+      `SELECT id, nom, telephone, role FROM employees
+        WHERE id = ANY($1::int[]) AND actif = TRUE
+          AND role IN ('sous-traitant','installateur','aide')
+          AND telephone IS NOT NULL AND TRIM(telephone) != ''`,
       [employeeIds]
     );
-    if (!empRows.length) continue;
+    if (!empRows.length) {
+      console.warn(`[worker-reminders] booking #${r.booking_id} a des assignés mais aucun employé actif avec téléphone+rôle valide`);
+      continue;
+    }
 
     const client = String(r.client_nom ?? 'Client');
     const adresse = String(r.client_adresse ?? 'adresse à confirmer');

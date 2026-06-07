@@ -63,7 +63,7 @@ const LEAD_ACTION_TYPES = ['lead', 'leadgen_grouped', 'onsite_conversion.lead_gr
 
 export async function GET(req: NextRequest) {
   const secret = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
-  if (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? '')) {
+  if (!secret || (secret !== (process.env.CRON_SECRET ?? '') && secret !== (process.env.ADMIN_API_KEY ?? ''))) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
@@ -82,7 +82,7 @@ export async function GET(req: NextRequest) {
   const items = data.data ?? [];
 
   // Get active ad set statuses (so we don't alert on already-paused ones)
-  const statusUrl = `https://graph.facebook.com/v25.0/act_${adAccountId}/adsets?fields=id,name,status,effective_status,created_time&effective_status=['ACTIVE','PAUSED']&limit=200&access_token=${token}`;
+  const statusUrl = `https://graph.facebook.com/v25.0/act_${adAccountId}/adsets?fields=id,name,status,effective_status,created_time&effective_status=${encodeURIComponent(JSON.stringify(['ACTIVE', 'PAUSED']))}&limit=200&access_token=${token}`;
   const stRes = await fetch(statusUrl);
   type AdSetMeta = { id: string; status: string; effective_status: string; created_time: string };
   const stData = stRes.ok ? (await stRes.json()) as { data?: AdSetMeta[] } : { data: [] };
