@@ -725,7 +725,11 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
     });
     const adsetData = await adsetRes.json();
     if (!adsetRes.ok || !adsetData.id) {
-      return { error: `AdSet creation failed: ${adsetData.error?.message ?? JSON.stringify(adsetData)}` };
+      const e = adsetData.error ?? {};
+      // Code 200 = le token n'a pas ads_management. Signale-le clairement (pas un bug de param).
+      const detail = [e.message, e.error_user_title, e.error_user_msg].filter(Boolean).join(' — ');
+      const needsPerm = e.code === 200 || /ads_management|ads_read|permission/i.test(detail);
+      return { error: `AdSet creation failed: ${detail || JSON.stringify(adsetData)}`, needsAdsManagement: needsPerm };
     }
     const adsetId = adsetData.id;
 
