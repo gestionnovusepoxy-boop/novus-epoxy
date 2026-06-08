@@ -8,7 +8,7 @@
     "postbuild": "next-sitemap",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/pricing.invariants.test.mjs tests/sms-classifier.test.mjs tests/money.test.mjs tests/lead-scoring.test.mjs tests/calendar-links.test.mjs tests/auto-description.test.mjs tests/promotions.test.mjs tests/invoice-numero.test.mjs"
+    "test": "node --test tests/pricing.invariants.test.mjs tests/sms-classifier.test.mjs tests/money.test.mjs tests/lead-scoring.test.mjs tests/calendar-links.test.mjs tests/auto-description.test.mjs tests/promotions.test.mjs tests/invoice-numero.test.mjs tests/email-templates.test.mjs tests/torginol.test.mjs tests/sms-phone-validation.test.mjs tests/sms-guards.test.mjs tests/sms-messages.test.mjs tests/gmail-auth-error.test.mjs tests/auto-heal-logic.test.mjs tests/meta-ads-url.test.mjs tests/ensure-invoice.skeleton.test.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",

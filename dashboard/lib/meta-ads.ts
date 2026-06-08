@@ -66,6 +66,8 @@ const DEFAULT_TARGETING = {
   age_min: 30,
   age_max: 65,
   locales: [6, 24], // French (Canada), French
+  // Désactive l'audience auto Meta (sinon impossible de garder age_min 30 — propriétaires).
+  targeting_automation: { advantage_audience: 0 },
 };
 
 /** Pick best Sage portfolio image for a service (quality_score >= 9 preferred).
@@ -240,8 +242,10 @@ IMPORTANT: All text must be perfectly readable, in FRENCH (Quebec), no English w
 export async function generateAdCopy(service: string, options?: { promoPct?: number }): Promise<{ headline: string; primary_text: string; cta: string }> {
   const label = SERVICE_LABELS[service] ?? service;
   const promo = options?.promoPct ?? 0;
+  // Mois courant (Québec) — plus de "MAI" hardcodé.
+  const moisQc = new Date().toLocaleDateString('fr-CA', { month: 'long', timeZone: 'America/Toronto' }).toUpperCase();
   const promoLine = promo > 0
-    ? `RÈGLE ABSOLUE: la 1ère ligne du primary_text DOIT commencer par "SPÉCIAL MAI — ${promo}% rabais" pour créer l'urgence.`
+    ? `RÈGLE ABSOLUE: la 1ère ligne du primary_text DOIT commencer par "SPÉCIAL ${moisQc} — ${promo}% rabais" pour créer l'urgence.`
     : '';
 
   const system = `Tu es Luca, propriétaire de Novus Epoxy à Québec. Tu écris une pub Facebook qui te ressemble — direct, chaleureux, sans flafla corporate. Tu vises les propriétaires (30-65 ans) dans un rayon de 55km autour de Québec ville qui rêvent d'un beau garage/sous-sol.

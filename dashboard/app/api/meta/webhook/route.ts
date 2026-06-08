@@ -310,10 +310,15 @@ async function handleLeadgen(change: Record<string, unknown>) {
     const newLeadId = crmResult?.[0]?.id;
     if (newLeadId) {
       // 3. Auto-create draft quote if we have enough info (service + superficie >= 10)
+      // EXCEPTION balcon: prix custom + photos requises (workflow Marcel balcon-photo) → pas d'auto-devis.
+      // (antiderapant = fini broadcast, PAS un balcon — on détecte le balcon par le mot dans le formulaire.)
+      const isBalcon = /balcon/i.test(String(serviceRaw ?? ''))
+        || /balcon/i.test(String(espaceRaw ?? ''))
+        || /balcon/i.test(String(service ?? ''));
       let quoteId: number | null = null;
       let quoteTotal: number | undefined;
       const superficieNum = superficie ? Number(superficie) : 0;
-      if (service && superficieNum >= 10 && SERVICES[service as ServiceType]) {
+      if (!isBalcon && service && superficieNum >= 10 && SERVICES[service as ServiceType]) {
         try {
           // Active promo lookup
           let rabaisPct = 0;
