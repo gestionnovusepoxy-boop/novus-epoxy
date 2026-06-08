@@ -23,3 +23,10 @@ dashboard/tmp/
 dashboard/.claude-flow/
 .env*.local
 .env.vps
+
+# Daemon-generated audit artifacts (peuvent contenir des secrets — JAMAIS commit)
+SECURITY_AUDIT_REPORT.json
+*_AUDIT_REPORT.json
+.claude-flow/security/
+dashboard/scripts/get-*.mjs
+dashboard/scripts/diag-*.mjs

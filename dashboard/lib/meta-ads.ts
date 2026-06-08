@@ -345,31 +345,30 @@ export async function buildAdDraft(input: AdDraftInput): Promise<AdDraft> {
     if (p[0]) promoPct = Number(p[0].rabais_pct);
   } catch { /* no promo */ }
 
-  // Step 1: image — priorité custom upload, sinon LLM design (skip Sage = photo brute).
-  // Sage portfolio = photos client réelles, OK pour réf interne mais pas design publicitaire.
-  // Si pas de photo custom, force generation via GPT-5 Image avec branding Novus.
+  // Step 1: image — PRIORITÉ AUX VRAIES PHOTOS DU PORTFOLIO.
+  // Les images IA généraient du faux que personne croyait → 897 vues, 0 lead (mai 2026).
+  // Les vraies photos avant/après de planchers convertissent. Ordre: 1) photo custom uploadée,
+  // 2) vraie photo portfolio (Sage), 3) IA SEULEMENT en dernier recours si aucune vraie photo.
   let imageUrl: string | null = input.customImageUrl ?? null;
-  let imageSource: 'sage' | 'llm' = 'llm';
+  let imageSource: 'sage' | 'llm' = 'sage';
   let imagePrompt: string | undefined;
-  if (imageUrl) {
-    // Si user a uploadé via Telegram, label image_source='sage' pour la DB (legacy)
-    // mais en vrai c'est une photo qu'il a fourni
-    imageSource = 'sage';
-  } else {
-    // Force LLM gen — design un flyer avec branding au lieu de prendre photo Sage brute
-    const generated = await generateAdImage(service);
-    if (generated) {
-      imageUrl = generated.url;
-      imageSource = 'llm';
-      imagePrompt = generated.prompt;
-    } else {
-      // Dernier recours: Sage portfolio si LLM gen échoue
-      imageUrl = await pickSageImage(service);
+  if (!imageUrl) {
+    // Vraie photo du portfolio d'abord (c'est ce qui marche)
+    imageUrl = await pickSageImage(service);
+    if (imageUrl) {
       imageSource = 'sage';
+    } else {
+      // Aucune vraie photo pour ce service → dernier recours: génération IA
+      const generated = await generateAdImage(service);
+      if (generated) {
+        imageUrl = generated.url;
+        imageSource = 'llm';
+        imagePrompt = generated.prompt;
+      }
     }
   }
   if (!imageUrl) {
-    throw new Error(`No image available (LLM gen failed AND no Sage portfolio for ${service})`);
+    throw new Error(`No image available (no portfolio photo AND LLM gen failed for ${service})`);
   }
 
   // Step 2: copy
