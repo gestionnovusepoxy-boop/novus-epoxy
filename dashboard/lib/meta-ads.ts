@@ -523,7 +523,7 @@ export async function sendDraftToTelegram(draft: AdDraft, chatId: string): Promi
  * Returns array of paused campaign IDs.
  */
 export async function pausePreviousLaunchedAds(service?: string): Promise<{ paused: string[]; failed: Array<{ id: string; error: string }> }> {
-  if (!ADS_AUTOMATION_ENABLED) return { paused: [], failed: [] }; // kill-switch: ne touche plus aux campagnes Meta
+  // Ne pause QUE les anciennes pubs créées par le système (meta_ads_drafts), pas tes pubs manuelles.
   const token = (process.env.META_PAGE_TOKEN ?? '').trim();
   if (!token) return { paused: [], failed: [] };
 
@@ -661,9 +661,8 @@ export async function buildAdsManagerPrefillUrl(draftId: number): Promise<string
  * Requires AD_ACCOUNT_ID env. Returns Meta IDs.
  */
 export async function createMetaCampaignPaused(draftId: number): Promise<{ campaignId?: string; adsetId?: string; adId?: string; error?: string; needsAdsManagement?: boolean }> {
-  if (!ADS_AUTOMATION_ENABLED) {
-    return { error: '🛑 Automation des pubs DÉSACTIVÉE. Crée la pub manuellement dans Ads Manager — le système ne publie plus sur Meta.', needsAdsManagement: true };
-  }
+  // Note: lancement autorisé UNIQUEMENT via approbation humaine (bouton Telegram ✅).
+  // Le cron autonome (ads-weekly) reste désactivé séparément — pas de pub auto sans ton OK.
   const token = (process.env.META_PAGE_TOKEN ?? '').trim();
   const adAccountId = (process.env.META_AD_ACCOUNT_ID ?? '').trim().replace(/^act_/, '');
   if (!token) return { error: 'META_PAGE_TOKEN missing' };
@@ -678,8 +677,9 @@ export async function createMetaCampaignPaused(draftId: number): Promise<{ campa
   // when we let user customize targeting via UI.
   const targeting = DEFAULT_TARGETING;
 
-  // PAUSED par défaut — JAMAIS publier ACTIVE automatiquement (ça brûlait le budget sur du créatif poche).
-  const entityStatus = (process.env.META_ADS_DEFAULT_STATUS ?? 'PAUSED').toUpperCase();
+  // ACTIVE sur approbation humaine — tu approuves une bonne pub → elle part live direct pour générer des leads.
+  // (Le cron autonome reste OFF, donc ACTIVE n'arrive QUE quand TU tapes ✅.)
+  const entityStatus = (process.env.META_ADS_DEFAULT_STATUS ?? 'ACTIVE').toUpperCase();
 
   try {
     // 1) Create campaign — ACTIVE by default
