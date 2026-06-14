@@ -63,11 +63,12 @@ const DEFAULT_TARGETING = {
       { latitude: 46.8139, longitude: -71.2080, radius: 55, distance_unit: 'kilometer' },
     ],
   },
-  age_min: 30,
+  age_min: 25, // 25 = minimum permis avec Advantage+ audience
   age_max: 65,
   locales: [6, 24], // French (Canada), French
-  // Désactive l'audience auto Meta (sinon impossible de garder age_min 30 — propriétaires).
-  targeting_automation: { advantage_audience: 0 },
+  // Advantage+ audience ON — SINON Meta étouffe la livraison (pub stalle après ~1 jour, juin 2026).
+  // L'âge 25-65 devient une suggestion; Meta optimise vers qui convertit (45-65 en pratique).
+  targeting_automation: { advantage_audience: 1 },
 };
 
 /** Pick best Sage portfolio image for a service (quality_score >= 9 preferred).
