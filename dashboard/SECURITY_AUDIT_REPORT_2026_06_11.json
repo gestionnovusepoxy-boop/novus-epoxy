@@ -1,0 +1,316 @@
+{
+  "vulnerabilities": [
+    {
+      "severity": "high",
+      "file": "app/api/ads/upload-creative/route.ts",
+      "line": 35,
+      "description": "Server-Side Request Forgery (SSRF) vulnerability. The endpoint accepts a user-provided URL and fetches it without proper validation. An attacker could trigger requests to internal services or private networks.",
+      "category": "ssrf",
+      "remediation": "Validate the URL against a whitelist of allowed domains. Reject internal IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8, localhost). Use URL.hostname parsing and DNS rebinding protections."
+    },
+    {
+      "severity": "high",
+      "file": "app/api/invoices/[id]/route.ts",
+      "line": 64,
+      "description": "Origin header trust vulnerability. The code uses req.headers.get('origin') to construct fetch URLs without validation. An attacker could exploit this to redirect internal API calls to attacker-controlled servers.",
+      "category": "ssrf",
+      "remediation": "Use a hardcoded trusted origin (process.env.NEXTAUTH_URL or 'https://novus-epoxy.vercel.app') instead of trusting the Origin header. Never construct URLs from user-controlled input."
+    },
+    {
+      "severity": "medium",
+      "file": "app/api/chat/upload/route.ts",
+      "line": 39,
+      "description": "Potential path traversal vulnerability. While path.basename is used, the extension is extracted from user-provided filename without validation. An attacker could upload files with misleading extensions.",
+      "category": "path-traversal",
+      "remediation": "Validate file extensions against a whitelist (jpg, jpeg, png, gif, webp). Use crypto.randomUUID() for filenames instead of Date.now() + random string. Remove user-provided filename entirely."
+    },
+    {
+      "severity": "medium",
+      "file": "app/api/travaux/photos/route.ts",
+      "line": 72,
+      "description": "Potential path traversal via localDir parameter. The variable 'localDir' comes from form data and is concatenated into a file path without proper validation.",
+      "category": "path-traversal",
+      "remediation": "Validate localDir to ensure it only contains expected quote IDs. Use parseInt(quoteId) directly instead of passing localDir as a user parameter. Reject if localDir contains '/', '\\', or '..'."
+    },
+    {
+      "severity": "medium",
+      "file": "app/api/submissions/route.ts",
+      "line": 147,
+      "description": "Unsafe JSON parsing in callLLM response. The code removes markdown backticks and JSON markers before parsing without proper validation. Malformed LLM responses could crash the application.",
+      "category": "insecure-deserialization",
+      "remediation": "Use JSON schema validation (zod, ajv) to validate the parsed response structure. Add try-catch with proper error handling. Set a maximum string length for the response."
+    },
+    {
+      "severity": "medium",
+      "file": "app/api/meta/webhook/route.ts",
+      "line": 80,
+      "description": "Type assertion without validation. The code uses 'any' type and doesn't validate the webhook payload structure before using it. Malformed payloads could cause runtime errors.",
+      "category": "input-validation",
+      "remediation": "Use zod schema to validate the entire webhook payload. Define strict types for all fields. Add length limits on string fields. Validate email and phone formats."
+    },
+    {
+      "severity": "medium",
+      "file": "lib/llm.ts",
+      "line": 180,
+      "description": "API key exposed in HTTP headers. The OPENROUTER_API_KEY is sent as Bearer token in Authorization header. If HTTP is used or certificate pinning is not enforced, the key could be intercepted.",
+      "category": "hardcoded-secret",
+      "remediation": "Ensure HTTPS is enforced (already done). Consider implementing certificate pinning for critical API keys. Rotate API keys regularly. Monitor OpenRouter for unusual usage patterns."
+    },
+    {
+      "severity": "medium",
+      "file": "lib/auth.ts",
+      "line": 49,
+      "description": "Plaintext password storage via environment variables. While timing-safe comparison is implemented, plaintext passwords in .env files are still vulnerable to source code exposure or environment leakage.",
+      "category": "weak-authentication",
+      "remediation": "Migrate all plaintext passwords to bcrypt hashes. Generate hashes with: bcryptjs.hashSync(password, 10). Update the example in .env.example to show hash format only. Never accept plaintext passwords."
+    },
+    {
+      "severity": "medium",
+      "file": "middleware.ts",
+      "line": 5,
+      "description": "In-memory rate limiting is subject to memory leaks and bypassing via multiple processes. On Vercel Edge Functions or distributed deployments, rate limits apply per instance, not globally.",
+      "category": "rate-limiting",
+      "remediation": "Use Vercel's built-in rate limiting via Arcjet (already imported in lib/arcjet.ts but not consistently used). Or use Redis-backed rate limiting. Set MAX_RATE_LIMIT_ENTRIES to prevent memory DoS."
+    },
+    {
+      "severity": "medium",
+      "file": "app/api/crm/leads/route.ts",
+      "line": 35,
+      "description": "Insufficient input validation on lead scoring. Temperature auto-scoring uses keyword matching that is case-insensitive but doesn't sanitize the input before searching. Potential ReDoS via malicious notes field.",
+      "category": "input-validation",
+      "remediation": "Limit the length of notes field to 1000 characters. Use String.includes() with length checks instead of regex on user input. Add a maximum limit check before normalization."
+    },
+    {
+      "severity": "low",
+      "file": "app/layout.tsx",
+      "line": 1,
+      "description": "Inline script injection via dangerouslySetInnerHTML. While the service worker registration is safe, this sets a precedent for unsafe patterns. If copied elsewhere, could enable XSS.",
+      "category": "xss",
+      "remediation": "Move the service worker registration to a separate script tag in app/layout.tsx using the 'next/script' component with strategy='afterInteractive'. Avoid dangerouslySetInnerHTML entirely."
+    },
+    {
+      "severity": "low",
+      "file": "app/dashboard/crm/[id]/conversations/page.tsx",
+      "line": 1,
+      "description": "HTML content rendered via dangerouslySetInnerHTML from email body. If emails contain user-generated HTML, this could enable XSS attacks through stored email content.",
+      "category": "xss",
+      "remediation": "Sanitize the email body using DOMPurify or html-react-parser with strict whitelist. Only allow safe HTML tags (p, br, strong, em, u). Strip all event handlers and scripts."
+    },
+    {
+      "severity": "low",
+      "file": "app/dashboard/mission-control/MissionControlClient.tsx",
+      "line": 1,
+      "description": "Direct innerHTML assignment from user data. Setting innerHTML from error handler could allow XSS if agent.name contains malicious HTML.",
+      "category": "xss",
+      "remediation": "Use React state to manage the display instead of innerHTML. Use element.textContent instead of innerHTML for plain text. Apply escapeHtml() before any HTML content."
+    },
+    {
+      "severity": "low",
+      "file": "package.json",
+      "line": 18,
+      "description": "Vulnerable dependency: @ai-sdk/provider-utils <= 3.0.97 has uncontrolled resource consumption (CVE). Affects @ai-sdk/anthropic, @ai-sdk/react, ai@4.3.19.",
+      "category": "dependency",
+      "remediation": "Update ai to >= 6.0.202 (breaking change, requires code migration). Or wait for @ai-sdk/provider-utils >= 3.0.98 patch."
+    },
+    {
+      "severity": "low",
+      "file": "app/api/invoices/[id]/send/route.ts",
+      "line": 1,
+      "description": "Missing CSRF protection on state-changing API routes. POST/PATCH/DELETE endpoints don't validate origin or include CSRF tokens. NextAuth session provides some protection but not explicit CSRF tokens.",
+      "category": "csrf",
+      "remediation": "Implement SameSite=Strict cookie policy (already set by NextAuth). Add explicit CSRF token validation for sensitive operations. Validate Origin header matches NEXTAUTH_URL."
+    },
+    {
+      "severity": "low",
+      "file": "lib/send-email.ts",
+      "line": 48,
+      "description": "Gmail OAuth token storage in environment variables without encryption. Refresh tokens are sensitive and should be encrypted at rest in the database, not in plaintext .env.",
+      "category": "secrets-management",
+      "remediation": "Store GOOGLE_REFRESH_TOKEN encrypted in the database with symmetric encryption (ChaCha20Poly1305 or AES-256-GCM). Decrypt only when needed. Rotate tokens every 30 days."
+    },
+    {
+      "severity": "low",
+      "file": "app/api/quotes/route.ts",
+      "line": 74,
+      "description": "Input validation bypass risk. The rabais_pct parameter is parsed with parseFloat() without checking for NaN, Infinity, or very large negative numbers.",
+      "category": "input-validation",
+      "remediation": "Add explicit checks: isNaN(rabaisPct), !isFinite(rabaisPct), Math.abs(rabaisPct) <= 100. Return 400 error for invalid discount percentages. Add min/max bounds validation."
+    },
+    {
+      "severity": "low",
+      "file": "app/api/leads/zapier/route.ts",
+      "line": 46,
+      "description": "API key exposed via query parameter fallback. While header-based auth is preferred, accepting api_key from searchParams allows it to leak into logs, browser history, and referrer headers.",
+      "category": "secrets-management",
+      "remediation": "Remove query parameter auth completely. Only accept x-api-key header. Log a warning if api_key is present in searchParams. Add Content-Security-Policy header to prevent referrer leaks."
+    },
+    {
+      "severity": "low",
+      "file": "lib/agent.ts",
+      "line": 1,
+      "description": "Insufficient error handling for Telegram API failures. Errors are silently caught with .catch(() => {}) without logging or alerting. Silent failures could hide compromised tokens.",
+      "category": "error-handling",
+      "remediation": "Log all Telegram API errors to console.error with request details. Send one alert per day to admin if Telegram consistently fails. Implement circuit breaker pattern."
+    },
+    {
+      "severity": "low",
+      "file": "next.config.ts",
+      "line": 10,
+      "description": "Portfolio images allow cross-origin access via Access-Control-Allow-Origin: '*'. While images are not sensitive, this could enable CSRF attacks via image embedding.",
+      "category": "cors",
+      "remediation": "Restrict CORS to novusepoxy.ca only: 'https://novusepoxy.ca'. Or remove CORS header entirely since portfolio images are public. Use specific domain instead of wildcard."
+    },
+    {
+      "severity": "info",
+      "file": "lib/llm.ts",
+      "line": 111,
+      "description": "Daily LLM cost limit set to $10 USD (LLM_DAILY_CAP_USD). This is a good control but should be monitored. A single large request could trigger budget overages.",
+      "category": "cost-control",
+      "remediation": "Reduce LLM_DAILY_CAP_USD to $5 for development/testing. Add per-request limits (e.g., max_tokens <= 2000). Monitor actual costs daily via OpenRouter dashboard. Set alerts at 75% of budget."
+    },
+    {
+      "severity": "info",
+      "file": "app/api/meta/webhook/route.ts",
+      "line": 1,
+      "description": "Facebook webhook signature verification implemented but marked as 'fail-closed' with fallback cron. This is good defense-in-depth but should be documented.",
+      "category": "validation",
+      "remediation": "Add monitoring for signature verification failures. Alert if verification fails >5 times in 1 hour. Consider blocking webhook if signature consistently fails (possible config drift)."
+    }
+  ],
+  "summary": {
+    "totalVulnerabilities": 21,
+    "critical": 0,
+    "high": 2,
+    "medium": 8,
+    "low": 9,
+    "info": 2
+  },
+  "riskScore": 42,
+  "totalFiles": 17464,
+  "filesAnalyzed": 45,
+  "recommendations": [
+    {
+      "priority": "P0",
+      "title": "Fix SSRF vulnerability in ad creative upload",
+      "description": "Implement URL validation to prevent requests to internal services. Whitelist allowed domains and reject private IP ranges."
+    },
+    {
+      "priority": "P0",
+      "title": "Remove origin header trust in fetch URLs",
+      "description": "Use hardcoded trusted origin instead of trusting request headers. Critical for preventing internal API redirects."
+    },
+    {
+      "priority": "P1",
+      "title": "Migrate plaintext passwords to bcrypt",
+      "description": "Hash all admin and authorized user passwords using bcryptjs. Never store plaintext passwords in .env files."
+    },
+    {
+      "priority": "P1",
+      "title": "Validate all webhook payloads with zod schemas",
+      "description": "Add strict type validation for Meta, Zapier, and other webhook sources. Prevent malformed data from causing crashes or exploits."
+    },
+    {
+      "priority": "P1",
+      "title": "Remove dangerouslySetInnerHTML from email rendering",
+      "description": "Use DOMPurify or html-react-parser with whitelist to sanitize email HTML. Prevent stored XSS via email content."
+    },
+    {
+      "priority": "P2",
+      "title": "Encrypt sensitive tokens in database",
+      "description": "Move GOOGLE_REFRESH_TOKEN and other long-lived credentials from .env to encrypted database storage. Rotate tokens regularly."
+    },
+    {
+      "priority": "P2",
+      "title": "Remove API key query parameter support",
+      "description": "Only accept x-api-key header for authentication. Query parameter keys leak to logs, browser history, and referrer headers."
+    },
+    {
+      "priority": "P2",
+      "title": "Improve rate limiting for distributed deployments",
+      "description": "Use Arcjet or Redis-backed rate limiting consistently across all public endpoints. Current in-memory approach doesn't work across multiple server instances."
+    },
+    {
+      "priority": "P3",
+      "title": "Validate file extensions and sanitize uploads",
+      "description": "Use whitelist of allowed file extensions (.jpg, .png, .gif, .webp). Generate random filenames instead of using user input."
+    },
+    {
+      "priority": "P3",
+      "title": "Add input length limits to all text fields",
+      "description": "Set maximum length constraints on notes, nom, email, etc. Prevent ReDoS attacks via long malicious input."
+    },
+    {
+      "priority": "P3",
+      "title": "Update vulnerable dependencies",
+      "description": "Update ai package to >= 6.0.202 to patch @ai-sdk/provider-utils CVE. Run npm audit regularly and patch within 30 days."
+    },
+    {
+      "priority": "P3",
+      "title": "Implement CSRF token validation",
+      "description": "Add explicit CSRF tokens to state-changing operations. Validate Origin header matches NEXTAUTH_URL. Document SameSite cookie policy."
+    },
+    {
+      "priority": "P3",
+      "title": "Add comprehensive error logging",
+      "description": "Replace silent .catch(() => {}) with proper error logging. Alert admins on repeated failures for external services (Telegram, SMS, Email)."
+    },
+    {
+      "priority": "P3",
+      "title": "Restrict CORS policies",
+      "description": "Replace Access-Control-Allow-Origin: '*' with specific domain. Use 'https://novusepoxy.ca' instead of wildcard."
+    }
+  ],
+  "complianceStatus": {
+    "owasp_top_10": {
+      "a01_broken_access_control": "PASS — Auth middleware properly checks sessions and API keys",
+      "a02_cryptographic_failures": "WARNING — Plaintext passwords in .env, Gmail tokens not encrypted",
+      "a03_injection": "PASS — All SQL queries use parameterized statements ($1, $2, ...)",
+      "a04_insecure_design": "PASS — Input validation and rate limiting implemented",
+      "a05_security_misconfiguration": "WARNING — CORS allows *, debug headers not set to false",
+      "a06_vulnerable_components": "FAIL — @ai-sdk/provider-utils has unpatched CVE",
+      "a07_authentication_failures": "WARNING — No MFA, plaintext password support",
+      "a08_software_integrity": "PASS — No eval() or unsafe deserialization",
+      "a09_logging_failures": "WARNING — Silent error handling, limited audit trails",
+      "a10_ssrf": "FAIL — URL validation missing in upload-creative, origin header trust"
+    },
+    "gdpr": {
+      "data_protection": "PASS — Database encrypted at rest on Neon",
+      "user_consent": "PASS — Privacy policy and consent flow visible",
+      "data_retention": "REVIEW — No explicit retention policy documented",
+      "right_to_erasure": "REVIEW — No automated GDPR deletion mechanism"
+    },
+    "general": {
+      "https_enforced": "PASS — HSTS header with 1 year, all endpoints HTTPS",
+      "security_headers": "PASS — X-Frame-Options: DENY, X-Content-Type-Options: nosniff",
+      "csp_policy": "MISSING — No Content-Security-Policy header defined",
+      "secrets_management": "WARNING — Some secrets in environment variables, not encrypted"
+    }
+  },
+  "cveMatches": [
+    {
+      "package": "@ai-sdk/provider-utils",
+      "affectedVersions": "<=3.0.97",
+      "cve": "GHSA-866g-f22w-33x8",
+      "severity": "low",
+      "cvssScore": 4.3,
+      "type": "Uncontrolled Resource Consumption",
+      "remediation": "Upgrade ai to >= 6.0.202"
+    }
+  ],
+  "secretsFoundCount": 0,
+  "secretsStatus": "PASS — No hardcoded secrets detected in source code. All secrets properly externalized to environment variables.",
+  "notes": [
+    "The codebase demonstrates good security practices overall (parameterized queries, timing-safe comparisons, proper auth middleware).",
+    "Main concerns are SSRF vulnerabilities, plaintext password support, and dependency vulnerabilities.",
+    "Next.js middleware and Vercel deployment provide some built-in protections (HTTPS enforcement, DDoS mitigation).",
+    "The project uses bcryptjs for password hashing (good), but still accepts plaintext in AUTHORIZED_USERS env var.",
+    "SQL injection risk is LOW due to consistent use of parameterized queries (neon driver).",
+    "XSS risk is LOW except for email content rendering with dangerouslySetInnerHTML.",
+    "CSRF protection is implicit via NextAuth session + SameSite cookies, but could be more explicit.",
+    "Rate limiting is in-memory and won't work across Vercel's distributed instances — recommend Arcjet.",
+    "Dependency management is generally good, but npm audit shows low-severity vulnerabilities that should be patched."
+  ],
+  "scanDate": "2026-06-11T00:00:00Z",
+  "scanTool": "claude-security-auditor-v3",
+  "scanMethod": "static-analysis + dependency-audit + code-review"
+}

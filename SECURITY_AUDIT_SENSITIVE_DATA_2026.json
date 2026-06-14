@@ -1,0 +1,369 @@
+{
+  "audit_date": "2026-06-11",
+  "audit_type": "Sensitive Data Exposure & PII Handling Audit",
+  "project": "Novus Epoxy",
+  "vulnerabilities": [
+    {
+      "id": "SD-001",
+      "severity": "CRITICAL",
+      "category": "Exposed Secrets in VCS",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/.env.local",
+      "line": 1,
+      "title": "Production API Keys and Credentials Committed to Repository",
+      "description": "The .env.local file containing production secrets is committed to the git repository despite being in .gitignore. This file contains multiple critical secrets that can be used to compromise the entire system.",
+      "data_type": "API Keys, Tokens, Database Credentials, Cryptographic Keys",
+      "exposed_secrets": [
+        {
+          "type": "Database URL",
+          "secret": "DATABASE_URL (Neon PostgreSQL connection string with password)",
+          "risk": "Full database access to production data"
+        },
+        {
+          "type": "API Keys",
+          "secrets": [
+            "ADMIN_API_KEY",
+            "TWILIO_ACCOUNT_SID",
+            "TWILIO_AUTH_TOKEN",
+            "TELEGRAM_BOT_TOKEN",
+            "ANTHROPIC_API_KEY",
+            "OPENROUTER_API_KEY",
+            "COMPOSIO_API_KEY",
+            "ZAPIER_API_KEY",
+            "RESEND_API_KEY",
+            "VERCEL_TOKEN",
+            "STRIPE_SECRET_KEY",
+            "META_PAGE_TOKEN"
+          ],
+          "risk": "Account takeover, unauthorized API calls, SMS spoofing, email hijacking, Stripe payment manipulation"
+        },
+        {
+          "type": "Encryption Keys",
+          "secrets": ["AUTH_SECRET", "TELEGRAM_WEBHOOK_SECRET"],
+          "risk": "Session hijacking, authentication bypass"
+        },
+        {
+          "type": "Admin Credentials",
+          "secret": "ADMIN_PASSWORD (plaintext)",
+          "risk": "Dashboard account takeover"
+        }
+      ],
+      "remediation": [
+        "Immediately rotate ALL credentials listed above",
+        "Remove .env.local from git history using 'git filter-branch' or 'git-filter-repo'",
+        "Move all secrets to Vercel Environment Variables (not committed)",
+        "Use 'git secret' or similar tool to prevent accidental secret commits",
+        "Scan git history for any leaked secrets using 'truffleHog' or 'detect-secrets'",
+        "Notify third parties (Twilio, Meta, OpenAI, etc.) of potential compromise"
+      ]
+    },
+    {
+      "id": "SD-002",
+      "severity": "HIGH",
+      "category": "Plaintext Passwords in Environment Variables",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/.env.local",
+      "line": 21,
+      "title": "Admin Password Stored as Plaintext",
+      "description": "ADMIN_PASSWORD is stored in plaintext in environment variables instead of being hashed. While the code supports bcrypt verification, the plaintext password in env vars is a security anti-pattern.",
+      "data_type": "Plaintext Password",
+      "risk_analysis": {
+        "current_storage": "plaintext",
+        "should_be": "bcrypt hash only (not plaintext)"
+      },
+      "remediation": [
+        "Generate a bcrypt hash for the password: bcrypt.hash(password, 10)",
+        "Replace ADMIN_PASSWORD with the hash only",
+        "Update auth.ts to remove plaintext password support if feasible",
+        "Consider using magic links or OAuth instead of password auth"
+      ]
+    },
+    {
+      "id": "SD-003",
+      "severity": "HIGH",
+      "category": "PII Exposed in API Responses",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/clients/route.ts",
+      "line": 40,
+      "title": "Full Client PII Returned in API Response",
+      "description": "The GET /api/clients endpoint returns full client records including email, phone, and address without any filtering or obfuscation. This violates the principle of least privilege for API responses.",
+      "data_type": "PII - Email, Phone, Address, Name",
+      "vulnerable_endpoints": [
+        {
+          "endpoint": "GET /api/clients",
+          "returns": ["nom", "email", "telephone", "adresse"],
+          "auth": "session required"
+        },
+        {
+          "endpoint": "GET /api/invoices",
+          "returns": ["client_nom", "client_email", "client_tel"],
+          "auth": "session required"
+        },
+        {
+          "endpoint": "GET /api/quotes",
+          "returns": ["client_nom", "client_email", "client_tel", "client_adresse"],
+          "auth": "session required"
+        }
+      ],
+      "remediation": [
+        "Return only necessary fields for display (avoid email/phone in list views)",
+        "Mask PII: show 'test...@example.com' instead of full email",
+        "Implement field-level access control based on user role",
+        "Add data minimization: only return fields the frontend actually uses"
+      ]
+    },
+    {
+      "id": "SD-004",
+      "severity": "HIGH",
+      "category": "Secret Tokens in URL Parameters",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/invoices/[id]/send/route.ts",
+      "line": 69,
+      "title": "Quote Secret Tokens Exposed in URL Query Parameters",
+      "description": "Payment links and public endpoints use secret_token in URL parameters. URLs are logged in browsers, servers, and proxies. Tokens in URLs are vulnerable to leakage via referrer headers, browser history, and server logs.",
+      "data_type": "Authentication Token (secret_token)",
+      "vulnerable_patterns": [
+        {
+          "code": "https://novus-epoxy.vercel.app/paiement/{id}?token={encodeURIComponent(secret_token)}",
+          "risk": "Token exposed in browser history, referrer headers, server logs"
+        },
+        {
+          "code": "/api/quotes/{id}/contract?token={token}",
+          "risk": "Token in URL query string is logged by servers, CDNs, proxies"
+        }
+      ],
+      "remediation": [
+        "Use POST requests with tokens in request body instead of URL params",
+        "Implement short-lived, single-use tokens instead of long-lived secrets",
+        "Add Referrer-Policy: no-referrer header to payment pages",
+        "Use authenticated sessions instead of bearer tokens in URLs",
+        "Log token access attempts and rotate tokens regularly",
+        "Consider passwordless links with email verification"
+      ]
+    },
+    {
+      "id": "SD-005",
+      "severity": "HIGH",
+      "category": "Error Messages Expose System Information",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/invoices/[id]/send/route.ts",
+      "line": 220,
+      "title": "Error Details Returned in API Response",
+      "description": "Error messages sometimes include raw error objects or exception details that could reveal system internals.",
+      "data_type": "System Information, Stack Traces",
+      "example": "return NextResponse.json({ error: `Erreur envoi email: ${String(err)}` }, { status: 500 });",
+      "risk": {
+        "information_disclosure": "Reveals system architecture, library versions, file paths",
+        "debugging_aid": "Helps attackers craft exploits by understanding error patterns"
+      },
+      "remediation": [
+        "Log full errors server-side (Sentry, structured logging)",
+        "Return generic error messages to clients: 'Email sending failed'",
+        "Never include exception messages, stack traces, or system details in API responses",
+        "Use consistent error response format with generic user-facing messages"
+      ]
+    },
+    {
+      "id": "SD-006",
+      "severity": "MEDIUM",
+      "category": "Sensitive Data in Logs",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/quotes/route.ts",
+      "line": 92,
+      "title": "Potential Sensitive Data in Console Logs",
+      "description": "Error logging may capture sensitive variables from catch blocks. While the code shows catch-all error handlers with console.error(err), the actual error objects may contain PII or sensitive configuration.",
+      "data_type": "Client Data, API Keys, System Paths",
+      "vulnerable_patterns": [
+        "console.error('Failed to check active promos for quote:', err)",
+        "console.error('auto-description on quote create failed:', err)"
+      ],
+      "remediation": [
+        "Implement structured logging with field masking (e.g., winston, pino)",
+        "Never log full error objects - extract message only",
+        "Mask sensitive fields: email → 'email[***]', phone → 'phone[***]'",
+        "Remove console logs in production, use logger with sensitivity levels",
+        "Audit all console.log/console.error statements for PII"
+      ]
+    },
+    {
+      "id": "SD-007",
+      "severity": "MEDIUM",
+      "category": "Unencrypted Sensitive Data at Rest",
+      "file": "/Users/novusepoxy/novus-epoxy/database/schema.postgresql.sql",
+      "line": 1,
+      "title": "Client PII Stored Unencrypted in Database",
+      "description": "Client names, emails, phone numbers, and addresses are stored in plaintext in the database without encryption at rest. While PostgreSQL supports field-level encryption, it's not implemented.",
+      "data_type": "PII - Names, Emails, Phone Numbers, Addresses",
+      "affected_tables": [
+        "clients (nom, email, telephone, adresse)",
+        "quotes (client_nom, client_email, client_tel, client_adresse)",
+        "invoices (client_id with linked PII)",
+        "submissions (nom, email, telephone)"
+      ],
+      "remediation": [
+        "Implement field-level encryption using pgcrypto or similar",
+        "Use application-level encryption with keys managed by AWS KMS or HashiCorp Vault",
+        "Encrypt sensitive fields before storing: email, phone, address",
+        "Store encryption keys separately from database",
+        "Implement key rotation policy",
+        "Consider data minimization: store only necessary PII fields"
+      ]
+    },
+    {
+      "id": "SD-008",
+      "severity": "MEDIUM",
+      "category": "Session Data Not Properly Protected",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/lib/auth.ts",
+      "line": 70,
+      "title": "JWT Sessions Without Additional Security Controls",
+      "description": "The application uses NextAuth v5 with JWT session strategy. While JWT is signed, there's no indication of additional protections like secure cookies, SameSite flags, or short expiration times.",
+      "data_type": "Session Token (JWT)",
+      "risks": [
+        "JWT tokens in localStorage are vulnerable to XSS",
+        "No indication of secure cookie settings",
+        "Session expiration not explicitly configured"
+      ],
+      "remediation": [
+        "Set secure session cookies: httpOnly=true, secure=true, sameSite=strict",
+        "Use short JWT expiration times (15-30 minutes)",
+        "Implement refresh token rotation",
+        "Add CSRF token to state-changing requests",
+        "Configure session callback to limit token size"
+      ]
+    },
+    {
+      "id": "SD-009",
+      "severity": "MEDIUM",
+      "category": "Timing Attack on Password Comparison",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/lib/auth.ts",
+      "line": 22,
+      "title": "Timing-Safe Password Comparison Implementation",
+      "description": "While the code implements timingSafeEqual for plaintext passwords (good!), supporting plaintext passwords at all is risky. The comparison is timing-safe but the storage pattern is weak.",
+      "data_type": "Authentication Credential",
+      "positive_controls": [
+        "Uses crypto.timingSafeEqual for plaintext comparison",
+        "Uses bcrypt.compareSync for hashed passwords"
+      ],
+      "remediation": [
+        "Deprecate plaintext password auth entirely",
+        "Migrate all credentials to bcrypt hashes",
+        "Use magic links or OIDC/OAuth instead"
+      ]
+    },
+    {
+      "id": "SD-010",
+      "severity": "MEDIUM",
+      "category": "API Key Exposure in Request Headers",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/invoices/[id]/send/route.ts",
+      "line": 15,
+      "title": "API Key Authentication in Custom Headers",
+      "description": "Internal API endpoints use x-api-key header for authentication. While this is acceptable for internal services, the keys are shared and visible in logs/monitoring.",
+      "data_type": "API Key (x-api-key header)",
+      "vulnerable_pattern": "x-api-key header shared across multiple services",
+      "remediation": [
+        "Use individual API keys per service/client",
+        "Implement OAuth 2.0 or mTLS for service-to-service auth",
+        "Rotate API keys regularly",
+        "Monitor API key usage and disable unused keys",
+        "Store keys in secrets manager (AWS Secrets Manager, HashiCorp Vault)"
+      ]
+    },
+    {
+      "id": "SD-011",
+      "severity": "MEDIUM",
+      "category": "Unvalidated Input - Path Traversal Risk",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/track/route.ts",
+      "line": 21,
+      "title": "URL Path Not Validated Before Storage",
+      "description": "The path parameter from tracker.js is sliced to 500 chars but not validated. Could potentially store malicious paths if input validation is bypassed.",
+      "data_type": "User-Supplied Path Input",
+      "code": "const path = (body.path as string)?.slice(0, 500) ?? '/'",
+      "risk": "Only length validation, no pattern validation",
+      "remediation": [
+        "Validate path against whitelist of expected paths",
+        "Use URL.parse() to validate structure",
+        "Reject paths with suspicious patterns (/admin, /private, etc.)",
+        "Implement CSP to prevent script injection via stored path"
+      ]
+    },
+    {
+      "id": "SD-012",
+      "severity": "MEDIUM",
+      "category": "Insufficient Input Validation on Sensitive Data",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/leads/zapier/route.ts",
+      "line": 66,
+      "title": "Phone Number Not Validated Before Storage",
+      "description": "Phone numbers are extracted via regex but not validated against known patterns. Could store invalid or malicious data.",
+      "data_type": "Phone Number Input",
+      "code": "const telephone = telephoneRaw.replace(/\\D/g, '').slice(-10) || null;",
+      "risk": "Only basic digit extraction, no validation of valid area codes or formats",
+      "remediation": [
+        "Validate against E.164 format for phone numbers",
+        "Verify area code is valid for region",
+        "Reject obviously invalid patterns (all zeros, sequential, etc.)",
+        "Implement phone number verification via SMS or API"
+      ]
+    }
+  ],
+  "summary": {
+    "total_vulnerabilities": 12,
+    "critical": 1,
+    "high": 4,
+    "medium": 7,
+    "low": 0,
+    "risk_score": 85,
+    "key_findings": [
+      "CRITICAL: Production secrets (.env.local) are committed to git repository",
+      "HIGH: API responses expose full client PII without filtering",
+      "HIGH: Secret tokens used in URL query parameters (vulnerable to logging)",
+      "HIGH: Plaintext admin password stored in environment variables",
+      "MEDIUM: Client PII stored unencrypted in PostgreSQL database",
+      "MEDIUM: Error messages may expose system details",
+      "MEDIUM: Sensitive data may be captured in console logs"
+    ]
+  },
+  "immediate_actions_required": [
+    {
+      "priority": "P0 - CRITICAL",
+      "action": "Revoke all secrets in .env.local immediately",
+      "steps": [
+        "1. Rotate Neon database password and update DATABASE_URL",
+        "2. Disable and regenerate all Twilio credentials",
+        "3. Regenerate Telegram bot token",
+        "4. Rotate all API keys (Anthropic, OpenRouter, Composio, Zapier, Resend, Meta)",
+        "5. Regenerate Vercel and Stripe tokens",
+        "6. Delete repository secrets from git history (use git-filter-repo)"
+      ],
+      "estimated_time": "2-4 hours"
+    },
+    {
+      "priority": "P1 - HIGH",
+      "action": "Move all secrets to secure secret management",
+      "steps": [
+        "1. Use Vercel Environment Variables for production secrets (not committed)",
+        "2. Implement local .env.local with local dev-only credentials",
+        "3. Add pre-commit hook to prevent secret commits (detect-secrets)",
+        "4. Audit git history for any leaked secrets"
+      ],
+      "estimated_time": "1-2 hours"
+    },
+    {
+      "priority": "P1 - HIGH",
+      "action": "Implement data minimization in API responses",
+      "steps": [
+        "1. Audit all API endpoints returning PII",
+        "2. Return only necessary fields for frontend",
+        "3. Mask sensitive fields in list views",
+        "4. Implement field-level access control"
+      ],
+      "estimated_time": "4-6 hours"
+    }
+  ],
+  "compliance_impact": {
+    "gdpr": "HIGH - Client PII stored unencrypted violates data protection requirements",
+    "pci_dss": "CRITICAL - If storing payment card details (check Stripe integration)",
+    "hipaa": "N/A - No health data",
+    "soc2": "HIGH - Audit logging and access controls need strengthening"
+  },
+  "testing_recommendations": [
+    "Run 'truffleHog' or 'detect-secrets' against git history",
+    "Scan current .env files for API keys using 'gitleaks'",
+    "Test API responses for PII leakage",
+    "Review database for unencrypted sensitive fields",
+    "Audit logs for sensitive data exposure"
+  ]
+}

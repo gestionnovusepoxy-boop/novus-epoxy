@@ -372,14 +372,17 @@ export async function GET(req: NextRequest) {
         checks.push({ name: 'Meta FB Token', ok: false, detail: `Token expire ou invalide: ${me.error.message}. Renouveler dans Meta Business Suite.`, severity: 'critical' });
       } else if (me.id) {
         checks.push({ name: 'Meta FB Token', ok: true, detail: `Token valide (${me.name ?? me.id})` });
+        // IMPORTANT: viser la PAGE directement, PAS me.id. Avec un token System User, /me retourne
+        // l'utilisateur système (Novusbot), pas la Page — l'abonnement leadgen DOIT cibler la Page.
+        const NOVUS_PAGE_ID = '636757822863288';
         // Check leadgen subscription
-        const subRes = await fetch(`https://graph.facebook.com/v25.0/${me.id}/subscribed_apps?access_token=${metaToken}`);
+        const subRes = await fetch(`https://graph.facebook.com/v25.0/${NOVUS_PAGE_ID}/subscribed_apps?access_token=${metaToken}`);
         const subData = await subRes.json();
         const hasLeadgen = (subData.data ?? []).some((s: Record<string, unknown>) =>
           Array.isArray(s.subscribed_fields) && s.subscribed_fields.includes('leadgen')
         );
         if (!hasLeadgen) {
-          await fetch(`https://graph.facebook.com/v25.0/${me.id}/subscribed_apps`, {
+          await fetch(`https://graph.facebook.com/v25.0/${NOVUS_PAGE_ID}/subscribed_apps`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ subscribed_fields: ['leadgen'], access_token: metaToken }),

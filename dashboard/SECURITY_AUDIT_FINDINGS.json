@@ -1,0 +1,227 @@
+{
+  "auditMetadata": {
+    "timestamp": "2026-06-13T00:00:00Z",
+    "auditorVersion": "V3-Security-Auditor",
+    "codebaseSize": 47148,
+    "filesScanned": 150,
+    "apiRoutesScanned": 60
+  },
+  "vulnerabilities": [
+    {
+      "severity": "high",
+      "file": "app/dashboard/crm/[id]/conversations/page.tsx",
+      "line": 153,
+      "type": "xss",
+      "description": "Unvalidated HTML rendering using dangerouslySetInnerHTML for email body content. Email content from database (e_body) is directly rendered without sanitization. An attacker could inject malicious HTML/JavaScript via email content stored in the database.",
+      "remediation": "Use DOMPurify or similar HTML sanitization library. Replace: `<div dangerouslySetInnerHTML={{ __html: e.body ?? '' }} />` with `<div>{sanitizeHtml(e.body)}</div>`"
+    },
+    {
+      "severity": "high",
+      "file": "app/api/bookings/route.ts",
+      "line": 49,
+      "type": "sql_injection",
+      "description": "Potential SQL injection via LIKE operator with user-controlled pattern. While parameterized, the pattern construction `'%' || $1 || '%'` could be exploited if the search parameter isn't properly validated. The query uses `extra_days::text LIKE` which is vulnerable to pattern-based attacks.",
+      "remediation": "Use stricter input validation. Add regex validation: `/^[\\w\\s-]{0,50}$/` and escape LIKE wildcards or use full-text search instead."
+    },
+    {
+      "severity": "high",
+      "file": "app/api/quotes/[id]/payment-info/route.ts",
+      "line": 8,
+      "type": "auth_issue",
+      "description": "Token-based authentication without rate limiting or token expiration. The `secret_token` is checked against user input but there's no evidence of: 1) Token TTL/expiration, 2) Rate limiting per token, 3) Token rotation. Attackers could brute-force tokens if they're predictable or reuse valid tokens indefinitely.",
+      "remediation": "Implement token TTL (e.g., 7 days). Add rate limiting per quote_id. Implement token rotation after use or generate cryptographically secure tokens (32+ bytes of entropy via crypto.getRandomValues)."
+    },
+    {
+      "severity": "high",
+      "file": "app/api/sms/incoming/route.ts",
+      "line": 69,
+      "type": "auth_issue",
+      "description": "SMS webhook validation uses TWILIO_AUTH_TOKEN but validation method may be weak. If Twilio signature validation is not strictly enforced, an attacker could spoof incoming SMS messages.",
+      "remediation": "Ensure Twilio request validation is enabled. Use twilio-node's RequestValidator class with exact signature matching. Verify Content-Type header matches signature expectations."
+    },
+    {
+      "severity": "medium",
+      "file": "app/api/invoices/[id]/send/route.ts",
+      "line": 165,
+      "type": "data_exposure",
+      "description": "Hardcoded API base URL logic. The endpoint constructs URLs using `process.env.VERCEL_URL` which is dynamically assigned. If an attacker can predict or brute-force invoice IDs, they can access payment pages without authentication (only needs `secret_token` which may be exposed via email).",
+      "remediation": "Add additional verification: require session OR API key for sensitive invoice operations. Implement per-invoice access control checks beyond token validation."
+    },
+    {
+      "severity": "medium",
+      "file": "lib/auth.ts",
+      "line": 49,
+      "type": "auth_issue",
+      "description": "Plaintext password support in environment variables. While bcrypt hashes are supported, plaintext passwords are compared with timingSafeEqual which is good, but storing plaintext credentials in .env.local is a security anti-pattern. If .env.local is accidentally committed or exposed, credentials are compromised.",
+      "remediation": "Migrate to bcrypt-only password storage. Generate hashes offline: `bcryptjs.hashSync('password', 10)`. Deprecate plaintext password env vars in docs."
+    },
+    {
+      "severity": "medium",
+      "file": "app/api/quotes/[id]/confirm-deposit/route.ts",
+      "line": 35,
+      "type": "csrf",
+      "description": "POST endpoint modifies booking/quote state without explicit CSRF protection. Next.js provides implicit CSRF protection via same-site cookies, but the endpoint doesn't validate origin or implement additional CSRF tokens.",
+      "remediation": "Add origin validation: `if (req.headers.get('origin') !== new URL(process.env.NEXTAUTH_URL).origin) return 401`. Consider adding explicit CSRF tokens for state-changing operations."
+    },
+    {
+      "severity": "medium",
+      "file": "app/api/bookings/route.ts",
+      "line": 75,
+      "type": "data_exposure",
+      "description": "Phone numbers and Telegram credentials exposed via process.env references. While environment variables are server-side, logs may leak these via error messages or monitoring systems. No masking of phone numbers in error messages.",
+      "remediation": "Create utility function to mask phone numbers in logs/errors. Add logging middleware that scrubs sensitive env vars. Use secret management system (AWS Secrets Manager, HashiCorp Vault)."
+    },
+    {
+      "severity": "medium",
+      "file": "middleware.ts",
+      "line": 5,
+      "type": "insecure_design",
+      "description": "In-memory rate limiting with no persistence across server restarts. The `rateLimitMap` is not shared across multiple deployments or serverless invocations. An attacker can bypass rate limits by distributing requests across multiple instances.",
+      "remediation": "Use distributed rate limiting: Redis, Upstash, or Arcjet (already imported but not used consistently). Implement sliding window or token bucket algorithm with persistent backend."
+    },
+    {
+      "severity": "medium",
+      "file": "app/api/chat/email/route.ts",
+      "line": 21,
+      "type": "auth_issue",
+      "description": "Webhook secret comparison (`RESEND_WEBHOOK_SECRET`) vulnerable to timing attacks. While using timingSafeEqual would be ideal, current implementation uses simple string comparison.",
+      "remediation": "Update to: `timingSafeEqual(Buffer.from(headerSignature), Buffer.from(expectedSignature))`"
+    },
+    {
+      "severity": "low",
+      "file": "package.json",
+      "line": 35,
+      "type": "insecure_dependency",
+      "description": "ai package <= 4.3.19 has CVE: File type whitelist bypass when uploading files (GHSA-rwvc-j5jr-mgvh). Affects file upload functionality.",
+      "remediation": "Update to ai >= 6.0.204. Run: `npm install ai@latest`. Test file upload functionality after upgrade."
+    },
+    {
+      "severity": "low",
+      "file": "package.json",
+      "line": 17,
+      "type": "insecure_dependency",
+      "description": "@ai-sdk/provider-utils <= 3.0.97 has CVE: Uncontrolled Resource Consumption (GHSA-866g-f22w-33x8, CVSS 4.3). Can lead to DoS.",
+      "remediation": "Update ai package to ^6.0.204 which brings in patched version. Or manually update @ai-sdk/provider-utils to ^3.1.0."
+    },
+    {
+      "severity": "low",
+      "file": "package.json",
+      "line": 29,
+      "type": "insecure_dependency",
+      "description": "@arcjet/next has unresolved moderate vulnerability via typeid-js. Arcjet is imported but rate limiting is not consistently applied across all endpoints.",
+      "remediation": "Upgrade @arcjet/next to latest. Verify typeid-js vulnerability fix. Implement Arcjet rate limiting for all public endpoints instead of middleware.ts in-memory solution."
+    },
+    {
+      "severity": "low",
+      "file": "app/layout.tsx",
+      "line": 41,
+      "type": "xss",
+      "description": "Service worker registration using dangerouslySetInnerHTML. While the content is hardcoded and safe, this is an anti-pattern. If dynamically constructed, could be vulnerable.",
+      "remediation": "Move to <script> tag with event listener instead: `<script defer>{window.navigator?.serviceWorker?.register('/sw.js')}</script>`"
+    },
+    {
+      "severity": "low",
+      "file": "app/api/auth/google/callback/route.ts",
+      "line": 70,
+      "type": "data_exposure",
+      "description": "Hardcoded Vercel project/team IDs in fallback values. While API keys aren't exposed, these IDs are sensitive and shouldn't be in code. If ever made public, enables targeted reconnaissance.",
+      "remediation": "Move to environment variables: VERCEL_PROJECT_ID, VERCEL_TEAM_ID (already done, but fallback still hardcoded). Remove fallback and require env vars."
+    },
+    {
+      "severity": "low",
+      "file": "app/api/bookings/route.ts",
+      "line": 298,
+      "type": "data_exposure",
+      "description": "Admin email read from environment variable without validation. If ADMIN_EMAIL is misconfigured, all booking emails go to wrong recipient. No validation that email format is valid.",
+      "remediation": "Add email validation: `const adminEmail = (process.env.ADMIN_EMAIL || '').toLowerCase(); if (!/^[^@]+@[^@]+$/.test(adminEmail)) throw new Error('Invalid ADMIN_EMAIL');`"
+    },
+    {
+      "severity": "low",
+      "file": "lib/db.ts",
+      "line": 8,
+      "type": "data_exposure",
+      "description": "DATABASE_URL error message exposes that database is missing. If this error leaks to client, attacker knows infrastructure details.",
+      "remediation": "Catch and log internally: `if (!url) { logger.error('DATABASE_URL not configured'); throw new Error('Service unavailable'); }`"
+    }
+  ],
+  "complianceStatus": {
+    "soc2": {
+      "accessControl": "PARTIAL - NextAuth implemented but token-based endpoints need stronger authz",
+      "logging": "PARTIAL - No centralized audit logging for sensitive operations",
+      "encryption": "PARTIAL - TLS via Vercel, no field-level encryption for sensitive data",
+      "status": "NEEDS_WORK"
+    },
+    "gdpr": {
+      "dataErasure": "UNKNOWN - No DELETE endpoints found for user data",
+      "dataPortability": "UNKNOWN - No data export functionality audited",
+      "consent": "UNKNOWN - Email consent tracking not reviewed",
+      "status": "NEEDS_REVIEW"
+    },
+    "pci": {
+      "cardholder_data_protection": "COMPLIANT - No direct card processing (uses Interac/external providers)",
+      "access_control": "PARTIAL - API key validation present but weak in some endpoints",
+      "status": "COMPLIANT"
+    }
+  },
+  "riskScore": 62,
+  "riskScoreBreakdown": {
+    "criticalsCount": 0,
+    "highCount": 4,
+    "mediumCount": 6,
+    "lowCount": 7,
+    "totalWeighted": 62
+  },
+  "summary": "The Novus Epoxy dashboard codebase has moderate security maturity with several high-risk vulnerabilities that require immediate remediation. The primary concerns are: (1) XSS vulnerability in email body rendering without sanitization, (2) Weak token-based authentication without expiration or rotation, (3) In-memory rate limiting that doesn't work across distributed deployments, (4) Unvalidated HTML rendering from database, and (5) Known CVEs in AI SDK dependencies. Authentication and authorization mechanisms are generally sound (NextAuth + bcrypt), database queries are properly parameterized, and HTTPS/security headers are configured. However, compliance with GDPR and SOC2 is incomplete and needs documentation.",
+  "recommendations": [
+    "CRITICAL: Implement HTML sanitization library (DOMPurify) for all user-generated content rendered via dangerouslySetInnerHTML - specifically email bodies in conversations page",
+    "CRITICAL: Add token expiration (7-14 days) and implement token rotation for payment page secret_token. Use crypto.getRandomValues for token generation.",
+    "HIGH: Replace in-memory rate limiting with distributed solution (Redis/Upstash). Current implementation fails in serverless/multi-instance deployments.",
+    "HIGH: Implement request signing/validation for all webhooks (Twilio, Resend, OpenClaw). Use cryptographic HMAC-SHA256 verification.",
+    "HIGH: Add per-resource authorization checks beyond token validation. Verify quote ownership before allowing payment/booking operations.",
+    "MEDIUM: Migrate all plaintext passwords to bcrypt hashes. Remove plaintext password support from AUTHORIZED_USERS env var.",
+    "MEDIUM: Add origin validation and CSRF tokens to all state-changing POST/PUT/DELETE endpoints",
+    "MEDIUM: Implement structured logging with PII/secret scrubbing. Log all auth attempts, quote/invoice access, payments to audit trail.",
+    "MEDIUM: Update dependencies: ai >= 6.0.204, @arcjet packages to latest. Verify file upload whitelisting after upgrade.",
+    "LOW: Create utility for masking phone numbers/emails in logs. Never log full secrets even in debug mode.",
+    "LOW: Add database-level encryption for sensitive fields (phone, email). Consider column-level encryption for highly sensitive data.",
+    "LOW: Implement GDPR compliance: add data export endpoint, data deletion workflow, consent tracking",
+    "LOW: Add automated security scanning to CI/CD (npm audit, semgrep, bandit) with pre-commit hooks",
+    "LOW: Document threat model and attack surfaces. Create security.md for vulnerability disclosure policy",
+    "LOW: Implement rate limiting per user/IP for API endpoints. Current limits may be too lenient (e.g., chat: 30/min, track: 120/min)"
+  ],
+  "thirdPartyRisks": [
+    {
+      "provider": "Vercel",
+      "risk": "MEDIUM",
+      "description": "Deployment platform handles secrets via environment variables. Risk of accidental logs exposure.",
+      "mitigation": "Use Vercel's built-in secret masking in logs. Never log process.env values."
+    },
+    {
+      "provider": "Neon PostgreSQL",
+      "risk": "LOW",
+      "description": "Serverless database provider. Connection pooling may expose database structure via error messages.",
+      "mitigation": "Implement query error handling to catch and log database errors internally without exposing to client."
+    },
+    {
+      "provider": "Twilio",
+      "risk": "MEDIUM",
+      "description": "SMS provider integration. Webhook could be spoofed if validation is weak.",
+      "mitigation": "Ensure webhook signature validation with RequestValidator class. Verify secrets are long and random."
+    },
+    {
+      "provider": "Telegram Bot API",
+      "risk": "MEDIUM",
+      "description": "Bot token exposed in multiple API routes. If token leaks, attacker can send messages as bot.",
+      "mitigation": "Use Telegram bot API best practices: IP whitelist, webhook HTTPS enforcement, regenerate token if suspected compromise."
+    }
+  ],
+  "nextSteps": [
+    "1. [IMMEDIATE] Deploy fix for XSS in conversations page - add DOMPurify",
+    "2. [THIS WEEK] Add token expiration and rotation to payment endpoints",
+    "3. [THIS WEEK] Replace in-memory rate limiting with Redis/Upstash",
+    "4. [THIS WEEK] Update ai and @arcjet packages to patched versions",
+    "5. [NEXT SPRINT] Implement distributed authorization checks for multi-tenant data isolation",
+    "6. [NEXT SPRINT] Add comprehensive audit logging for GDPR/SOC2 compliance",
+    "7. [ONGOING] Setup continuous security scanning in CI/CD pipeline"
+  ]
+}
