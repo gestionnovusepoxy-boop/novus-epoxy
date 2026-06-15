@@ -30,3 +30,6 @@ SECURITY_AUDIT_REPORT.json
 .claude-flow/security/
 dashboard/scripts/get-*.mjs
 dashboard/scripts/diag-*.mjs
+
+# Daemon testgaps — fichiers coverage-gaps regénérés en boucle (jamais commit)
+dashboard/tests/coverage-gaps-*.test.mjs
