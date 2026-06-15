@@ -1981,7 +1981,7 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       if (convoRow.length > 0) {
         const convoData = JSON.parse(convoRow[0].value as string);
         // Active if last bot message was less than 5 minutes ago
-        if (convoData.ts && (Date.now() - convoData.ts) < 300000) {
+        if (convoData.ts && (Date.now() - convoData.ts) < 120000) {
           hasActiveConvo = true;
         }
       }
@@ -2009,7 +2009,7 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
             const convoRow = await query(`SELECT value FROM kv_store WHERE key = $1`, [groupConvoKey]);
             if (convoRow.length > 0) {
               const convoData = JSON.parse(convoRow[0].value as string);
-              if (convoData.history && (Date.now() - convoData.ts) < 300000) {
+              if (convoData.history && (Date.now() - convoData.ts) < 120000) {
                 convoHistory = convoData.history;
               }
             }
