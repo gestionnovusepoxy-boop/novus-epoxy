@@ -35,6 +35,41 @@ export async function GET(req: NextRequest) {
 
   if (isQuietHours()) return NextResponse.json({ skipped: 'quiet hours' });
 
+  // 0. P0-3 — Rappels à LUCA pour les leads FB chauds pas encore contactés (J+1, J+3).
+  // N'envoie RIEN au client (règle FB-manuel) — juste un rappel Telegram à l'admin + bouton "contacté".
+  let fbReminders = 0;
+  try {
+    const groupId = (process.env.TELEGRAM_GROUP_CHAT_ID ?? '').trim();
+    const botToken = BOT_TOKEN();
+    if (groupId && botToken) {
+      const hotFb = await query(
+        `SELECT id, nom, telephone, service, created_at,
+                CASE WHEN created_at > NOW() - INTERVAL '2 days' THEN 'j1' ELSE 'j3' END AS stage
+         FROM crm_leads
+         WHERE temperature = 'chaud' AND prospect_sent_at IS NULL
+           AND statut NOT IN ('ferme','perdu','converti','rdv_pris','gagne')
+           AND source ~* '(facebook|meta|fb|zapier)'
+           AND telephone IS NOT NULL
+           AND ((created_at <= NOW() - INTERVAL '1 day' AND created_at > NOW() - INTERVAL '2 days')
+             OR (created_at <= NOW() - INTERVAL '3 days' AND created_at > NOW() - INTERVAL '4 days'))`
+      ).catch(() => []);
+      for (const l of hotFb) {
+        const key = `fb_lead_reminder_${l.id}_${l.stage}`;
+        const seen = await query(`SELECT 1 FROM kv_store WHERE key = $1`, [key]).catch(() => []);
+        if (seen.length) continue;
+        const jours = l.stage === 'j1' ? '1 jour' : '3 jours';
+        const msg = `🔥 <b>Rappel — lead chaud FB pas encore contacté!</b>\n\n👤 ${l.nom}\n📞 ${l.telephone}\n🔧 ${l.service ?? '—'}\n⏱️ Reçu il y a ${jours}\n\n⚡ Contacte-le avant qu'il refroidisse!`;
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: groupId, text: msg, parse_mode: 'HTML',
+            reply_markup: { inline_keyboard: [[{ text: '✅ Marquer contacté', callback_data: `lead_contacted_${l.id}` }]] } }),
+        }).catch(() => {});
+        await query(`INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`, [key, new Date().toISOString()]).catch(() => {});
+        fbReminders++;
+      }
+    }
+  } catch (e) { console.error('FB hot-lead reminders:', e); }
+
   // 1. Find leads ready for follow-up
   // Include leads where last_agent_reply_at IS NULL (never auto-replied) but created >4 days ago.
   // FB-leads-manual rule (feedback_fb_leads_manual.md): Aria does NOT auto-contact Facebook/Meta
@@ -146,7 +181,7 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ sent, marques_froid: marquesFroid });
+  return NextResponse.json({ sent, marques_froid: marquesFroid, fb_reminders: fbReminders });
 }
 
 export async function POST(req: NextRequest) {

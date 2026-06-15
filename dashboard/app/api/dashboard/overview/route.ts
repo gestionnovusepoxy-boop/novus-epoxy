@@ -75,77 +75,28 @@ export async function GET() {
     FROM sms_logs
   `).catch(() => [{ envoyes: 0, recus: 0 }]);
 
-  // 13. Urgent actions — counts
-  const leadsChaudsNonContactes = await query(`
-    SELECT COUNT(*)::int AS count
-    FROM crm_leads
-    WHERE temperature = 'chaud' AND prospect_sent_at IS NULL
-  `).catch(() => [{ count: 0 }]);
-
-  const devisSansReponse48h = await query(`
-    SELECT COUNT(*)::int AS count
-    FROM quotes
-    WHERE statut = 'envoye'
-      AND sent_at <= NOW() - INTERVAL '48 hours'
-      AND relance_1_at IS NULL
-  `).catch(() => [{ count: 0 }]);
-
-  const depotsEnAttente = await query(`
-    SELECT COUNT(*)::int AS count
-    FROM quotes
-    WHERE statut = 'contrat_signe' AND deposit_paid_at IS NULL
-  `).catch(() => [{ count: 0 }]);
-
-  const facturesImpayees = await query(`
-    SELECT
-      COUNT(*)::int AS count,
-      COALESCE(SUM(
-        CASE
-          WHEN NOT depot_paye THEN depot_montant
-          ELSE 0
-        END
-        +
-        CASE
-          WHEN NOT final_paye THEN final_montant
-          ELSE 0
-        END
-      ), 0)::numeric AS montant
-    FROM invoices
-    WHERE statut NOT IN ('completee', 'payee', 'annulee')
-      AND (NOT depot_paye OR NOT final_paye)
-  `).catch(() => [{ count: 0, montant: 0 }]);
-
-  const soumissionsNonTraitees = await query(`
-    SELECT COUNT(*)::int AS count
-    FROM submissions
-    WHERE statut = 'nouveau'
-  `).catch(() => [{ count: 0 }]);
-
-  const reservationsDemain = await query(`
-    SELECT COUNT(*)::int AS count
-    FROM bookings
-    WHERE jour1_date = CURRENT_DATE + INTERVAL '1 day'
-      AND statut IN ('en_attente', 'confirme')
-  `).catch(() => [{ count: 0 }]);
-
-  // 14. Details for quick actions
-  const prochainsLeadsChauds = await query(`
-    SELECT id, nom, telephone, created_at
-    FROM crm_leads
-    WHERE temperature = 'chaud' AND prospect_sent_at IS NULL
-    ORDER BY created_at DESC
-    LIMIT 3
-  `).catch(() => []);
-
-  const prochainsDevisRelance = await query(`
-    SELECT id, client_nom, client_tel, total, sent_at
-    FROM quotes
-    WHERE statut = 'envoye'
-      AND sent_at <= NOW() - INTERVAL '48 hours'
-      AND relance_1_at IS NULL
-    ORDER BY sent_at ASC
-    LIMIT 3
-  `).catch(() => []);
+  // 13-14. Actions urgentes (compteurs + détails) — toutes indépendantes → en parallèle.
+  const [
+    leadsChaudsNonContactes,
+    devisSansReponse48h,
+    depotsEnAttente,
+    facturesImpayees,
+    soumissionsNonTraitees,
+    reservationsDemain,
+    prochainsLeadsChauds,
+    prochainsDevisRelance,
+  ] = await Promise.all([
+    query(`SELECT COUNT(*)::int AS count FROM crm_leads WHERE temperature = 'chaud' AND prospect_sent_at IS NULL`).catch(() => [{ count: 0 }]),
+    query(`SELECT COUNT(*)::int AS count FROM quotes WHERE statut = 'envoye' AND sent_at <= NOW() - INTERVAL '48 hours' AND relance_1_at IS NULL`).catch(() => [{ count: 0 }]),
+    query(`SELECT COUNT(*)::int AS count FROM quotes WHERE statut = 'contrat_signe' AND deposit_paid_at IS NULL`).catch(() => [{ count: 0 }]),
+    query(`SELECT COUNT(*)::int AS count,
+        COALESCE(SUM((CASE WHEN NOT depot_paye THEN depot_montant ELSE 0 END) + (CASE WHEN NOT final_paye THEN final_montant ELSE 0 END)), 0)::numeric AS montant
+      FROM invoices WHERE statut NOT IN ('completee', 'payee', 'annulee') AND (NOT depot_paye OR NOT final_paye)`).catch(() => [{ count: 0, montant: 0 }]),
+    query(`SELECT COUNT(*)::int AS count FROM submissions WHERE statut = 'nouveau'`).catch(() => [{ count: 0 }]),
+    query(`SELECT COUNT(*)::int AS count FROM bookings WHERE jour1_date = CURRENT_DATE + INTERVAL '1 day' AND statut IN ('en_attente', 'confirme')`).catch(() => [{ count: 0 }]),
+    query(`SELECT id, nom, telephone, created_at FROM crm_leads WHERE temperature = 'chaud' AND prospect_sent_at IS NULL ORDER BY created_at DESC LIMIT 3`).catch(() => []),
+    query(`SELECT id, client_nom, client_tel, total, sent_at FROM quotes WHERE statut = 'envoye' AND sent_at <= NOW() - INTERVAL '48 hours' AND relance_1_at IS NULL ORDER BY sent_at ASC LIMIT 3`).catch(() => []),
+  ]);
 
   return NextResponse.json({
     financier: {
@@ -201,5 +152,8 @@ export async function GET() {
       total: Number(q.total),
       sent_at: q.sent_at,
     })),
+  }, {
+    // Cache privé court — la page poll aux 30s; on évite de re-frapper Neon à chaque onglet.
+    headers: { 'Cache-Control': 'private, max-age=10' },
   });
 }

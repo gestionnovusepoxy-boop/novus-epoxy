@@ -162,7 +162,11 @@ export function calculateQuoteWithExtras(opts: {
     : mulCents(dollarsToCents(knownPrix), superficie);
 
   const rabaisCents = pctOfCents(serviceBrutCents, rabaisPct);
-  const serviceNetCents = serviceBrutCents - rabaisCents;
+  const serviceNetRawCents = serviceBrutCents - rabaisCents;
+  // Plancher minimum-job 1500$ sur la PORTION SERVICE (jamais sur les extras). Vinyl exempt.
+  const minJobCents = serviceType === 'vinyl_click' ? 0 : dollarsToCents(MIN_JOB_DOLLARS);
+  const serviceNetCents = Math.max(serviceNetRawCents, minJobCents);
+  const minimumApplied = serviceNetRawCents < minJobCents;
   const extrasCents = dollarsToCents(extrasTotal);
   const sousTotalCents = sumCents(serviceNetCents, extrasCents);
 
@@ -172,6 +176,7 @@ export function calculateQuoteWithExtras(opts: {
     prix_pied_carre: isPrixFixe ? 0 : knownPrix,
     service_brut: centsToDollars(serviceBrutCents),
     service_net: centsToDollars(serviceNetCents),
+    minimum_applique: minimumApplied,
     extras_total: centsToDollars(extrasCents),
     rabais_pct: rabaisPct,
     rabais_montant: centsToDollars(rabaisCents),
@@ -247,7 +252,13 @@ export function calculateMultiQuote(
 
   // Rabais sur les services seulement, jamais les extras
   const rabaisCents = pctOfCents(itemsTotalCents, rabais_pct);
-  const sousTotalCents = (itemsTotalCents - rabaisCents) + extrasTotalCents;
+  const servicesNetRawCents = itemsTotalCents - rabaisCents;
+  // Plancher minimum-job 1500$ sur la portion services. Exempt si TOUS les items sont du vinyl.
+  const allVinyl = calcItems.length > 0 && calcItems.every(i => i.type_service === 'vinyl_click');
+  const minJobCents = allVinyl ? 0 : dollarsToCents(MIN_JOB_DOLLARS);
+  const servicesNetCents = Math.max(servicesNetRawCents, minJobCents);
+  const minimumApplied = servicesNetRawCents < minJobCents;
+  const sousTotalCents = servicesNetCents + extrasTotalCents;
   const { tpsCents, tvqCents, totalCents, depotCents } = taxesFromSubtotalCents(sousTotalCents);
 
   return {
@@ -255,6 +266,7 @@ export function calculateMultiQuote(
     extras: calcExtras,
     items_total: centsToDollars(itemsTotalCents),
     extras_total: centsToDollars(extrasTotalCents),
+    minimum_applique: minimumApplied,
     rabais_pct,
     rabais_montant: centsToDollars(rabaisCents),
     sous_total: centsToDollars(sousTotalCents),

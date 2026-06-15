@@ -1,0 +1,334 @@
+{
+  "audit_metadata": {
+    "timestamp": "2024-06-14T00:00:00Z",
+    "application": "Novus Epoxy Dashboard",
+    "target": "/Users/novusepoxy/novus-epoxy",
+    "scope": "Full codebase scan including API routes, dependencies, auth, and secrets",
+    "severity_levels": ["CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"]
+  },
+  "summary": {
+    "total_findings": 12,
+    "critical": 3,
+    "high": 5,
+    "medium": 3,
+    "low": 1,
+    "status": "REVIEW_REQUIRED"
+  },
+  "findings": [
+    {
+      "id": "SEC-001",
+      "severity": "CRITICAL",
+      "category": "Secret Management",
+      "type": "Hardcoded Secrets in .env Files",
+      "title": "Multiple API Keys and Secrets Exposed in Version Control",
+      "description": "The .env.local, .env.vps, and .env.sentry files contain sensitive production credentials that should never be committed to version control.",
+      "files": [
+        {
+          "path": "/Users/novusepoxy/novus-epoxy/.env.local",
+          "line": "2-22",
+          "exposed_secrets": 10
+        },
+        {
+          "path": "/Users/novusepoxy/novus-epoxy/.env.vps",
+          "line": "1-30",
+          "exposed_secrets": 6
+        }
+      ],
+      "impact": "CRITICAL - Attackers could gain unauthorized access to: database, admin accounts, SMS/Telegram services, Google OAuth credentials, LLM APIs, payment systems, and customer data.",
+      "action_items": [
+        "Rotate ALL exposed secrets immediately (API keys, tokens, database credentials)",
+        "Add .env.local and .env.vps to .gitignore if not already there",
+        "Use environment variable management system (Vercel Secrets, HashiCorp Vault, 1Password)",
+        "Remove secrets from git history: git-filter-branch or BFG Repo-Cleaner",
+        "Store secrets in Vercel Environment Variables only",
+        "Implement pre-commit hooks to prevent secret commits",
+        "Enable GitHub secret scanning"
+      ],
+      "owasp": "A02:2021 - Cryptographic Failures",
+      "cvss": "9.8"
+    },
+    {
+      "id": "SEC-002",
+      "severity": "CRITICAL",
+      "category": "Authentication",
+      "type": "Weak API Key Validation",
+      "title": "Multiple Endpoints Use String Comparison for API Keys",
+      "description": "API endpoints validate API keys using simple string comparison without rate limiting or proper mechanisms.",
+      "affected_endpoints": [
+        "/api/ads/propose",
+        "/api/ads/upload-creative",
+        "/api/agents/cost",
+        "/api/admin/balcon-sms-photo",
+        "/api/admin/fb-leads-renotify"
+      ],
+      "vulnerabilities": [
+        "No per-API-key rate limiting",
+        "No API key rotation or expiration",
+        "Single API key used for multiple services",
+        "No request signing or HMAC validation"
+      ],
+      "action_items": [
+        "Implement API key rotation with expiration dates",
+        "Use HMAC-SHA256 for key comparison",
+        "Add per-API-key rate limiting",
+        "Create separate API keys for different services/scopes",
+        "Implement request signing (HMAC of body + timestamp)",
+        "Add audit logging for all API key usage"
+      ],
+      "owasp": "A07:2021 - Authentication Failures"
+    },
+    {
+      "id": "SEC-003",
+      "severity": "CRITICAL",
+      "category": "Path Traversal",
+      "type": "Unsafe File Upload Handling",
+      "title": "File Upload Vulnerability in Chat Module",
+      "description": "File upload endpoint constructs paths from user input without full validation.",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/chat/upload/route.ts",
+      "line_numbers": "16-21",
+      "issues": [
+        "File extension not validated (relies on Content-Type check)",
+        "Fallback to local filesystem is risky",
+        "path.basename() used for safety but still allows some attacks"
+      ],
+      "action_items": [
+        "Validate file extensions against allowlist (jpg, png, gif, webp)",
+        "Use random UUIDs for filenames, not original names",
+        "Never store uploads in /public directory",
+        "Implement antivirus scanning for uploaded files",
+        "Remove local filesystem fallback, use Vercel Blob only",
+        "Validate Content-Type with magic bytes verification"
+      ],
+      "owasp": "A04:2021 - Insecure Design"
+    },
+    {
+      "id": "SEC-004",
+      "severity": "HIGH",
+      "category": "Information Disclosure",
+      "type": "Sensitive Data Exposure",
+      "title": "Admin Phone Numbers and Credentials Exposed",
+      "description": "Administrative contact information and credentials accessible via environment variables.",
+      "exposure_points": [
+        "ADMIN_PHONE, JASON_PHONE in .env files",
+        "Embedded in SMS notifications that could be logged",
+        "Telegram bot token in environment variables"
+      ],
+      "action_items": [
+        "Move sensitive contact info to secure secret management",
+        "Implement structured logging that filters sensitive fields",
+        "Use correlation IDs instead of logging credentials",
+        "Configure log redaction for phone, email, token, api_key patterns",
+        "Exclude environment variables from default logging"
+      ],
+      "owasp": "A01:2021 - Broken Access Control"
+    },
+    {
+      "id": "SEC-005",
+      "severity": "HIGH",
+      "category": "Authentication",
+      "type": "Missing CSRF Protection",
+      "title": "State-Changing Operations Lack CSRF Tokens",
+      "description": "API endpoints accepting x-api-key may bypass CSRF protections.",
+      "recommendation": "All POST/PATCH/DELETE should require CSRF tokens or secure session validation.",
+      "action_items": [
+        "Verify NextAuth.js CSRF settings are enabled",
+        "Implement double-submit cookie pattern for API key endpoints",
+        "Add SameSite=Strict cookie policy",
+        "Ensure all state-changing operations require proper tokens"
+      ],
+      "owasp": "A01:2021 - Broken Access Control"
+    },
+    {
+      "id": "SEC-006",
+      "severity": "HIGH",
+      "category": "Injection",
+      "type": "Dynamic Query Construction",
+      "title": "Potential SQL Injection in Dynamic Queries",
+      "description": "While parameterized queries are used, dynamic WHERE clause construction could be vulnerable if validation fails.",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/submissions/route.ts",
+      "line_numbers": "22-46",
+      "current_status": "SAFE - Whitelist validation is properly implemented",
+      "note": "Document this pattern for future developers. Keep whitelist validation as best practice."
+    },
+    {
+      "id": "SEC-007",
+      "severity": "HIGH",
+      "category": "Rate Limiting",
+      "type": "In-Memory Rate Limiting Risks",
+      "title": "Rate Limit Map Could Cause Memory Issues",
+      "description": "In-memory rate limiting with potential for unbounded growth under attack.",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/middleware.ts",
+      "concerns": [
+        "Cleanup only triggers at 10,000 entries",
+        "Could reach memory limit during botnet attack",
+        "Arcjet already integrated but only in lib/arcjet.ts",
+        "Middleware uses separate in-memory implementation"
+      ],
+      "action_items": [
+        "Use Arcjet for all rate limiting instead of in-memory",
+        "Implement sliding window counter algorithm",
+        "Add per-key memory limits and circuit breaker",
+        "Monitor rate limit map size and alert on growth",
+        "Consider Redis for distributed rate limiting"
+      ],
+      "owasp": "A05:2021 - Security Misconfiguration"
+    },
+    {
+      "id": "SEC-008",
+      "severity": "HIGH",
+      "category": "Credentials Management",
+      "type": "Database Credentials in Connection String",
+      "title": "PostgreSQL Password Exposed in DATABASE_URL",
+      "description": "Database credentials embedded in connection string accessible to all processes.",
+      "exposure": "postgresql://neondb_owner:npg_NF9cCIr2dfiO@... in .env.vps",
+      "action_items": [
+        "Use Neon IAM authentication (JWT-based) if available",
+        "Rotate database password immediately",
+        "Use Vercel PostgreSQL with automatic secret management",
+        "Implement separate connection pooling credentials",
+        "Create read-only user for specific application functions"
+      ],
+      "owasp": "A02:2021 - Cryptographic Failures"
+    },
+    {
+      "id": "SEC-009",
+      "severity": "MEDIUM",
+      "category": "Security Headers",
+      "type": "Missing Security Headers",
+      "title": "Content-Security-Policy Not Configured",
+      "description": "While some security headers are set, CSP is missing which prevents XSS attacks.",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/middleware.ts",
+      "line_numbers": "196-203",
+      "action_items": [
+        "Add Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'",
+        "Add Strict-Transport-Security: max-age=31536000; includeSubDomains",
+        "Add X-Permitted-Cross-Domain-Policies: none",
+        "Add Permissions-Policy restrictions"
+      ],
+      "owasp": "A05:2021 - Security Misconfiguration"
+    },
+    {
+      "id": "SEC-010",
+      "severity": "MEDIUM",
+      "category": "Input Validation",
+      "type": "Silent Input Truncation",
+      "title": "User Input Truncated Without Validation",
+      "description": "Input strings are silently truncated using .slice() without error feedback.",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/submissions/route.ts",
+      "line_numbers": "290-301",
+      "risks": [
+        "User doesn't know data was truncated",
+        "Email addresses may become invalid",
+        "Lost data without user notification"
+      ],
+      "action_items": [
+        "Implement proper validation using zod or yup",
+        "Return validation errors instead of silently truncating",
+        "Set maximum length constraints at API boundary",
+        "Validate before database insertion"
+      ],
+      "owasp": "A07:2021 - Authentication Failures"
+    },
+    {
+      "id": "SEC-011",
+      "severity": "MEDIUM",
+      "category": "Dependency Management",
+      "type": "Missing Vulnerability Scanning",
+      "title": "No Automated Dependency Scanning in CI/CD",
+      "description": "No visible npm audit or Snyk integration in GitHub Actions.",
+      "action_items": [
+        "Add npm audit to pre-commit hooks",
+        "Configure Snyk in GitHub Actions",
+        "Set up Dependabot for automated pull requests",
+        "Run security audits in CI/CD pipeline on every push"
+      ],
+      "owasp": "A06:2021 - Vulnerable Components"
+    },
+    {
+      "id": "SEC-012",
+      "severity": "LOW",
+      "category": "Error Handling",
+      "type": "Error Message Information Leakage",
+      "title": "Error Messages Could Leak System Details",
+      "description": "Generic error messages in production (good) but could reveal patterns.",
+      "file": "/Users/novusepoxy/novus-epoxy/dashboard/app/api/submissions/route.ts",
+      "current_status": "ACCEPTABLE - Generic errors are properly implemented",
+      "recommendations": [
+        "Log detailed errors server-side with correlation IDs",
+        "Return only correlation ID for debugging",
+        "Implement structured logging for analysis"
+      ],
+      "owasp": "A05:2021 - Security Misconfiguration"
+    }
+  ],
+  "compliance_gaps": {
+    "gdpr": "INCOMPLETE - Data collection present (email, phone) but missing: data retention policy, right to deletion endpoint, data export functionality",
+    "pci_dss": "NOT_APPLICABLE - No direct credit card processing (uses Interac/bank transfers)",
+    "soc2": "PARTIAL - Rate limiting and monitoring in place, audit logging needs enhancement"
+  },
+  "priority_fixes": [
+    {
+      "priority": "CRITICAL",
+      "item": "Rotate all secrets in .env files immediately",
+      "estimated_effort": "30 minutes",
+      "blockers": "None - can be done immediately"
+    },
+    {
+      "priority": "CRITICAL",
+      "item": "Remove .env files from git history (BFG Repo-Cleaner)",
+      "estimated_effort": "45 minutes",
+      "blockers": "Need to coordinate with team on force-push"
+    },
+    {
+      "priority": "HIGH",
+      "item": "Implement HMAC-SHA256 API key validation",
+      "estimated_effort": "3-4 hours",
+      "blockers": "Affects multiple endpoints"
+    },
+    {
+      "priority": "HIGH",
+      "item": "Add Content-Security-Policy header",
+      "estimated_effort": "1 hour",
+      "blockers": "None"
+    },
+    {
+      "priority": "HIGH",
+      "item": "Fix file upload path handling",
+      "estimated_effort": "2 hours",
+      "blockers": "Test with actual file uploads"
+    }
+  ],
+  "testing_plan": [
+    "Run: npm audit and fix all warnings",
+    "Run: snyk test to check known vulnerabilities",
+    "Test: API endpoints with invalid/missing API keys",
+    "Test: File upload with various filename patterns",
+    "Test: Rate limiting with ab (Apache Bench) or similar",
+    "Test: CSRF protection on state-changing operations",
+    "Penetration test with Burp Suite Community Edition"
+  ],
+  "recommendations": {
+    "immediate": [
+      "Rotate all secrets now",
+      "Use git-filter-branch to remove secrets from history",
+      "Add comprehensive .gitignore for all sensitive files"
+    ],
+    "short_term_1week": [
+      "Implement HMAC validation for API keys",
+      "Add CSP and other security headers",
+      "Fix file upload validation"
+    ],
+    "medium_term_1month": [
+      "Migrate to Vercel Secrets Management",
+      "Implement Snyk/npm audit in CI/CD",
+      "Add comprehensive audit logging",
+      "Implement API key expiration and rotation"
+    ],
+    "long_term_ongoing": [
+      "Regular penetration testing (quarterly)",
+      "Dependency updates (monthly)",
+      "Security training for team",
+      "Implement GDPR compliance features"
+    ]
+  }
+}
