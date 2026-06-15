@@ -366,6 +366,20 @@ export default function DevisDetailPage({ params }: { params: Promise<{ id: stri
         </span>
       </div>
 
+      {/* Liens contextuels (P1-3) — accéder aux entités liées sans chercher */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {linkedInvoice && (
+          <Link href={`/dashboard/factures/${linkedInvoice.id}`} className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-amber-300 hover:bg-slate-700 transition">
+            🧾 Facture {linkedInvoice.numero}
+          </Link>
+        )}
+        {quote.client_nom && (
+          <Link href={`/dashboard/crm?search=${encodeURIComponent(quote.client_nom)}`} className="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 transition">
+            👤 {quote.client_nom} — CRM
+          </Link>
+        )}
+      </div>
+
       {error && (
         <div className="bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-2">
           <p className="text-red-400 text-sm">{error}</p>
