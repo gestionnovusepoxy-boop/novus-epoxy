@@ -33,3 +33,8 @@ dashboard/scripts/diag-*.mjs
 
 # Daemon testgaps — fichiers coverage-gaps regénérés en boucle (jamais commit)
 dashboard/tests/coverage-gaps-*.test.mjs
+SECURITY_AUDIT_*.md
+dashboard/tests/coverage-new-gaps-*.test.mjs
+dashboard/tests/critical-gaps-*.test.mjs
+dashboard/tests/gap-analysis-*.test.mjs
+dashboard/tests/coverage-audit-*.test.mjs
