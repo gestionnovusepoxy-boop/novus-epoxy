@@ -147,8 +147,9 @@ async function notifyTelegramFacebookLead(nom: string, email: string, telephone:
   if (!botToken || chatIds.length === 0) return;
 
   const lines = [
-    `🔥 <b>Nouveau lead Facebook!</b>`,
-    ``,
+    `━━━━━━━━━━━━━━━`,
+    `🔥🔥 <b>NOUVEAU LEAD FACEBOOK</b> 🔥🔥`,
+    `━━━━━━━━━━━━━━━`,
     `👤 ${escapeHtml(nom)}`,
     `📧 ${escapeHtml(email)}`,
     telephone ? `📞 ${escapeHtml(telephone)}` : '',
@@ -173,13 +174,25 @@ async function notifyTelegramFacebookLead(nom: string, email: string, telephone:
         { text: '📋 Voir CRM', url: 'https://novus-epoxy.vercel.app/dashboard/crm' },
       ]] };
 
-  await Promise.all(chatIds.map(chatId =>
-    fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ chat_id: chatId.trim(), text: lines.join('\n'), parse_mode: 'HTML', reply_markup: buttons }),
-    }).catch(() => {})
-  ));
+  for (const chatId of chatIds) {
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId.trim(), text: lines.join('\n'), parse_mode: 'HTML', reply_markup: buttons }),
+      });
+      const data = await res.json().catch(() => null);
+      // ÉPINGLE le lead dans le GROUPE — le dernier lead reste toujours visible en haut,
+      // même quand le bot envoie d'autres messages (Echo, rappels, etc.).
+      if (groupId && chatId.trim() === groupId && data?.result?.message_id) {
+        await fetch(`https://api.telegram.org/bot${botToken}/pinChatMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chat_id: groupId, message_id: data.result.message_id, disable_notification: true }),
+        }).catch(() => {});
+      }
+    } catch { /* ignore */ }
+  }
 }
 
 // Handle Facebook Lead Ads
