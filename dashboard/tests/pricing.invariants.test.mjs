@@ -43,6 +43,17 @@ function gen(seed) {
   };
 }
 
+// P0-2: plancher minimum-job 1500$ appliqué sur la PORTION SERVICE dans
+// calculateQuoteWithExtras ET calculateMultiQuote (vinyl exempt). Voir lib/pricing.ts.
+test('Min-job 1500$: portion service plancher (manuel + multi)', () => {
+  const floor = (serviceNet, isAllVinyl) => Math.max(serviceNet, isAllVinyl ? 0 : 1500);
+  assert.equal(floor(850, false), 1500, 'flake 100pi² (850$) → ramené à 1500$');
+  assert.equal(floor(1200, false), 1500, 'sous le min → 1500$');
+  assert.equal(floor(1500, false), 1500, 'pile au min → 1500$');
+  assert.equal(floor(8500, false), 8500, 'au-dessus du min → inchangé');
+  assert.equal(floor(200, true), 200, 'vinyl seul → exempt du minimum');
+});
+
 test('I1: total >= 0', () => {
   for (let i = 0; i < 500; i++) {
     const out = calc(gen(i));

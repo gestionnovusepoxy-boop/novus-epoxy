@@ -2,6 +2,7 @@
 
 import { useEffect, useState, use } from 'react';
 import Link from 'next/link';
+import { sanitizeEmailHtml } from '@/lib/utils';
 
 type TimelineType = 'email_in' | 'email_out' | 'sms_in' | 'sms_out' | 'chat' | 'quote' | 'note';
 
@@ -150,7 +151,7 @@ export default function ConversationsPage({ params }: { params: Promise<{ id: st
                     {hasBody && isOpen && (
                       <div className="mt-2 text-slate-300 text-sm whitespace-pre-wrap border-t border-slate-700 pt-2">
                         {e.type === 'email_in' || e.type === 'email_out'
-                          ? <div dangerouslySetInnerHTML={{ __html: e.body ?? '' }} className="prose prose-invert max-w-none" />
+                          ? <div dangerouslySetInnerHTML={{ __html: sanitizeEmailHtml(e.body) }} className="prose prose-invert max-w-none" />
                           : e.body}
                       </div>
                     )}

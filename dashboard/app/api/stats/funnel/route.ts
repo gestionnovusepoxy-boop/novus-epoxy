@@ -32,10 +32,13 @@ export async function GET(req: NextRequest) {
   const signes = (signesRow[0] as { count: number }).count;
   const completes = (completesRow[0] as { count: number }).count;
 
-  // Tous les taux calculés par rapport au total leads — jamais > 100%
+  // Taux par rapport au total leads inbound. ATTENTION: `devis/signes/completes` comptent TOUS
+  // les quotes (incluant ceux issus de prospects outbound exclus de `leads`), donc le ratio brut
+  // peut dépasser 100%. On clamp à 100% pour que le chiffre affiché reste honnête et utilisable
+  // pour juger les pubs (un taux "100%" = au moins autant de devis que de leads inbound).
   function pct(num: number, den: number): number {
     if (den === 0) return 0;
-    return Math.round((num / den) * 1000) / 10;
+    return Math.min(100, Math.round((num / den) * 1000) / 10);
   }
 
   return NextResponse.json({

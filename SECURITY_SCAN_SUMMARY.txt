@@ -1,0 +1,158 @@
+================================================================================
+NOVUS EPOXY SECURITY SCAN - EXECUTIVE SUMMARY
+================================================================================
+
+Date: 2026-06-14
+Project: Novus Epoxy Dashboard (Next.js + PostgreSQL)
+Risk Level: CRITICAL - IMMEDIATE ACTION REQUIRED
+
+================================================================================
+KEY FINDINGS
+================================================================================
+
+CRITICAL (4):
+  1. SEC-001: Secrets in Version Control
+     - API keys, DB credentials, tokens exposed in .env files
+     - Action: Rotate ALL secrets immediately, remove from git history
+
+  2. SEC-002: DOM XSS via dangerouslySetInnerHTML  
+     - Email body rendered without sanitization in conversations page
+     - Action: Install DOMPurify, sanitize email content
+
+  3. SEC-003: Broken Access Control (IDOR)
+     - Quote/invoice endpoints don't verify resource ownership
+     - Action: Add authorization checks to all resource endpoints
+
+  4. SEC-004: DoS in AI SDK Dependencies
+     - Uncontrolled resource consumption in @ai-sdk/provider-utils
+     - Action: Update ai package to v6.0.202+
+
+HIGH (8):
+  - API key validation without rate limiting (SEC-007)
+  - Plaintext passwords in environment (SEC-008)
+  - PDF template injection without escaping (SEC-009)
+  - Tokens in URL parameters (SEC-010)
+  - Error messages leak system info (SEC-011)
+  - PII exposure in API responses (SEC-012)
+  - Plus 2 more dependency vulnerabilities (SEC-005, SEC-006)
+
+MEDIUM (4):
+  - File upload validation (SEC-013)
+  - CSRF protection gaps (SEC-014)
+  - Rate limiting inadequate (SEC-015)
+  - Insufficient audit logging (SEC-016)
+
+LOW (2):
+  - Missing security headers (SEC-017)
+  - Debug code in production (SEC-018)
+
+================================================================================
+IMMEDIATE ACTIONS (DO FIRST)
+================================================================================
+
+[ ] 1. ROTATE SECRETS (30 minutes)
+   - Regenerate: ADMIN_API_KEY, TWILIO tokens, TELEGRAM_BOT_TOKEN, 
+                 ANTHROPIC_API_KEY, OPENROUTER_API_KEY, STRIPE_SECRET_KEY,
+                 META_PAGE_TOKEN, VERCEL_TOKEN, GOOGLE_CLIENT_SECRET
+   - Check git history: git log --all -p -- .env.local | head
+   - Remove from history: git filter-branch --tree-filter 'rm -f .env.local' -- --all
+   - Force push: git push origin --force --all
+
+[ ] 2. FIX XSS VULNERABILITY (15 minutes)
+   - npm install dompurify @types/dompurify
+   - Edit: dashboard/app/dashboard/crm/[id]/conversations/page.tsx line 153
+   - Replace dangerouslySetInnerHTML with DOMPurify.sanitize()
+   - Test with XSS payloads
+
+[ ] 3. ADD AUTHORIZATION CHECKS (1 hour)
+   - Edit: dashboard/app/api/quotes/[id]/route.ts
+   - Edit: dashboard/app/api/invoices/[id]/route.ts  
+   - Add ownership verification before returning data
+   - Apply to all resource endpoints
+
+[ ] 4. UPDATE DEPENDENCIES (30 minutes)
+   - npm install ai@6.0.202+
+   - npm install fast-uri@latest
+   - npm audit --json | check for remaining HIGH/CRITICAL
+
+================================================================================
+VULNERABILITY BREAKDOWN
+================================================================================
+
+CATEGORY BREAKDOWN:
+  - Authentication & Authorization: 4 vulnerabilities (SEC-003, 007, 014, 015)
+  - Secret Management: 3 vulnerabilities (SEC-001, 008, 010)
+  - Injection & XSS: 3 vulnerabilities (SEC-002, 009, 006)
+  - Dependencies: 3 vulnerabilities (SEC-004, 005, 006)
+  - Data Exposure: 2 vulnerabilities (SEC-011, 012)
+  - Other: 3 vulnerabilities (SEC-013, 016, 017, 018)
+
+OWASP TOP 10 COVERAGE:
+  ✓ A01:2021 - Broken Access Control (SEC-003)
+  ✓ A02:2021 - Cryptographic Failures (SEC-001, SEC-010)
+  ✓ A03:2021 - Injection (SEC-002, SEC-009)
+  ✓ A07:2021 - Identification & Auth (SEC-007, SEC-008)
+  ✓ A08:2021 - Software & Data Integrity (SEC-004, SEC-005, SEC-006)
+
+================================================================================
+REMEDIATION TIMELINE
+================================================================================
+
+IMMEDIATE (Today - Critical):
+  - Rotate secrets
+  - Fix XSS vulnerability  
+  - Add authorization checks
+  - Update AI SDK
+
+SHORT TERM (This week - High):
+  - Implement API key rate limiting
+  - Fix PDF template injection
+  - Update remaining dependencies
+  - Fix token-in-URL issue
+
+MEDIUM TERM (Next 2 weeks - Medium):
+  - Implement audit logging
+  - Add security headers (CSP, HSTS, etc)
+  - Improve error message handling
+  - Enhance file upload validation
+
+================================================================================
+FILES TO REVIEW
+================================================================================
+
+Critical to Review:
+  1. dashboard/lib/auth.ts - Authentication logic
+  2. dashboard/app/api/quotes/[id]/route.ts - IDOR vulnerability
+  3. dashboard/app/dashboard/crm/[id]/conversations/page.tsx - XSS
+  4. dashboard/lib/render-pdf.ts - Template injection
+  5. dashboard/middleware.ts - Rate limiting & headers
+
+Support Files:
+  - package.json - Dependencies
+  - dashboard/lib/db.ts - Database queries (currently safe)
+  - .env files - Secret rotation tracking
+
+================================================================================
+TESTING CHECKLIST
+================================================================================
+
+Before Merging:
+  [ ] npm audit shows zero HIGH/CRITICAL vulnerabilities
+  [ ] Run: npm test
+  [ ] Manual test XSS payload in email: <svg onload=\"alert('xss')\">
+  [ ] Test IDOR: Try accessing /api/quotes/999 with wrong user
+  [ ] Verify authorization checks work: should return 403 for unauthorized
+  [ ] Check error messages don't leak stack traces
+
+================================================================================
+REPORT LOCATION
+================================================================================
+
+Full Report: /Users/novusepoxy/novus-epoxy/SECURITY_SCAN_COMPREHENSIVE.json
+
+Previous Audits:
+  - /Users/novusepoxy/novus-epoxy/SECURITY_AUDIT_2024.json
+  - /Users/novusepoxy/novus-epoxy/SECURITY_AUDIT_REPORT.json  
+  - /Users/novusepoxy/novus-epoxy/SECURITY_AUDIT_SENSITIVE_DATA_2026.json
+
+================================================================================
