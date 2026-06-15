@@ -1572,6 +1572,19 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       return NextResponse.json({ ok: true });
     }
 
+    // lead_contacted_123 — "Marquer contacté" depuis le rappel de lead chaud FB (P0-3)
+    if (cbData.startsWith('lead_contacted_')) {
+      const leadId = parseInt(cbData.replace('lead_contacted_', ''));
+      try {
+        // prospect_sent_at = NOW() arrête les rappels; statut=contacte.
+        await query(`UPDATE crm_leads SET statut = 'contacte', prospect_sent_at = NOW(), updated_at = NOW() WHERE id = $1`, [leadId]);
+        await sendTelegram(cbChatId, `✅ Lead #${leadId} marqué contacté — plus de rappels.`);
+      } catch (err) {
+        console.error('lead_contacted handler error:', err);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
     // reject_quote_123
     if (cbData.startsWith('reject_quote_')) {
       const quoteId = parseInt(cbData.replace('reject_quote_', ''));
