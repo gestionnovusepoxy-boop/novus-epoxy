@@ -11,6 +11,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const rows = await query('SELECT * FROM quotes WHERE id = $1', [parseInt(id)]);
   if (!rows[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
+  // Verify ownership: user must own the quote or be the admin
+  const quote = rows[0];
+  const userEmail = session.user?.email?.toLowerCase().trim();
+  const isOwner = (quote.client_email as string | undefined)?.toLowerCase().trim() === userEmail;
+  const isAdmin = userEmail === process.env.ADMIN_EMAIL?.toLowerCase().trim();
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+  }
+
   // Fetch items and extras
   const items = await query('SELECT * FROM quote_items WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
   const extras = await query('SELECT * FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
@@ -19,10 +28,20 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const gate = await requireAdmin(req);
-  if (gate instanceof NextResponse) return gate;
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
 
   const { id } = await params;
+  const current = await query('SELECT client_email FROM quotes WHERE id = $1', [parseInt(id)]);
+  if (!current[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
+
+  // Verify ownership
+  const userEmail = session.user?.email?.toLowerCase().trim();
+  const isOwner = (current[0].client_email as string | undefined)?.toLowerCase().trim() === userEmail;
+  const isAdmin = userEmail === process.env.ADMIN_EMAIL?.toLowerCase().trim();
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+  }
   const body = await req.json();
   const allowed = ['statut', 'client_nom', 'client_email', 'client_tel', 'client_adresse', 'type_service', 'superficie', 'etat_plancher', 'notes', 'description_travaux', 'couleur_flake', 'contrat_signature_nom', 'rabais_pct', 'sous_total'];
 
@@ -45,28 +64,28 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   let serviceNetForItem: number | null = null;
 
   if (needsRecalc) {
-    const current = await query('SELECT * FROM quotes WHERE id = $1', [parseInt(id)]);
-    if (!current[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
+    const currentFull = await query('SELECT * FROM quotes WHERE id = $1', [parseInt(id)]);
+    if (!currentFull[0]) return NextResponse.json({ error: 'Devis introuvable' }, { status: 404 });
 
     const extrasRows = await query('SELECT sous_total FROM quote_extras WHERE quote_id = $1', [parseInt(id)]).catch(() => []);
     const extrasTotal = extrasRows.reduce<number>((s, r) => s + Number(r.sous_total || 0), 0);
 
-    const service = (body.type_service ?? current[0].type_service) as ServiceType;
-    const superficie = parseFloat(body.superficie ?? current[0].superficie);
-    const rabais = parseFloat(body.rabais_pct ?? current[0].rabais_pct ?? 0);
-    const prixCarre = Number(body.prix_pied_carre ?? current[0].prix_pied_carre ?? 0);
+    const service = (body.type_service ?? currentFull[0].type_service) as ServiceType;
+    const superficie = parseFloat(body.superficie ?? currentFull[0].superficie);
+    const rabais = parseFloat(body.rabais_pct ?? currentFull[0].rabais_pct ?? 0);
+    const prixCarre = Number(body.prix_pied_carre ?? currentFull[0].prix_pied_carre ?? 0);
 
     // Prix fixe : si body.sous_total est explicitement passé (modal édition), c'est le sous_total SERVICE seul.
-    // Sinon on conserve le sous_total service existant (current[0].sous_total - extras_actuels post-rabais).
-    const isPrixFixe = (!prixCarre || prixCarre === 0) && Number(current[0].sous_total) > 0;
+    // Sinon on conserve le sous_total service existant (currentFull[0].sous_total - extras_actuels post-rabais).
+    const isPrixFixe = (!prixCarre || prixCarre === 0) && Number(currentFull[0].sous_total) > 0;
     let sousTotalService: number;
     if (body.sous_total !== undefined && isPrixFixe) {
       sousTotalService = parseFloat(body.sous_total);
     } else if (isPrixFixe) {
-      // Reconstruct service-only from current : current.sous_total - previousExtrasNet
-      const prevRabais = Number(current[0].rabais_pct ?? 0);
-      const currentSousTotal = Number(current[0].sous_total ?? 0);
-      // Avant fix: current.sous_total = service_net SEUL. On garde cette convention.
+      // Reconstruct service-only from currentFull : currentFull.sous_total - previousExtrasNet
+      const prevRabais = Number(currentFull[0].rabais_pct ?? 0);
+      const currentSousTotal = Number(currentFull[0].sous_total ?? 0);
+      // Avant fix: currentFull.sous_total = service_net SEUL. On garde cette convention.
       sousTotalService = currentSousTotal / (1 - prevRabais / 100 || 1); // brut
     } else {
       sousTotalService = 0; // calculé par le helper via prix_pied_carre * superficie

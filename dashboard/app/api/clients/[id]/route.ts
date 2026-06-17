@@ -10,6 +10,15 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const rows = await query('SELECT * FROM clients WHERE id = $1', [parseInt(id)]);
   if (!rows[0]) return NextResponse.json({ error: 'Client introuvable' }, { status: 404 });
 
+  // Verify ownership: user must be the client or be the admin
+  const client = rows[0] as any;
+  const userEmail = session.user?.email?.toLowerCase().trim();
+  const isOwner = (client.email as string)?.toLowerCase().trim() === userEmail;
+  const isAdmin = userEmail === process.env.ADMIN_EMAIL?.toLowerCase().trim();
+  if (!isOwner && !isAdmin) {
+    return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+  }
+
   const quotes = await query(
     'SELECT * FROM quotes WHERE client_email = $1 ORDER BY created_at DESC',
     [rows[0].email]

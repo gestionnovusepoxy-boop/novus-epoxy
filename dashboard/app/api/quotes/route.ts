@@ -27,8 +27,10 @@ export async function GET(req: NextRequest) {
     params.push(statut);
   }
   if (search) {
+    // Validate search parameter length to prevent ReDoS
+    const validSearch = (search || '').slice(0, 100);
     where += ` AND (client_nom ILIKE $${i} OR client_email ILIKE $${i})`;
-    params.push(`%${search}%`);
+    params.push(`%${validSearch}%`);
     i++;
   }
 

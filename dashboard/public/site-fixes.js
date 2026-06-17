@@ -334,7 +334,17 @@
 
       var overlay = document.createElement('div');
       overlay.style.cssText = 'position:absolute;bottom:0;left:0;right:0;padding:12px 16px;background:linear-gradient(transparent,rgba(0,0,0,0.8));color:#fff;';
-      overlay.innerHTML = '<div style="font-weight:600;font-size:14px;">' + p.title + '</div><div style="font-size:12px;opacity:0.8;margin-top:2px;">' + p.type + '</div>';
+
+      var titleDiv = document.createElement('div');
+      titleDiv.style.cssText = 'font-weight:600;font-size:14px;';
+      titleDiv.textContent = p.title;
+
+      var typeDiv = document.createElement('div');
+      typeDiv.style.cssText = 'font-size:12px;opacity:0.8;margin-top:2px;';
+      typeDiv.textContent = p.type;
+
+      overlay.appendChild(titleDiv);
+      overlay.appendChild(typeDiv);
 
       card.appendChild(img);
       card.appendChild(overlay);
