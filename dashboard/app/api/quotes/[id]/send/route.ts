@@ -52,6 +52,33 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const quoteExtras = await query('SELECT * FROM quote_extras WHERE quote_id = $1 ORDER BY sort_order', [parseInt(id)]).catch(() => []);
   const isMultiService = quoteItems.length > 0;
 
+  // Portfolio gallery (preuve visuelle): jusqu'à 3 photos avant/après matchant le type de service.
+  // Priorité: featured + type_service, puis type_service, puis featured. Échec = jamais bloquant.
+  let galleryHtml = '';
+  try {
+    const portfolioRows = await query(
+      `SELECT photos FROM portfolio
+       WHERE photos IS NOT NULL AND array_length(photos, 1) >= 1
+       ORDER BY (type_service = $1) DESC, featured DESC, id DESC
+       LIMIT 3`,
+      [quote.type_service],
+    );
+    const imgs = portfolioRows
+      .map((r) => (Array.isArray(r.photos) ? (r.photos as string[])[0] : undefined))
+      .filter((u): u is string => typeof u === 'string' && /^https:\/\//.test(u))
+      .slice(0, 3);
+    if (imgs.length > 0) {
+      galleryHtml = `<div style="margin:0 0 16px;">
+<p style="margin:0 0 8px;color:#1e293b;font-weight:700;font-size:14px;">Exemples de nos planchers</p>
+<table cellpadding="0" cellspacing="0" style="width:100%;"><tr>
+${imgs.map((u) => `<td style="padding:0 4px;text-align:center;"><img src="${escapeHtml(u)}" alt="Réalisation Novus Epoxy" width="170" style="width:100%;max-width:170px;height:auto;border-radius:8px;border:1px solid #e2e8f0;" /></td>`).join('')}
+</tr></table>
+</div>`;
+    }
+  } catch (err) {
+    console.error('Portfolio gallery error (non-blocking):', err);
+  }
+
   let subject: string;
   let html: string;
 
@@ -144,6 +171,7 @@ ${isMultiService ? `<p style="margin:0 0 4px;color:#475569;font-size:13px;">1. S
 <p style="margin:0;color:#475569;font-size:13px;">3. Confirmez avec le depot (30%)</p>`}
 <p style="margin:8px 0 0;color:#94a3b8;font-size:12px;">Tout se fait sur une seule page — suivez les etapes a votre rythme.</p>
 </div>
+${galleryHtml}
 <div style="text-align:center;margin:0 0 12px;">
 <a href="${pageUrl}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:16px 40px;border-radius:8px;text-decoration:none;font-weight:700;font-size:17px;">
   Voir ma soumission
