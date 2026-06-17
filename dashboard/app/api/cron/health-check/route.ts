@@ -376,21 +376,23 @@ export async function GET(req: NextRequest) {
         // IMPORTANT: viser la PAGE directement, PAS me.id. Avec un token System User, /me retourne
         // l'utilisateur système (Novusbot), pas la Page — l'abonnement leadgen DOIT cibler la Page.
         const NOVUS_PAGE_ID = '636757822863288';
-        // Check leadgen subscription
+        // Check subscriptions: leadgen (formulaires) + feed (commentaires) + messages (Messenger)
+        const REQUIRED_FIELDS = ['leadgen', 'feed', 'messages'];
         const subRes = await fetch(`https://graph.facebook.com/v25.0/${NOVUS_PAGE_ID}/subscribed_apps?access_token=${metaToken}`);
         const subData = await subRes.json();
-        const hasLeadgen = (subData.data ?? []).some((s: Record<string, unknown>) =>
-          Array.isArray(s.subscribed_fields) && s.subscribed_fields.includes('leadgen')
+        const subbed: string[] = (subData.data ?? []).flatMap((s: Record<string, unknown>) =>
+          Array.isArray(s.subscribed_fields) ? (s.subscribed_fields as string[]) : []
         );
-        if (!hasLeadgen) {
+        const missing = REQUIRED_FIELDS.filter(f => !subbed.includes(f));
+        if (missing.length > 0) {
           await fetch(`https://graph.facebook.com/v25.0/${NOVUS_PAGE_ID}/subscribed_apps`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ subscribed_fields: ['leadgen'], access_token: metaToken }),
+            body: JSON.stringify({ subscribed_fields: REQUIRED_FIELDS, access_token: metaToken }),
           });
-          checks.push({ name: 'Meta Leadgen Sub', ok: true, detail: 'Abonnement leadgen renouvele automatiquement', autoFixed: true, severity: 'critical' });
+          checks.push({ name: 'Meta Leadgen Sub', ok: true, detail: `Abonnements renouveles auto (manquaient: ${missing.join(', ')})`, autoFixed: true, severity: 'critical' });
         } else {
-          checks.push({ name: 'Meta Leadgen Sub', ok: true, detail: 'Abonnement leadgen actif' });
+          checks.push({ name: 'Meta Leadgen Sub', ok: true, detail: 'Abonnements leadgen+feed+messages actifs' });
         }
       }
     }

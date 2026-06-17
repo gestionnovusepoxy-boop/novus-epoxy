@@ -86,10 +86,12 @@ export async function POST(req: NextRequest) {
 
   if (body.object === 'page') {
     for (const entry of body.entry ?? []) {
-      // Handle leadgen events
+      // Handle leadgen + feed (comments) events
       for (const change of entry.changes ?? []) {
         if (change.field === 'leadgen') {
           await handleLeadgen(change);
+        } else if (change.field === 'feed') {
+          await handleComment(change);
         }
       }
 
@@ -516,4 +518,63 @@ async function handleMessengerMessage(event: Record<string, unknown>) {
       console.error('Error sending Messenger reply:', err);
     }
   }
+}
+
+// Handle Facebook Page comments — auto-réponse aux commentaires-demandes (capture de lead).
+// Réponse publique SANS prix (règle Novus) qui invite au privé; réponse privée (DM) qui démarre
+// Nova. Garde anti-boucle: ne répond JAMAIS à nos propres commentaires. Token mort = no-op (prêt
+// dès qu'il revient + page abonnée au champ 'feed').
+async function handleComment(change: Record<string, unknown>) {
+  const value = (change.value ?? {}) as Record<string, unknown>;
+  if (value.item !== 'comment' || value.verb !== 'add') return;
+
+  const commentId = value.comment_id as string | undefined;
+  const message = ((value.message as string | undefined) ?? '').trim();
+  const from = (value.from ?? {}) as Record<string, string>;
+  const fromId = from.id ?? '';
+  const fromName = from.name ?? '';
+  if (!commentId) return;
+
+  const accessToken = process.env.META_PAGE_TOKEN;
+  const pageId = process.env.META_PAGE_ID ?? '636757822863288';
+  // Anti-boucle: ne JAMAIS répondre à nos propres commentaires/réponses.
+  if (!fromId || fromId === pageId) return;
+
+  // Vraie demande (prix/service/surface) vs simple commentaire/compliment.
+  const isInquiry = /(combien|prix|co[ûu]t|soumission|estim|devis|garage|sous.?sol|plancher|terrasse|balcon|pi(ed)?2|pied carr|int[ée]ress|\binfo\b)/i.test(message);
+  const prenom = (fromName.split(/\s+/)[0] || '').slice(0, 40);
+
+  // Alerte Telegram TOUJOURS (Luca voit chaque commentaire).
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const groupId = process.env.TELEGRAM_GROUP_CHAT_ID;
+  if (botToken && groupId) {
+    const tg = [
+      `💬 Commentaire Facebook${isInquiry ? ' — LEAD potentiel 🔥' : ''}`,
+      ``,
+      `👤 ${fromName || 'Inconnu'}`,
+      `📝 ${message.slice(0, 300)}`,
+      isInquiry ? `\n✅ Réponse auto envoyée (publique + privé).` : `\n(pas une demande — pas de réponse auto)`,
+    ].join('\n');
+    await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: groupId, text: tg }),
+    }).catch(() => {});
+  }
+
+  if (!isInquiry || !accessToken) return;
+
+  // 1) Réponse publique sobre — JAMAIS de prix, invite au privé.
+  const publicReply = `Merci ${prenom || 'beaucoup'}! 😊 On vous a ecrit en prive avec les details. Vous pouvez aussi nous joindre au 581-307-5983.`;
+  await fetch(`https://graph.facebook.com/v25.0/${commentId}/comments?access_token=${accessToken}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: publicReply }),
+  }).catch((e) => console.error('FB public reply error:', e));
+
+  // 2) Réponse privée (DM) — démarre la conversation; si la personne répond, Nova prend le relais
+  //    via handleMessengerMessage.
+  const privateReply = `Allo ${prenom}! Merci pour votre interet envers Novus Epoxy. Pour une soumission gratuite, dites-moi: 1) le type de surface (garage, sous-sol, balcon...) 2) la superficie approx en pi2 3) votre ville. On s'occupe de vous rapidement!`.trim();
+  await fetch(`https://graph.facebook.com/v25.0/${commentId}/private_replies?access_token=${accessToken}`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message: privateReply }),
+  }).catch((e) => console.error('FB private reply error:', e));
 }
