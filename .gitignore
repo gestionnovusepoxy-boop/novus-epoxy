@@ -38,3 +38,5 @@ dashboard/tests/coverage-new-gaps-*.test.mjs
 dashboard/tests/critical-gaps-*.test.mjs
 dashboard/tests/gap-analysis-*.test.mjs
 dashboard/tests/coverage-audit-*.test.mjs
+dashboard/tests/infrastructure-coverage-gaps.test.mjs
+dashboard/tests/new-gap-skeletons-*.test.mjs
