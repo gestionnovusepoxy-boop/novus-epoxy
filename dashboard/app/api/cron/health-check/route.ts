@@ -5,6 +5,7 @@ import { google } from 'googleapis';
 import { isQuietHours } from '@/lib/telegram-utils';
 import { callLLM } from '@/lib/llm';
 import { insertInvoiceWithRetry } from '@/lib/invoice-numero';
+import { sendSMS } from '@/lib/sms';
 
 export const maxDuration = 90;
 
@@ -404,9 +405,9 @@ export async function GET(req: NextRequest) {
     if (lastAt) {
       const hoursAgo = (Date.now() - lastAt.getTime()) / 3600000;
       if (hoursAgo > 48) {
-        // Severity 'warning' (pas 'critical') pour ne PAS spam Telegram à chaque run.
-        // Visible dashboard, fire seulement si ≥2 warnings combinés.
-        checks.push({ name: 'Leads FB', ok: false, detail: `Aucun lead Facebook depuis ${Math.round(hoursAgo)}h — verifie Zapier et les pubs actives!`, severity: 'warning' });
+        // CRITICAL: pas de lead = pas de revenu. Escalade SMS (voir bloc REPORT).
+        // Le dedup once/jour empêche le spam; 1 SMS/jour tant que c'est pas réglé.
+        checks.push({ name: 'Leads FB', ok: false, detail: `AUCUN lead Facebook depuis ${Math.round(hoursAgo)}h — token Meta mort ou pubs pausées. Argent qui rentre = 0.`, severity: 'critical' });
       } else {
         checks.push({ name: 'Leads FB', ok: true, detail: `Dernier lead il y a ${hoursAgo.toFixed(1)}h` });
       }
@@ -591,6 +592,15 @@ export async function GET(req: NextRequest) {
       `Score: ${checks.length - failures.length}/${checks.length}`,
     ].join('\n');
     await notifyTelegram(msg);
+    // ESCALADE SMS — une alerte critique (token Meta mort, zéro lead, etc.) ne doit PAS
+    // se noyer dans Telegram. SMS direct à Luca, max 1/jour via le dedup fingerprint ci-dessus.
+    try {
+      const adminPhone = process.env.ADMIN_PHONE;
+      if (adminPhone) {
+        const smsMsg = `🚨 NOVUS CRITIQUE: ${criticals.map(f => f.name).join(', ')}. Argent en jeu — check Telegram/dashboard maintenant.`.slice(0, 300);
+        await sendSMS(adminPhone, smsMsg);
+      }
+    } catch { /* never block the health-check on SMS delivery */ }
   } else if (shouldAlert && warnings.length >= 2) {
     const msg = [
       `⚠️ ECHO — Avertissements`,
