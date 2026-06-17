@@ -416,6 +416,29 @@ export async function GET(req: NextRequest) {
     }
   } catch { /* ignore */ }
 
+  // 3e-quater. Surveille les ANNONCES Meta actives — alerte CRITIQUE (→ SMS) si Meta
+  // en rejette ou en bloque une (DISAPPROVED / WITH_ISSUES / issues_info). IN_PROCESS = normal,
+  // pas d'alerte. Comme ça si une pub se fait refuser, Luca le sait dans l'heure, pas dans 3 jours.
+  try {
+    const metaTok = process.env.META_PAGE_TOKEN;
+    const adAcct = process.env.META_AD_ACCOUNT_ID || '250180039560083';
+    if (metaTok) {
+      const campR = await fetch(`https://graph.facebook.com/v25.0/act_${adAcct}/campaigns?fields=name&effective_status=%5B%22ACTIVE%22%5D&limit=10&access_token=${metaTok}`);
+      const campD = await campR.json() as { data?: Array<{ id: string; name: string }> };
+      for (const camp of (campD.data ?? [])) {
+        const adR = await fetch(`https://graph.facebook.com/v25.0/${camp.id}/ads?fields=name,effective_status,issues_info&limit=25&access_token=${metaTok}`);
+        const adD = await adR.json() as { data?: Array<{ effective_status?: string; issues_info?: Array<{ error_message?: string }> }> };
+        for (const ad of (adD.data ?? [])) {
+          const st = ad.effective_status ?? '';
+          const issues = (ad.issues_info ?? []).map(i => i.error_message).filter(Boolean).join(' | ');
+          if (st === 'DISAPPROVED' || st === 'WITH_ISSUES' || issues) {
+            checks.push({ name: 'Pub Meta bloquee', ok: false, detail: `"${camp.name}" — ${st}${issues ? ': ' + issues : ''}. A corriger (image/copy).`, severity: 'critical' });
+          }
+        }
+      }
+    }
+  } catch { /* ne bloque pas le health-check */ }
+
   // 3f. CRM leads with raw service names — auto-normalize
   try {
     const rawServices = await query(
