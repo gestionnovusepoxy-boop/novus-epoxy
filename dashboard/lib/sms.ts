@@ -136,6 +136,11 @@ export async function notifyAdminSMS(quoteId: number, clientName: string) {
 // Luca's number — always use this for client-facing SMS
 const LUCA_PHONE = '581-307-5983';
 
+// CASL/CRTC: tout message commercial (marketing/prospection) doit inclure un mécanisme
+// de désabonnement clair et bilingue. Les transactionnels (confirmation de dépôt, etc.)
+// en sont exemptés. Suffixe court à coller aux messages marketing.
+export const OPT_OUT_SUFFIX = ' Texto ARRET pour arreter.';
+
 // Send follow-up SMS to client (single relance after 5 days, no earlier SMS)
 export async function sendFollowUpSMS(clientPhone: string, clientName: string, quoteId: number) {
   if (!clientPhone) return false;
@@ -163,6 +168,6 @@ export async function sendReferralSMS(clientPhone: string, clientName: string) {
   if (!clientPhone) return false;
   const prenom = clientName.split(' ')[0];
 
-  const msg = `Salut ${prenom}! C'est Luca de Novus Epoxy. Ca fait deja quelques mois qu'on a fait ton plancher — j'espere que t'en profites! Si tu connais quelqu'un qui voudrait la meme chose, on offre 100$ de rabais pour chaque reference. Passe le mot! ${LUCA_PHONE}`;
+  const msg = `Salut ${prenom}! C'est Luca de Novus Epoxy. Ca fait deja quelques mois qu'on a fait ton plancher — j'espere que t'en profites! Si tu connais quelqu'un qui voudrait la meme chose, on offre 100$ de rabais pour chaque reference. Passe le mot! ${LUCA_PHONE}${OPT_OUT_SUFFIX}`;
   return sendSMS(clientPhone, msg);
 }

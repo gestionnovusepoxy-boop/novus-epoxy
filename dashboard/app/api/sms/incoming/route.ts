@@ -307,9 +307,14 @@ export async function POST(req: NextRequest) {
   const smsClass = classify(body);
   const isOptOut = smsClass === 'optout' || smsClass === 'complaint';
   const isComplaint = smsClass === 'complaint';
+  // CRTC: mot-clé HELP/AIDE/INFO (seul) doit retourner identification + façon de se désabonner.
+  const helpToken = lower.trim().replace(/[^a-z]/g, '');
+  const isHelp = helpToken === 'help' || helpToken === 'aide' || helpToken === 'info';
 
   let autoReply: string;
-  if (isOptOut) {
+  if (isHelp) {
+    autoReply = `Novus Epoxy — planchers epoxy haut de gamme (Quebec). Soumission gratuite ou questions: 581-307-5983 ou gestionnovusepoxy@gmail.com. Texto ARRET pour ne plus recevoir de messages.`;
+  } else if (isOptOut) {
     // Opt-out: save to DB so we NEVER contact this person again
     const phone = from.startsWith('+') ? from : `+1${last10}`;
     await query(
