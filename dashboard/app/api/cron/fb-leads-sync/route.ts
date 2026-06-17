@@ -272,6 +272,19 @@ export async function GET(req: NextRequest) {
           quoteId = await tryCreateDraftQuote(leadId, nom, email, telephone, adresse, service, superficie);
         }
         await notifyTelegram(nom, email ?? '', telephone, { service: service ?? undefined, espace: espace ?? undefined, superficie: superficie ?? undefined, adresse: adresse ?? undefined, quoteId: quoteId ?? undefined });
+        // Accusé de réception instantané au lead FB (Luca le veut comme les autres canaux, 17 juin).
+        // GARDE: seulement sur leads FRAIS (<6h) pour que le backfill post-token ne texte PAS des
+        // leads vieux de plusieurs jours. CASL-safe: formulaire FB = demande = consentement implicite.
+        if (telephone) {
+          const ageMs = Date.now() - new Date(lead.created_time).getTime();
+          if (ageMs >= 0 && ageMs < 6 * 3600 * 1000) {
+            try {
+              const { sendSMS } = await import('@/lib/sms');
+              const prenom = String(nom).trim().split(/\s+/)[0];
+              await sendSMS(telephone, `Allo ${prenom}! Merci pour ta demande chez Novus Epoxy. On a bien recu ca, on te recontacte tres vite! — Luca, 581-307-5983 Texto ARRET pour arreter.`);
+            } catch { /* ne bloque jamais la sync */ }
+          }
+        }
       } else {
         // Lead already exists — check if it needs a quote auto-created (e.g. superficie wasn't parseable before)
         if (service && superficie && SERVICES[service as ServiceType]) {

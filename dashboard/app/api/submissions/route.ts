@@ -339,11 +339,11 @@ export async function POST(req: NextRequest) {
     ]
   ).catch(() => []); // Don't fail
 
-  // Accusé de réception instantané au LEAD (site web / Google seulement — PAS Facebook,
-  // qui reste contact manuel par Luca). La recherche montre que répondre en <5 min = 21×
-  // plus de qualification. CASL-safe: réponse à une demande explicite (consentement implicite),
-  // identification (Luca/Novus), + opt-out ARRET. sendSMSNotif gère heures calmes/dedup/validation.
-  if (body.telephone && !leadSource.includes('facebook')) {
+  // Accusé de réception instantané au LEAD (tous canaux, FB inclus — Luca le veut, 17 juin).
+  // La recherche montre que répondre en <5 min = 21× plus de qualification. CASL-safe: réponse à
+  // une demande explicite (consentement implicite), identification (Luca/Novus), + opt-out ARRET.
+  // sendSMSNotif gère heures calmes/dedup/validation.
+  if (body.telephone) {
     const prenomLead = String(body.nom).trim().split(/\s+/)[0];
     const ackMsg = `Allo ${prenomLead}! Merci pour ta demande chez Novus Epoxy. On a bien recu ca, on te recontacte tres vite! — Luca, 581-307-5983 Texto ARRET pour arreter.`;
     await sendSMSNotif(body.telephone, ackMsg);
