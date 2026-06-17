@@ -15,13 +15,6 @@
         "TWILIO_AUTH_TOKEN": "${TWILIO_AUTH_TOKEN}"
       }
     },
-    "stripe": {
-      "command": "npx",
-      "args": ["-y", "@stripe/mcp"],
-      "env": {
-        "STRIPE_SECRET_KEY": "${STRIPE_SECRET_KEY}"
-      }
-    },
     "claude-flow": {
       "command": "npx",
       "args": [
