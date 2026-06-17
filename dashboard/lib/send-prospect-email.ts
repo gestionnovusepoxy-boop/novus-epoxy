@@ -46,13 +46,27 @@ export async function sendProspectEmail({
   oauth2.setCredentials({ refresh_token: refreshToken });
   const gmail = google.gmail({ version: 'v1', auth: oauth2 });
 
-  const content = html || (text ? text.split('\n').map(l => l.trim() ? `<p style="margin:0 0 8px;">${l}</p>` : '').join('') : '');
+  const body = html || (text ? text.split('\n').map(l => l.trim() ? `<p style="margin:0 0 8px;">${l}</p>` : '').join('') : '');
+
+  // CASL/LCAP: tout courriel commercial doit inclure identification de l'expéditeur
+  // + un mécanisme de désabonnement clair. Injecté ici pour que TOUS les emails de
+  // prospection soient conformes, peu importe l'appelant.
+  // NOTE: ajouter une adresse postale civique complète pour conformité CASL stricte.
+  const caslFooter = `<hr style="margin:24px 0 12px;border:none;border-top:1px solid #ddd;">
+<p style="font-size:12px;color:#888;line-height:1.5;margin:0;">
+Novus Epoxy — Planchers époxy haut de gamme, région de Québec (QC).<br>
+Téléphone: 581-307-5983 · gestionnovusepoxy@gmail.com<br>
+Vous recevez ce courriel car vous avez manifesté de l'intérêt pour nos services.<br>
+Pour ne plus jamais recevoir nos courriels, répondez «&nbsp;DESABONNEMENT&nbsp;» à ce message.
+</p>`;
+  const content = body + caslFooter;
 
   const headerLines = [
     'From: Novus Epoxy <gestionnovusepoxy@gmail.com>',
     `To: ${to}`,
     `Subject: ${subject}`,
     'MIME-Version: 1.0',
+    'List-Unsubscribe: <mailto:gestionnovusepoxy@gmail.com?subject=DESABONNEMENT>',
     'Content-Type: text/html; charset=utf-8',
   ].join('\r\n');
 

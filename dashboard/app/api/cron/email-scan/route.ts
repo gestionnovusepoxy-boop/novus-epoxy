@@ -399,6 +399,17 @@ Reponds en JSON strict (sans markdown):
     [parsed.type, temperature, leadId]
   );
 
+  // CASL/LCAP: un classement NON_INTERESSE ou une réponse "DESABONNEMENT" doit bloquer
+  // IMMÉDIATEMENT tout envoi commercial futur (honoré bien avant le délai légal de 10 jours).
+  const wantsUnsub = parsed.type === 'NON_INTERESSE'
+    || /d[eé]sabonn|unsubscribe|ne plus.*(courriel|email|message)|retir.*liste/i.test(`${subject} ${bodyText}`);
+  if (wantsUnsub) {
+    try {
+      const { blockLead } = await import('@/lib/lead-blocklist');
+      await blockLead({ email: fromEmail, reason: 'unsubscribed', detail: `Email desabo: ${subject}`.slice(0, 200) });
+    } catch { /* ne bloque pas le scan */ }
+  }
+
   // 8b. Get lead phone for Telegram alert
   const leadPhoneRows = await query(`SELECT telephone, source FROM crm_leads WHERE id = $1`, [leadId]);
   const leadPhone = (leadPhoneRows[0]?.telephone as string) ?? null;
