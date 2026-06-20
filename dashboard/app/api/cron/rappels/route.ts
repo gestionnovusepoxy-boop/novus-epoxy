@@ -6,7 +6,7 @@ import { sendEmail } from '@/lib/send-email';
 
 export const maxDuration = 60;
 
-// Vercel Cron — runs every 6 hours to send 24h reminders before work appointments
+// Vercel Cron — runs daily to send 24h reminders before work appointments
 export async function GET(req: NextRequest) {
   const authHeader = req.headers.get('authorization')?.replace('Bearer ', '') ?? '';
   const cronSecret = process.env.CRON_SECRET ?? '';

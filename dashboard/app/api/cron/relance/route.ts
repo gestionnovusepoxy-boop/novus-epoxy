@@ -9,7 +9,7 @@ import { getQuebecHour } from '@/lib/timezone';
 
 export const maxDuration = 60;
 
-// Vercel Cron — runs every 6 hours to send follow-ups on unanswered quotes
+// Vercel Cron — runs daily to send follow-ups on unanswered quotes
 // Relance 1: 48h after sent
 // Relance 2: 5 days after sent (SMS + email)
 export async function GET(req: NextRequest) {

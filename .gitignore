@@ -30,6 +30,10 @@ SECURITY_AUDIT_REPORT.json
 .claude-flow/security/
 dashboard/scripts/get-*.mjs
 dashboard/scripts/diag-*.mjs
+dashboard/scripts/fix-*.mjs
+
+# Daemon claude-flow local memory (généré localement, jamais commit)
+.swarm/
 
 # Daemon testgaps — fichiers coverage-gaps regénérés en boucle (jamais commit)
 dashboard/tests/coverage-gaps-*.test.mjs
