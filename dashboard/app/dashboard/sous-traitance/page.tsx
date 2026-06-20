@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { formatMoney } from '@/lib/pricing';
 
 /* ─── Types ─── */
@@ -366,6 +367,7 @@ function PartnersModal({
 
 /* ─── Page ─── */
 export default function SousTraitancePage() {
+  const router = useRouter();
   const [contracts, setContracts] = useState<Contract[]>([]);
   const [partners, setPartners] = useState<Partner[]>([]);
   const [loading, setLoading] = useState(true);
@@ -466,7 +468,7 @@ export default function SousTraitancePage() {
                 {contracts.map(c => {
                   const badge = statutBadge(c.statut);
                   return (
-                    <tr key={c.id} className="border-b border-slate-800/60 last:border-0 hover:bg-slate-900/40 transition">
+                    <tr key={c.id} onClick={() => router.push(`/dashboard/sous-traitance/${c.id}`)} className="border-b border-slate-800/60 last:border-0 hover:bg-slate-900/40 transition cursor-pointer">
                       <td className="px-4 py-3">
                         <div className="text-white font-medium">{c.client_nom}</div>
                         {c.client_adresse && <div className="text-slate-500 text-xs truncate max-w-[200px]">{c.client_adresse}</div>}
