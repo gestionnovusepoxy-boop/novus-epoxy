@@ -638,6 +638,12 @@ export async function GET(req: NextRequest) {
   // Si tout va bien, ou si le même problème a déjà été signalé aujourd'hui → silence.
   // Echo parle seulement quand ça casse, et UNE fois par problème par jour.
 
+  // Heartbeat — dashboard agent status (Echo) reads kv_store['last_health_check']
+  await query(
+    `INSERT INTO kv_store (key, value) VALUES ('last_health_check', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+    [new Date().toISOString()],
+  ).catch(() => {});
+
   return NextResponse.json({
     ok: failures.length === 0,
     timestamp: new Date().toISOString(),

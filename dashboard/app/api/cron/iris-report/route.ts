@@ -165,6 +165,12 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // Heartbeat — dashboard agent status (Iris) reads kv_store['last_iris_report']
+  await query(
+    `INSERT INTO kv_store (key, value) VALUES ('last_iris_report', $1) ON CONFLICT (key) DO UPDATE SET value = $1`,
+    [new Date().toISOString()],
+  ).catch(() => {});
+
   return NextResponse.json({
     ok: true,
     sent_to: hasAction ? chatIds.length : 0,
