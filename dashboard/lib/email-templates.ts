@@ -36,6 +36,10 @@ export function brandedEmailHtml(bodyHtml: string, opts: BrandedEmailOptions = {
         📞 <b>Jason</b> (chantier / soumission) : <a href="tel:5813072678" style="color:#f59e0b;">581-307-2678</a><br/>
         🌐 <a href="https://novusepoxy.ca" style="color:#f59e0b;">novusepoxy.ca</a>
       </p>
+      <p style="color:#94a3b8;font-size:11px;margin:14px 0 0;line-height:1.5;">
+        Novus Epoxy · 44 rue de la Polyvalente, Quebec, QC G2N 1G8 · 581-307-5983 · <a href="https://novusepoxy.ca" style="color:#94a3b8;">novusepoxy.ca</a><br/>
+        Pour ne plus recevoir nos courriels, repondez DESABONNEMENT.
+      </p>
     </div>
   </div>`;
 }

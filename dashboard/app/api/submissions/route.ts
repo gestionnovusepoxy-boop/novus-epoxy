@@ -348,6 +348,11 @@ export async function POST(req: NextRequest) {
     const ackMsg = `Allo ${prenomLead}! Merci pour ta demande chez Novus Epoxy. On a bien recu ca, on te recontacte tres vite! — Luca, 581-307-5983 Texto ARRET pour arreter.`;
     await sendSMSNotif(body.telephone, ackMsg);
   }
+  // Accusé email (24/7, pas d'heures calmes). Envoyé 1× à l'intake si email présent.
+  if (body.email) {
+    const { sendLeadAckEmail } = await import('@/lib/send-email');
+    await sendLeadAckEmail(body.email, body.nom);
+  }
 
   // Try to auto-create a draft quote if we have enough info
   let quoteId: number | null = null;

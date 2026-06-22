@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { query } from '@/lib/db';
+import { brandedEmailHtml } from '@/lib/email-templates';
 
 /**
  * Detects Gmail OAuth `invalid_grant` errors (revoked / expired refresh token).
@@ -192,6 +193,32 @@ async function sendViaGmail({
     // Detect invalid_grant (revoked refresh token) — alert once/day + persist flag
     void handleGmailAuthError(err);
     throw err;
+  }
+}
+
+/**
+ * Accusé de réception INSTANTANÉ au lead (email court + humain, québécois).
+ * Envoyé à l'intake (formulaire, FB sync, Zapier) — répondre vite = beaucoup plus de qualification.
+ * JAMAIS de prix (règle métier). CASL-safe: réponse à une demande explicite + identification + reply.
+ * Ne throw jamais — retourne true/false pour ne pas bloquer le flux d'intake.
+ */
+export async function sendLeadAckEmail(to: string, nom: string): Promise<boolean> {
+  try {
+    const prenom = String(nom ?? '').trim().split(/\s+/)[0] || 'là';
+    const body = `<p>Allo ${prenom}!</p>
+      <p>Merci d'avoir contacté <b>Novus Epoxy</b>. On a bien reçu ta demande, on te recontacte très vite.</p>
+      <p>Une question? Réponds à ce courriel ou appelle Luca au <a href="tel:5813075983" style="color:#f59e0b;">581-307-5983</a>.</p>`;
+    await sendEmail({
+      to,
+      subject: 'On a bien reçu ta demande — Novus Epoxy',
+      html: brandedEmailHtml(body, { showQuoteButton: false }),
+      replyTo: 'gestionnovusepoxy@gmail.com',
+    });
+    return true;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error(`[sendLeadAckEmail] failed (${msg.slice(0, 120)})`);
+    return false;
   }
 }
 

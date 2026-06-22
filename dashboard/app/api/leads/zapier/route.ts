@@ -260,6 +260,12 @@ export async function POST(req: NextRequest) {
     const jasonPhone = process.env.JASON_PHONE;
     if (adminPhone) sendSMS(adminPhone, smsMsg).catch(() => {});
     if (jasonPhone) sendSMS(jasonPhone, smsMsg).catch(() => {});
+
+    // Accusé email instantané au lead (24/7, pas d'heures calmes) — seulement nouveaux leads.
+    if (email) {
+      const { sendLeadAckEmail } = await import('@/lib/send-email');
+      await sendLeadAckEmail(email, nom).catch(() => {});
+    }
   }
 
   return NextResponse.json({
