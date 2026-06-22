@@ -242,6 +242,23 @@ export async function tryCreateQuoteFromReply(
 
   // ── AUTO-CREATE QUOTE — need at least a service + superficie ──────────
   if (parsed.confidence >= 40 && parsed.type_service && parsed.superficie) {
+    // ANTI-DOUBLON: ne PAS créer un 2e devis si ce client en a déjà un actif récent
+    // (même email OU tél, < 7 jours, pas refusé). Évite "deux devis pour la même affaire".
+    const cleanTel = (lead.telephone || '').replace(/\D/g, '').slice(-10);
+    const dupe = await query(
+      `SELECT id FROM quotes
+       WHERE statut <> 'refuse'
+         AND created_at >= NOW() - INTERVAL '7 days'
+         AND ( ($1 <> '' AND LOWER(client_email) = $1)
+            OR ($2 <> '' AND RIGHT(REGEXP_REPLACE(COALESCE(client_tel,''), '\\D', '', 'g'), 10) = $2) )
+       ORDER BY created_at DESC LIMIT 1`,
+      [(lead.email || '').toLowerCase().trim(), cleanTel],
+    ).catch(() => []);
+    if (dupe.length > 0) {
+      console.log(`[auto-quote] SKIP — devis récent #${dupe[0].id} existe déjà pour ce client (anti-doublon)`);
+      return null;
+    }
+
     // Check active promotions
     let rabaisPct = 0;
     try {

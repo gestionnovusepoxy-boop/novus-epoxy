@@ -15,11 +15,30 @@ async function notifyTelegramHandoff(conversationId: number, visitorName: string
     : getAdminChatIds();
   if (!botToken || chatIds.length === 0) return;
 
+  // Inclure les derniers messages de l'échange pour que Luca LISE la conversation
+  // directement dans Telegram (avant: il voyait juste la "raison", incompréhensible).
+  let transcript = '';
+  try {
+    const rows = await query(
+      `SELECT role, content FROM messages WHERE conversation_id = $1 ORDER BY created_at DESC LIMIT 8`,
+      [conversationId]
+    );
+    const lines = (rows as Array<{ role: string; content: string }>)
+      .reverse()
+      .map(m => {
+        const who = m.role === 'assistant' ? '🤖 Nova' : m.role === 'user' ? '👤 Client' : '⚙️';
+        const txt = escapeHtml(String(m.content || '').slice(0, 280));
+        return `<b>${who}:</b> ${txt}`;
+      });
+    if (lines.length) transcript = '\n\n<b>━━ Conversation ━━</b>\n' + lines.join('\n');
+  } catch { /* si la lecture échoue, on envoie quand même la notif de base */ }
+
   const msg = [
     `🔔🔔 <b>HANDOFF REQUIS</b>`,
     ``,
-    `<b>Client:</b> ${visitorName || 'Anonyme'}`,
-    `<b>Raison:</b> ${reason}`,
+    `<b>Client:</b> ${escapeHtml(visitorName || 'Anonyme')}`,
+    `<b>Raison:</b> ${escapeHtml(reason)}`,
+    transcript,
     ``,
     `<i>Le client attend une réponse humaine.</i>`,
   ].join('\n');
