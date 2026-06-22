@@ -65,8 +65,9 @@ export async function GET(req: NextRequest) {
 </div>
 <div style="padding:28px 24px;">
   <p style="font-size:16px;color:#1e293b;">Bonjour ${escapeHtml(prenom)},</p>
-  <p style="color:#475569;line-height:1.7;">Votre soumission <strong>#${q.id}</strong> de <strong>${formatMoney(Number(q.total))}</strong> est prête et vous attend. On voulait simplement s'assurer que vous l'avez bien reçue!</p>
-  <p style="color:#475569;line-height:1.7;">Si vous avez des questions ou souhaitez ajuster quoi que ce soit, répondez directement à ce courriel — on s'en occupe rapidement.</p>
+  <p style="color:#475569;line-height:1.7;">Votre soumission <strong>#${q.id}</strong> est prête:</p>
+  <p style="color:#1e293b;line-height:1.7;font-size:15px;margin:8px 0 16px;">Total: <strong>${formatMoney(Number(q.total))}</strong><br/>Dépôt pour réserver votre date: <strong>${formatMoney(Number(q.depot_requis))}</strong></p>
+  <p style="color:#475569;line-height:1.7;">Une question ou un ajustement? Répondez à ce courriel, on s'en occupe vite.</p>
   <div style="text-align:center;margin:28px 0;">
     <a href="${quoteUrl}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Voir ma soumission →</a>
   </div>
@@ -107,10 +108,11 @@ export async function GET(req: NextRequest) {
 </div>
 <div style="padding:28px 24px;">
   <p style="font-size:16px;color:#1e293b;">Bonjour ${escapeHtml(prenom)},</p>
-  <p style="color:#475569;line-height:1.7;">Notre calendrier se remplit rapidement pour les prochaines semaines. Votre soumission <strong>#${q.id}</strong> de <strong>${formatMoney(Number(q.total))}</strong> est toujours disponible — mais les créneaux partent vite!</p>
-  <p style="color:#475569;line-height:1.7;">Si vous avez des hésitations ou des questions, appelez-nous directement — on règle ça en 5 minutes.</p>
+  <p style="color:#475569;line-height:1.7;">Notre calendrier se remplit vite pour les prochaines semaines. Votre soumission <strong>#${q.id}</strong> tient toujours:</p>
+  <p style="color:#1e293b;line-height:1.7;font-size:15px;margin:8px 0 16px;">Total: <strong>${formatMoney(Number(q.total))}</strong><br/>Dépôt pour bloquer votre date: <strong>${formatMoney(Number(q.depot_requis))}</strong></p>
+  <p style="color:#475569;line-height:1.7;">C'est le dépôt qui réserve votre place — les créneaux partent au premier qui confirme.</p>
   <div style="text-align:center;margin:28px 0;">
-    <a href="${quoteUrl}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Confirmer mon projet →</a>
+    <a href="${quoteUrl}" style="display:inline-block;background:#f59e0b;color:#0f172a;padding:14px 36px;border-radius:8px;text-decoration:none;font-weight:700;font-size:15px;">Réserver ma date →</a>
   </div>
   <div style="border-top:1px solid #e2e8f0;padding-top:20px;margin-top:8px;">
     <p style="color:#1e293b;font-weight:700;font-size:13px;margin:0 0 8px;">Contactez-nous directement:</p>
