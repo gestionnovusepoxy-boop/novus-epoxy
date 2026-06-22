@@ -1,6 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { sendSMS } from '@/lib/sms';
+
+// POST — répondre à un client par SMS directement depuis la page Textos.
+// sendSMS gère heures calmes, opt-out, validation, et log dans sms_logs.
+export async function POST(req: NextRequest) {
+  const session = await auth();
+  if (!session) return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+  const body = await req.json().catch(() => null);
+  const to = String(body?.to || '').trim();
+  const message = String(body?.message || '').trim().slice(0, 600);
+  if (!to || !message) return NextResponse.json({ error: 'Numéro et message requis' }, { status: 400 });
+  const ok = await sendSMS(to, message);
+  if (ok) return NextResponse.json({ ok: true, delivered: 'SMS' });
+  return NextResponse.json({ ok: false, deliveryError: 'SMS bloqué (heures calmes, opt-out, ou numéro invalide)' });
+}
 
 export async function GET(req: NextRequest) {
   const session = await auth();

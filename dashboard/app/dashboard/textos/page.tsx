@@ -32,9 +32,28 @@ function getContactPhone(sms: SmsLog): string {
 }
 
 /* ─── Conversation View ─── */
-function ConversationPanel({ phone, messages, onClose }: { phone: string; messages: SmsLog[]; onClose: () => void }) {
+function ConversationPanel({ phone, messages, onClose, onSent }: { phone: string; messages: SmsLog[]; onClose: () => void; onSent: () => void }) {
   const sorted = [...messages].sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
   const clientName = messages.find(m => m.client_nom)?.client_nom || formatPhone(phone);
+  const [reply, setReply] = useState('');
+  const [sending, setSending] = useState(false);
+  const [statusOk, setStatusOk] = useState<string | null>(null);
+  const [statusErr, setStatusErr] = useState<string | null>(null);
+
+  async function send() {
+    if (!reply.trim() || sending) return;
+    setSending(true); setStatusOk(null); setStatusErr(null);
+    try {
+      const res = await fetch('/api/sms/logs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: phone, message: reply.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) { setStatusOk('Texto envoyé au client'); setReply(''); onSent(); }
+      else setStatusErr(data.deliveryError || 'Échec de l\'envoi');
+    } catch { setStatusErr('Erreur de connexion'); }
+    setSending(false);
+  }
 
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -62,6 +81,26 @@ function ConversationPanel({ phone, messages, onClose }: { phone: string; messag
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Reply box */}
+        <div className="p-4 border-t border-slate-700">
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={reply}
+              onChange={e => setReply(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') send(); }}
+              placeholder="Répondre par texto..."
+              className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-4 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:border-amber-500"
+            />
+            <button onClick={send} disabled={!reply.trim() || sending}
+              className="bg-amber-500 text-slate-900 font-bold px-5 py-2.5 rounded-lg hover:bg-amber-400 transition disabled:opacity-50">
+              {sending ? '...' : 'Envoyer'}
+            </button>
+          </div>
+          {statusOk && <div className="mt-2 text-sm text-green-400">✅ {statusOk}</div>}
+          {statusErr && <div className="mt-2 text-sm text-red-400">⚠️ {statusErr}</div>}
         </div>
       </div>
     </div>
@@ -207,6 +246,7 @@ function PageContent() {
             phone={selectedPhone}
             messages={selectedMessages}
             onClose={() => setSelectedPhone(null)}
+            onSent={load}
           />
         )}
       </div>
