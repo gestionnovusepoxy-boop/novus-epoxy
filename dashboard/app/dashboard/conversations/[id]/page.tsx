@@ -26,6 +26,7 @@ function PageContent() {
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [sendOk, setSendOk] = useState<string | null>(null);
   const msgsEndRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
@@ -43,14 +44,20 @@ function PageContent() {
     if (!reply.trim() || sending) return;
     setSending(true);
     setSendError(null);
+    setSendOk(null);
     try {
       const res = await fetch(`/api/conversations/${id}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: reply.trim() }),
       });
+      const data = await res.json().catch(() => ({}));
       if (res.ok) {
         setReply('');
+        if (data.delivered) setSendOk(`Envoyé au client par ${data.delivered}`);
+        else if (data.deliveryError) setSendError(`Sauvegardé mais PAS livré — ${data.deliveryError}`);
+        else if (data.quote_created) setSendOk(`Devis #${data.quote_id} créé`);
+        else setSendOk('Message sauvegardé');
         await load();
       } else {
         setSendError('Erreur lors de l\'envoi du message');
@@ -167,6 +174,8 @@ function PageContent() {
               {sending ? '...' : 'Envoyer'}
             </button>
           </div>
+          {sendOk && <div className="mt-2 text-sm text-green-400">✅ {sendOk}</div>}
+          {sendError && <div className="mt-2 text-sm text-red-400">⚠️ {sendError}</div>}
         </div>
       </div>
     </PollingProvider>

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { calculateQuoteCustomPrice, formatMoney, TPS_RATE, TVQ_RATE } from '@/lib/pricing';
-import { notifyAdminSMS } from '@/lib/sms';
+import { notifyAdminSMS, sendSMS } from '@/lib/sms';
+import { sendEmail } from '@/lib/send-email';
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -87,16 +88,57 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ ok: true, quote_created: true, quote_id: quoteId, total: calc.total });
   }
 
-  // Normal admin reply
+  // Normal admin reply — SAUVEGARDE + ENVOI RÉEL au client par le bon canal.
   await query(
     `INSERT INTO messages (conversation_id, role, content) VALUES ($1, 'assistant', $2)`,
     [convId, message]
   );
+
+  // Détermine le canal et livre le message au client.
+  let delivered: string | null = null;
+  let deliveryError: string | null = null;
+  try {
+    const channel = String(conv.channel || '');
+    const visitorId = String(conv.visitor_id || '');
+    const tel = conv.visitor_tel ? String(conv.visitor_tel) : '';
+    const email = conv.visitor_email ? String(conv.visitor_email) : '';
+
+    if (channel === 'messenger' && visitorId) {
+      // Messenger: recipient = visitor_id sans le préfixe 'fb_'
+      const psid = visitorId.replace(/^fb_/, '');
+      const token = process.env.META_PAGE_TOKEN;
+      if (token) {
+        const r = await fetch(`https://graph.facebook.com/v25.0/me/messages?access_token=${token}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ recipient: { id: psid }, message: { text: message.slice(0, 2000) }, messaging_type: 'RESPONSE' }),
+        });
+        if (r.ok) delivered = 'Messenger';
+        else deliveryError = `Messenger: ${(await r.text().catch(() => '')).slice(0, 120)}`;
+      } else deliveryError = 'META_PAGE_TOKEN manquant';
+    } else if (tel) {
+      // Web/SMS: sendSMS gère heures calmes, opt-out, validation
+      const ok = await sendSMS(tel, message.slice(0, 600));
+      if (ok) delivered = 'SMS';
+      else deliveryError = 'SMS bloqué (heures calmes, opt-out, ou numéro invalide)';
+    } else if (email) {
+      await sendEmail({
+        to: email,
+        subject: 'Réponse de Novus Epoxy',
+        html: `<p>${message.replace(/</g, '&lt;').replace(/\n/g, '<br>')}</p><p style="color:#888;font-size:12px;">Novus Epoxy — 581-307-5983</p>`,
+      });
+      delivered = 'Email';
+    } else {
+      deliveryError = 'Aucun canal pour joindre le client (pas de tél ni email)';
+    }
+  } catch (err) {
+    deliveryError = err instanceof Error ? err.message.slice(0, 150) : 'Erreur envoi';
+  }
 
   // If conversation was in handoff, move back to active
   if (conv.status === 'handoff') {
     await query(`UPDATE conversations SET status = 'active' WHERE id = $1`, [convId]);
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, delivered, deliveryError });
 }
