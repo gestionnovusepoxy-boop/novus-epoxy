@@ -63,9 +63,9 @@ const ACTIONS: { value: Action; label: string; desc: string; icon: React.ReactNo
 
 /* ── Inner component (needs polling context) ───────────── */
 
-function LeadHunterInner({ history, setHistory }: {
+function LeadHunterInner({ history, refreshHistory }: {
   history: HistoryItem[];
-  setHistory: React.Dispatch<React.SetStateAction<HistoryItem[]>>;
+  refreshHistory: () => Promise<void>;
 }) {
   const [action, setAction] = useState<Action | null>(null);
   const [details, setDetails] = useState('');
@@ -96,15 +96,9 @@ function LeadHunterInner({ history, setHistory }: {
       const json = await res.json();
       if (json.result) {
         setResult(json.result);
-        if (json.id) {
-          setHistory(prev => [{
-            id: json.id,
-            action,
-            details,
-            result: json.result,
-            created_at: new Date().toISOString(),
-          }, ...prev]);
-        }
+        // POST persists the campaign server-side but returns no id,
+        // so refetch the history to show the new entry.
+        await refreshHistory();
       }
     } catch {
       setResult('Erreur lors de la generation. Reessayez.');
@@ -392,20 +386,6 @@ function LeadHunterInner({ history, setHistory }: {
               >
                 {copied ? 'Copie!' : 'Copier'}
               </button>
-              <button
-                onClick={async () => {
-                  try {
-                    await fetch('/api/leads/hunter', {
-                      method: 'PUT',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({ action, details, result }),
-                    });
-                  } catch { /* ignore */ }
-                }}
-                className="text-xs bg-amber-500/20 text-amber-400 px-3 py-1.5 rounded hover:bg-amber-500/30 transition"
-              >
-                Sauvegarder
-              </button>
             </div>
           </div>
           <div className="text-white text-sm leading-relaxed whitespace-pre-wrap">
@@ -467,15 +447,23 @@ export default function LeadHunterPage() {
     try {
       const res = await fetch('/api/leads/hunter');
       const json = await res.json();
-      if (Array.isArray(json.items)) {
-        setHistory(json.items);
-      }
+      // The API returns rows under `data` (not `items`).
+      const rows = Array.isArray(json.data) ? json.data : [];
+      setHistory(
+        rows.map((row: Record<string, unknown>): HistoryItem => ({
+          id: String(row.id),
+          action: row.action as HistoryItem['action'],
+          details: (row.details as string) ?? '',
+          result: (row.result as string) ?? '',
+          created_at: (row.created_at as string) ?? new Date().toISOString(),
+        })),
+      );
     } catch { /* ignore */ }
   }, []);
 
   return (
     <PollingProvider onRefresh={fetchHistory} intervalMs={60_000}>
-      <LeadHunterInner history={history} setHistory={setHistory} />
+      <LeadHunterInner history={history} refreshHistory={fetchHistory} />
     </PollingProvider>
   );
 }

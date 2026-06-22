@@ -23,12 +23,33 @@ const LABEL: Record<Submission['statut'], string> = {
 
 function DetailPanel({ s, onClose, onUpdate }: { s: Submission; onClose: () => void; onUpdate: () => void }) {
   const [loading, setLoading] = useState(false);
+  const [smsOpen, setSmsOpen]       = useState(false);
+  const [smsText, setSmsText]       = useState('');
+  const [smsSending, setSmsSending] = useState(false);
+  const [smsStatus, setSmsStatus]   = useState<string | null>(null);
+
+  const tel = (s.telephone || '').replace(/[^0-9+]/g, '');
 
   async function handleStatut(statut: Submission['statut']) {
     setLoading(true);
     await updateSubmissionStatus(s.id, statut);
     onUpdate();
     setLoading(false);
+  }
+
+  async function sendSms() {
+    if (!smsText.trim() || smsSending || !s.telephone) return;
+    setSmsSending(true); setSmsStatus(null);
+    try {
+      const res = await fetch('/api/sms/logs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: s.telephone, message: smsText.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) { setSmsStatus('✅ Texto envoyé'); setSmsText(''); setSmsOpen(false); }
+      else setSmsStatus('⚠️ ' + (data.deliveryError || data.error || 'Échec'));
+    } catch { setSmsStatus('⚠️ Erreur de connexion'); }
+    setSmsSending(false);
   }
 
   return (
@@ -136,6 +157,43 @@ function DetailPanel({ s, onClose, onUpdate }: { s: Submission; onClose: () => v
 
           {/* Actions */}
           <div className="space-y-2 pt-2">
+            {/* Contact rapide */}
+            {s.telephone && (
+              <div className="flex gap-2">
+                <a
+                  href={`tel:${tel}`}
+                  className="flex-1 text-center bg-green-600 hover:bg-green-500 text-white font-semibold py-3 rounded-lg transition"
+                >
+                  Appeler
+                </a>
+                <button
+                  onClick={() => { setSmsOpen(o => !o); setSmsStatus(null); }}
+                  className="flex-1 text-center bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-lg transition"
+                >
+                  Texter
+                </button>
+              </div>
+            )}
+            {smsOpen && s.telephone && (
+              <div className="flex gap-2 items-start pt-1">
+                <input
+                  value={smsText}
+                  onChange={e => setSmsText(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') sendSms(); }}
+                  placeholder="Texto au client…"
+                  className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-amber-500"
+                />
+                <button
+                  onClick={sendSms}
+                  disabled={!smsText.trim() || smsSending}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-50"
+                >
+                  {smsSending ? '…' : 'Envoyer'}
+                </button>
+              </div>
+            )}
+            {smsStatus && <div className="text-sm text-slate-300 pb-1">{smsStatus}</div>}
+
             <a
               href={`/dashboard/devis?from_submission=${s.id}&nom=${encodeURIComponent(s.nom)}&email=${encodeURIComponent(s.email)}&tel=${encodeURIComponent(s.telephone || '')}&service=${encodeURIComponent(s.service || '')}&surface=${encodeURIComponent(s.surface_estimee || '')}&adresse=${encodeURIComponent(s.adresse || '')}`}
               className="block w-full text-center bg-amber-500 hover:bg-amber-400 text-slate-900 font-bold py-3 rounded-lg transition"

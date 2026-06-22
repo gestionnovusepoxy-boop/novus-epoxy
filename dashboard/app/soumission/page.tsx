@@ -9,8 +9,6 @@ function SoumissionForm() {
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState(false);
-  const [longueur, setLongueur] = useState('');
-  const [largeur, setLargeur] = useState('');
   const [form, setForm] = useState({
     nom: '',
     email: '',
@@ -38,21 +36,19 @@ function SoumissionForm() {
 
   const set = (k: string, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  const services = [
-    { value: 'Finition Flake', label: 'Flocon (Flake)', desc: 'Le plus populaire', img: '/portfolio/flake-1.jpg' },
-    { value: 'Finition Metallique', label: 'Metallique', desc: 'Effet marbre luxueux', img: '/portfolio/metallic-1.jpg' },
-    { value: 'Quartz', label: 'Quartz', desc: 'Pierre naturelle', img: '/portfolio/quartz-1.jpg' },
-    { value: 'Couleur unie', label: 'Couleur unie', desc: 'Fini lisse uniforme', img: '/portfolio/uni-1.jpg' },
-    { value: 'Commercial', label: 'Commercial', desc: 'Ultra-resistant', img: '/portfolio/commercial-1.jpg' },
-    { value: 'Antiderapant', label: 'Antiderapant', desc: 'Securite maximale', img: '/portfolio/anti-1.jpg' },
+  // 3 catégories de fini visuelles (mappées sur les services backend)
+  const finis = [
+    { value: 'Finition Flake', label: 'Flocon', desc: 'Le plus populaire', icon: '✨' },
+    { value: 'Finition Metallique', label: 'Metallique', desc: 'Effet marbre luxueux', icon: '🌊' },
+    { value: 'Couleur unie', label: 'Couleur unie', desc: 'Fini lisse uniforme', icon: '🎨' },
   ];
 
+  // 4 espaces max
   const espaces = [
     { value: 'Garage', icon: '🚗', desc: 'Plancher de garage' },
     { value: 'Sous-sol', icon: '🏠', desc: 'Espace de vie' },
-    { value: 'Balcon', icon: '🌿', desc: 'Terrasse / balcon' },
     { value: 'Commercial', icon: '🏢', desc: 'Bureau / commerce' },
-    { value: 'Industriel', icon: '🏭', desc: 'Entrepot / atelier' },
+    { value: 'Autre', icon: '🏗️', desc: 'Balcon, atelier, etc.' },
   ];
 
   async function submit() {
@@ -68,8 +64,8 @@ function SoumissionForm() {
     setSubmitting(false);
   }
 
-  // Step labels for progress
-  const stepLabels = ['Fini', 'Espace', 'Surface', 'Vous', 'Contact'];
+  // Labels pour 3 etapes
+  const stepLabels = ['Espace', 'Projet', 'Fini'];
 
   if (done) {
     return (
@@ -116,27 +112,23 @@ function SoumissionForm() {
           </div>
         </div>
 
-        {/* Promo banner */}
+        {/* Promo banner — simple */}
         <div className="mx-4 mb-4">
-          <div className="bg-gradient-to-r from-amber-400 to-amber-500 rounded-2xl p-4 text-center shadow-lg shadow-amber-400/20">
-            <p className="text-[#0f172a] font-extrabold text-xl leading-tight">Soumission gratuite</p>
-            <p className="text-[#0f172a]/80 font-bold text-sm mt-1">+ consultation sur place — Places limitees</p>
-            <div className="mt-2 inline-block bg-[#0f172a]/15 rounded-lg px-3 py-1">
-              <p className="text-[#0f172a] font-extrabold text-sm">🔥 15% de rabais en mai</p>
-            </div>
+          <div className="bg-gradient-to-r from-amber-400 to-amber-500 rounded-2xl px-4 py-3 text-center shadow-lg shadow-amber-400/20">
+            <p className="text-[#0f172a] font-extrabold text-lg leading-tight">Soumission gratuite — 15% de rabais</p>
           </div>
         </div>
 
-        {/* Progress bar with labels */}
+        {/* Progress bar with labels — 3 etapes */}
         <div className="mx-4 mb-5">
-          <div className="flex gap-1 mb-1.5">
-            {[0,1,2,3,4].map(i => (
+          <div className="flex gap-1.5 mb-1.5">
+            {[0,1,2].map(i => (
               <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= step ? 'bg-amber-400' : 'bg-slate-700/50'}`} />
             ))}
           </div>
           <div className="flex justify-between px-1">
             {stepLabels.map((label, i) => (
-              <span key={label} className={`text-[10px] transition-all ${i <= step ? 'text-amber-400/80' : 'text-slate-600'}`}>{label}</span>
+              <span key={label} className={`text-[11px] transition-all ${i <= step ? 'text-amber-400/80' : 'text-slate-600'}`}>{label}</span>
             ))}
           </div>
         </div>
@@ -145,30 +137,8 @@ function SoumissionForm() {
         <div className="mx-4 mb-6">
           <div className="bg-[#1e293b]/80 backdrop-blur border border-slate-700/50 rounded-2xl p-5 shadow-xl min-h-[300px]">
 
-            {/* Step 0: Service */}
+            {/* Step 0: Espace */}
             {step === 0 && (
-              <div>
-                <h2 className="text-white text-xl font-bold mb-1">Quel type de fini?</h2>
-                <p className="text-slate-400 text-sm mb-4">Choisissez le style qui vous plait</p>
-                <div className="grid grid-cols-2 gap-2.5">
-                  {services.map(s => (
-                    <button
-                      key={s.value}
-                      onClick={() => { set('service', s.value); setStep(1); }}
-                      className="group relative overflow-hidden rounded-xl border-2 border-slate-600/50 hover:border-amber-400/60 active:border-amber-400 transition-all text-left"
-                    >
-                      <div className="bg-gradient-to-br from-slate-700/80 to-slate-800 p-3.5">
-                        <p className="font-bold text-white text-sm group-hover:text-amber-400 transition-colors">{s.label}</p>
-                        <p className="text-[11px] text-slate-400 mt-0.5">{s.desc}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Step 1: Espace */}
-            {step === 1 && (
               <div>
                 <h2 className="text-white text-xl font-bold mb-1">C'est pour quel espace?</h2>
                 <p className="text-slate-400 text-sm mb-4">Selectionnez le type d'espace</p>
@@ -176,7 +146,7 @@ function SoumissionForm() {
                   {espaces.map(e => (
                     <button
                       key={e.value}
-                      onClick={() => { set('type_projet', e.value); setStep(2); }}
+                      onClick={() => { set('type_projet', e.value); setStep(1); }}
                       className="w-full flex items-center gap-4 p-4 rounded-xl border-2 border-slate-600/50 hover:border-amber-400/60 active:border-amber-400 bg-slate-800/50 hover:bg-slate-700/50 transition-all text-left"
                     >
                       <span className="text-3xl">{e.icon}</span>
@@ -191,106 +161,27 @@ function SoumissionForm() {
               </div>
             )}
 
-            {/* Step 2: Surface */}
-            {step === 2 && (
+            {/* Step 1: Superficie + Nom + Telephone */}
+            {step === 1 && (
               <div>
-                <h2 className="text-white text-xl font-bold mb-1">Dimensions du plancher</h2>
-                <p className="text-slate-400 text-sm mb-5">Entrez les mesures OU directement les pi²</p>
-
-                {/* Option 1: Superficie exacte */}
-                <div className="bg-slate-900/60 border-2 border-slate-700 rounded-xl p-4 mb-3">
-                  <p className="text-amber-400 text-xs font-bold mb-2 uppercase tracking-wider">Option 1 — Superficie exacte</p>
-                  <p className="text-slate-400 text-[11px] mb-3">Si vous connaissez deja vos pi²</p>
-                  <div className="relative">
-                    <input
-                      type="number"
-                      inputMode="numeric"
-                      placeholder="Ex: 475"
-                      value={longueur === '' && largeur === '' ? form.surface_estimee : ''}
-                      onChange={e => {
-                        setLongueur('');
-                        setLargeur('');
-                        set('surface_estimee', e.target.value);
-                      }}
-                      className="w-full bg-slate-800/70 border-2 border-slate-600/50 text-white rounded-lg p-3 pr-14 text-lg font-bold focus:border-amber-400 focus:outline-none text-center placeholder:text-slate-600"
-                    />
-                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-400 font-bold text-sm">pi²</span>
-                  </div>
-                </div>
-
-                {/* OU separator */}
-                <div className="flex items-center gap-3 my-4">
-                  <div className="flex-1 h-px bg-slate-700"></div>
-                  <span className="text-slate-500 text-xs font-bold">OU</span>
-                  <div className="flex-1 h-px bg-slate-700"></div>
-                </div>
-
-                {/* Option 2: Dimensions longueur x largeur */}
-                <div className="bg-slate-900/60 border-2 border-slate-700 rounded-xl p-4 mb-4">
-                  <p className="text-amber-400 text-xs font-bold mb-2 uppercase tracking-wider">Option 2 — Mesures en pieds</p>
-                  <p className="text-slate-400 text-[11px] mb-3">On calcule les pi² pour vous</p>
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <label className="text-slate-500 text-[10px] font-medium mb-1 block text-center">Longueur</label>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="20"
-                        value={longueur}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setLongueur(val);
-                          const l = parseFloat(val);
-                          const w = parseFloat(largeur);
-                          if (!isNaN(l) && !isNaN(w) && l > 0 && w > 0) set('surface_estimee', Math.round(l * w).toString());
-                          else if (!val && !largeur) set('surface_estimee', '');
-                        }}
-                        className="w-full bg-slate-800/70 border-2 border-slate-600/50 text-white rounded-lg p-3 text-lg font-bold focus:border-amber-400 focus:outline-none text-center placeholder:text-slate-600"
-                      />
-                    </div>
-                    <span className="text-amber-400 font-bold text-2xl pt-5">×</span>
-                    <div className="flex-1">
-                      <label className="text-slate-500 text-[10px] font-medium mb-1 block text-center">Largeur</label>
-                      <input
-                        type="number"
-                        inputMode="decimal"
-                        placeholder="24"
-                        value={largeur}
-                        onChange={e => {
-                          const val = e.target.value;
-                          setLargeur(val);
-                          const l = parseFloat(longueur);
-                          const w = parseFloat(val);
-                          if (!isNaN(l) && !isNaN(w) && l > 0 && w > 0) set('surface_estimee', Math.round(l * w).toString());
-                          else if (!val && !longueur) set('surface_estimee', '');
-                        }}
-                        className="w-full bg-slate-800/70 border-2 border-slate-600/50 text-white rounded-lg p-3 text-lg font-bold focus:border-amber-400 focus:outline-none text-center placeholder:text-slate-600"
-                      />
-                    </div>
-                  </div>
-                  {longueur && largeur && form.surface_estimee && (
-                    <div className="mt-3 text-center">
-                      <div className="inline-block bg-amber-400/15 border border-amber-400/40 rounded-lg px-4 py-1.5">
-                        <span className="text-amber-400 font-extrabold text-lg">= {form.surface_estimee} pi²</span>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {form.surface_estimee && Number(form.surface_estimee) > 0 && (
-                  <button onClick={() => setStep(3)} className="w-full bg-gradient-to-r from-amber-400 to-amber-500 text-[#0f172a] font-bold py-3.5 rounded-xl text-lg hover:from-amber-500 hover:to-amber-600 active:from-amber-600 active:to-amber-700 transition-all shadow-lg shadow-amber-400/20">
-                    Continuer →
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Step 3: Nom + Tel */}
-            {step === 3 && (
-              <div>
-                <h2 className="text-white text-xl font-bold mb-1">Vos coordonnees</h2>
-                <p className="text-slate-400 text-sm mb-4">Pour vous contacter avec votre soumission</p>
+                <h2 className="text-white text-xl font-bold mb-1">Votre projet</h2>
+                <p className="text-slate-400 text-sm mb-4">Superficie et vos coordonnees</p>
                 <div className="space-y-3">
+                  <div>
+                    <label className="text-slate-400 text-xs font-medium mb-1 block">Superficie approximative (pi²) *</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        inputMode="numeric"
+                        placeholder="Ex: 475"
+                        value={form.surface_estimee}
+                        onChange={e => set('surface_estimee', e.target.value)}
+                        className="w-full bg-slate-800/50 border-2 border-slate-600/50 text-white rounded-xl p-3.5 pr-14 text-base font-bold focus:border-amber-400 focus:outline-none transition-all placeholder:text-slate-600"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-400 font-bold text-sm">pi²</span>
+                    </div>
+                    <p className="text-slate-500 text-[11px] mt-1">Pas sur? Estimez — on confirme sur place.</p>
+                  </div>
                   <div>
                     <label className="text-slate-400 text-xs font-medium mb-1 block">Nom complet *</label>
                     <input
@@ -315,56 +206,45 @@ function SoumissionForm() {
                     />
                   </div>
                 </div>
-                {form.nom && form.telephone && (
-                  <button onClick={() => setStep(4)} className="w-full mt-4 bg-gradient-to-r from-amber-400 to-amber-500 text-[#0f172a] font-bold py-3.5 rounded-xl text-lg hover:from-amber-500 hover:to-amber-600 active:from-amber-600 active:to-amber-700 transition-all shadow-lg shadow-amber-400/20">
+                {form.surface_estimee && Number(form.surface_estimee) > 0 && form.nom && form.telephone && (
+                  <button onClick={() => setStep(2)} className="w-full mt-4 bg-gradient-to-r from-amber-400 to-amber-500 text-[#0f172a] font-bold py-3.5 rounded-xl text-lg hover:from-amber-500 hover:to-amber-600 active:from-amber-600 active:to-amber-700 transition-all shadow-lg shadow-amber-400/20">
                     Presque fini! →
                   </button>
                 )}
               </div>
             )}
 
-            {/* Step 4: Email + Adresse + Ville + Submit */}
-            {step === 4 && (
+            {/* Step 2: Fini (3 categories visuelles) + Email */}
+            {step === 2 && (
               <div>
-                <h2 className="text-white text-xl font-bold mb-1">Derniere etape!</h2>
-                <p className="text-slate-400 text-sm mb-4">On y est presque, {form.nom.split(' ')[0]}</p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-slate-400 text-xs font-medium mb-1 block">Courriel *</label>
-                    <input
-                      type="email"
-                      inputMode="email"
-                      placeholder="votre@courriel.com"
-                      value={form.email}
-                      onChange={e => set('email', e.target.value)}
-                      autoComplete="email"
-                      className="w-full bg-slate-800/50 border-2 border-slate-600/50 text-white rounded-xl p-3.5 text-base focus:border-amber-400 focus:outline-none transition-all placeholder:text-slate-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 text-xs font-medium mb-1 block">Adresse des travaux *</label>
-                    <input
-                      type="text"
-                      placeholder="123 rue Exemple, Quebec"
-                      value={form.adresse}
-                      onChange={e => set('adresse', e.target.value)}
-                      autoComplete="street-address"
-                      className="w-full bg-slate-800/50 border-2 border-slate-600/50 text-white rounded-xl p-3.5 text-base focus:border-amber-400 focus:outline-none transition-all placeholder:text-slate-600"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-slate-400 text-xs font-medium mb-1 block">Ville / Secteur *</label>
-                    <input
-                      type="text"
-                      placeholder="Quebec, Levis, Beauport..."
-                      value={form.ville}
-                      onChange={e => set('ville', e.target.value)}
-                      autoComplete="address-level2"
-                      className="w-full bg-slate-800/50 border-2 border-slate-600/50 text-white rounded-xl p-3.5 text-base focus:border-amber-400 focus:outline-none transition-all placeholder:text-slate-600"
-                    />
-                  </div>
+                <h2 className="text-white text-xl font-bold mb-1">Quel fini vous plait?</h2>
+                <p className="text-slate-400 text-sm mb-4">Choisissez un style — on en discute ensuite</p>
+                <div className="grid grid-cols-3 gap-2.5 mb-4">
+                  {finis.map(s => (
+                    <button
+                      key={s.value}
+                      onClick={() => set('service', s.value)}
+                      className={`group relative overflow-hidden rounded-xl border-2 transition-all text-center p-3 ${form.service === s.value ? 'border-amber-400 bg-amber-400/10' : 'border-slate-600/50 hover:border-amber-400/60 bg-slate-800/50'}`}
+                    >
+                      <span className="text-3xl block mb-1">{s.icon}</span>
+                      <p className={`font-bold text-sm ${form.service === s.value ? 'text-amber-400' : 'text-white'}`}>{s.label}</p>
+                      <p className="text-[10px] text-slate-400 mt-0.5 leading-tight">{s.desc}</p>
+                    </button>
+                  ))}
                 </div>
-                {form.email && form.adresse && form.ville && (
+                <div>
+                  <label className="text-slate-400 text-xs font-medium mb-1 block">Courriel *</label>
+                  <input
+                    type="email"
+                    inputMode="email"
+                    placeholder="votre@courriel.com"
+                    value={form.email}
+                    onChange={e => set('email', e.target.value)}
+                    autoComplete="email"
+                    className="w-full bg-slate-800/50 border-2 border-slate-600/50 text-white rounded-xl p-3.5 text-base focus:border-amber-400 focus:outline-none transition-all placeholder:text-slate-600"
+                  />
+                </div>
+                {form.service && form.email && (
                   <button
                     onClick={submit}
                     disabled={submitting}
