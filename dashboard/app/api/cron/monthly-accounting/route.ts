@@ -19,12 +19,12 @@ export async function GET(req: NextRequest) {
   }
 
   const now = new Date();
-  const firstOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const lastOfPrevMonth = new Date(firstOfThisMonth.getTime() - 1);
-  const firstOfPrevMonth = new Date(lastOfPrevMonth.getFullYear(), lastOfPrevMonth.getMonth(), 1);
+  const firstOfThisMonthMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1);
+  const lastOfPrevMonth = new Date(firstOfThisMonthMs - 1);
+  const firstOfPrevMonth = new Date(Date.UTC(lastOfPrevMonth.getUTCFullYear(), lastOfPrevMonth.getUTCMonth(), 1));
   const start = firstOfPrevMonth.toISOString().slice(0, 10);
   const end = lastOfPrevMonth.toISOString().slice(0, 10);
-  const monthName = firstOfPrevMonth.toLocaleDateString('fr-CA', { month: 'long', year: 'numeric' });
+  const monthName = firstOfPrevMonth.toLocaleDateString('fr-CA', { month: 'long', year: 'numeric', timeZone: 'UTC' });
 
   // Revenus (invoices complétées) + dépenses + heures sous-traitants
   const [revRows, expRows, hrsRows, depotRows] = await Promise.all([
