@@ -91,6 +91,25 @@ function LeadDetail({ lead, onUpdate, onClose }: { lead: Lead; onUpdate: () => v
   });
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [smsOpen, setSmsOpen] = useState(false);
+  const [smsText, setSmsText] = useState('');
+  const [smsSending, setSmsSending] = useState(false);
+  const [smsStatus, setSmsStatus] = useState<string | null>(null);
+
+  async function sendSms() {
+    if (!smsText.trim() || smsSending || !lead.telephone) return;
+    setSmsSending(true); setSmsStatus(null);
+    try {
+      const res = await fetch('/api/sms/logs', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: lead.telephone, message: smsText.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.ok) { setSmsStatus('✅ Texto envoyé'); setSmsText(''); setSmsOpen(false); }
+      else setSmsStatus('⚠️ ' + (data.deliveryError || 'Échec'));
+    } catch { setSmsStatus('⚠️ Erreur de connexion'); }
+    setSmsSending(false);
+  }
 
   async function save() {
     setSaving(true);
@@ -175,12 +194,28 @@ function LeadDetail({ lead, onUpdate, onClose }: { lead: Lead; onUpdate: () => v
               Appeler
             </a>
           )}
+          {lead.telephone && (
+            <button onClick={() => setSmsOpen(o => !o)} className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-4 py-2.5 text-sm transition min-h-[44px] inline-flex items-center">
+              Texter
+            </button>
+          )}
           {lead.email && (
             <a href={`mailto:${lead.email}`} className="text-amber-400 hover:text-amber-300 text-sm">
               {lead.email}
             </a>
           )}
         </div>
+        {smsOpen && lead.telephone && (
+          <div className="mt-3 flex gap-2 items-start">
+            <input value={smsText} onChange={e => setSmsText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') sendSms(); }}
+              placeholder="Texto au client..." className={inputCls + ' flex-1'} />
+            <button onClick={sendSms} disabled={!smsText.trim() || smsSending}
+              className="bg-blue-600 hover:bg-blue-500 text-white font-semibold rounded-lg px-4 py-2 text-sm transition disabled:opacity-50">
+              {smsSending ? '...' : 'Envoyer'}
+            </button>
+          </div>
+        )}
+        {smsStatus && <div className="mt-1 text-sm text-slate-300">{smsStatus}</div>}
       </td>
     </tr>
   );
