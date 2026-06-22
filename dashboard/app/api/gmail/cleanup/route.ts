@@ -66,126 +66,51 @@ export async function POST(req: NextRequest) {
   const results: Record<string, number> = {};
   let total = 0;
 
-  // SAFE EXCLUSIONS — never trash these
-  const safe = '-from:stripe.com -from:interac -from:desjardins -from:td.com -from:rbc.com -from:bmo.com -from:paypal -from:revenuquebec -from:cra-arc.gc.ca';
+  // ─────────────────────────────────────────────────────────────────────────
+  // RÈGLE D'OR (réécriture sécuritaire — Luca 22 juin): on NE SUPPRIME que du
+  // junk 100% identifiable par EXPÉDITEUR ou CATÉGORIE système. On ne supprime
+  // JAMAIS par âge ni par sujet dans la boîte principale, et JAMAIS un email
+  // avec une PIÈCE JOINTE (les clients envoient des photos!). Le doute = on garde.
+  // GUARD est ajouté à CHAQUE requête: protège pièces jointes + paiements + clients.
+  // ─────────────────────────────────────────────────────────────────────────
+  const GUARD = '-has:attachment -from:stripe.com -from:interac -from:desjardins -from:td.com -from:rbc.com -from:bmo.com -from:paypal -from:revenuquebec -from:cra-arc.gc.ca -from:gmail.com -from:hotmail.com -from:outlook.com -from:yahoo -from:videotron -from:cgocable -from:sympatico';
 
-  // 1. BOUNCES & DELIVERY FAILURES
-  const bounces = await batchTrash(gmail, 'subject:("Address not found" OR "Message not delivered" OR "Undeliverable" OR "Mail delivery failed" OR "Delivery Status Notification" OR "échec de la remise" OR "Returned mail")', 500);
+  // 1. BOUNCES & échecs de remise (pas des clients)
+  const bounces = await batchTrash(gmail, `(from:mailer-daemon OR from:postmaster OR subject:"Address not found" OR subject:"Undeliverable" OR subject:"Mail delivery failed" OR subject:"Delivery Status Notification" OR subject:"échec de la remise") ${GUARD}`, 500);
   if (bounces > 0) { results['bounces'] = bounces; total += bounces; }
 
-  const mailer = await batchTrash(gmail, 'from:mailer-daemon OR from:postmaster', 500);
-  if (mailer > 0) { results['mailer_daemon'] = mailer; total += mailer; }
+  // 2. NOTIFICATIONS SYSTÈME/DEV (expéditeurs connus, jamais des clients)
+  const system = await batchTrash(gmail, `(from:sentry.io OR from:notifications@github.com OR from:noreply@github.com OR from:no-reply@vercel.com OR from:notifications@vercel.com OR from:supabase.io OR from:anthropic.com OR from:google-workspace-noreply@google.com OR from:no-reply@accounts.google.com) older_than:7d ${GUARD}`, 1000);
+  if (system > 0) { results['system_notifs'] = system; total += system; }
 
-  // 2. DEV/SYSTEM NOTIFICATIONS
-  const sentry = await batchTrash(gmail, 'from:sentry.io', 500);
-  if (sentry > 0) { results['sentry'] = sentry; total += sentry; }
+  // 3. RÉSEAUX SOCIAUX (notifications, pas des clients)
+  const fb = await batchTrash(gmail, `(from:facebookmail.com OR from:instagram.com) ${GUARD}`, 500);
+  if (fb > 0) { results['social_notifs'] = fb; total += fb; }
 
-  const github = await batchTrash(gmail, '(from:notifications@github.com OR from:noreply@github.com) older_than:7d', 500);
-  if (github > 0) { results['github'] = github; total += github; }
-
-  const supabase = await batchTrash(gmail, '(from:noreply@supabase.io OR from:no-reply@supabase.io OR from:support@supabase.io) older_than:7d', 200);
-  if (supabase > 0) { results['supabase'] = supabase; total += supabase; }
-
-  const vercel = await batchTrash(gmail, '(from:no-reply@vercel.com OR from:notifications@vercel.com) older_than:7d', 500);
-  if (vercel > 0) { results['vercel'] = vercel; total += vercel; }
-
-  const anthropic = await batchTrash(gmail, 'from:anthropic.com', 200);
-  if (anthropic > 0) { results['anthropic'] = anthropic; total += anthropic; }
-
-  // 3. SOCIAL MEDIA
-  const fb = await batchTrash(gmail, 'from:facebookmail.com OR from:notification@facebookmail.com OR from:instagram.com', 500);
-  if (fb > 0) { results['facebook_instagram'] = fb; total += fb; }
-
-  // 4. GMAIL CATEGORIES — all tabs except Primary banks
-  const promos = await batchTrash(gmail, `category:promotions ${safe}`, 1000);
+  // 4. CATÉGORIES GMAIL Promotions/Social/Updates (jamais la Primary, jamais pièces jointes)
+  const promos = await batchTrash(gmail, `category:promotions ${GUARD}`, 1000);
   if (promos > 0) { results['promotions'] = promos; total += promos; }
-
-  const social = await batchTrash(gmail, 'category:social', 500);
+  const social = await batchTrash(gmail, `category:social ${GUARD}`, 500);
   if (social > 0) { results['social'] = social; total += social; }
-
-  const updates = await batchTrash(gmail, `category:updates ${safe}`, 1000);
+  const updates = await batchTrash(gmail, `category:updates ${GUARD}`, 1000);
   if (updates > 0) { results['updates'] = updates; total += updates; }
 
-  // 5. GOOGLE SYSTEM EMAILS
-  const gws = await batchTrash(gmail, 'from:google-workspace-noreply@google.com', 200);
-  if (gws > 0) { results['google_workspace'] = gws; total += gws; }
+  // 5. DMARC reports + mailinblack (bots, jamais des clients)
+  const dmarc = await batchTrash(gmail, `(from:dmarcreport OR subject:"Report Domain:" OR from:mailinblack.com OR from:invitations.mailinblack.com) ${GUARD}`, 500);
+  if (dmarc > 0) { results['dmarc_bots'] = dmarc; total += dmarc; }
 
-  const gsec = await batchTrash(gmail, 'from:no-reply@accounts.google.com', 200);
-  if (gsec > 0) { results['google_security'] = gsec; total += gsec; }
+  // 6. NOS PROPRES copies BCC de devis > 1 jour (envoyées par nous-mêmes pour vérif)
+  const devisCopies = await batchTrash(gmail, 'from:gestionnovusepoxy@gmail.com older_than:1d (subject:"Soumission Novus Epoxy" OR subject:"Solde à payer") -has:attachment', 200);
+  if (devisCopies > 0) { results['devis_copies'] = devisCopies; total += devisCopies; }
 
-  // 6. NEWSLETTERS & MARKETING (emails with unsubscribe links in Primary)
-  const unsub = await batchTrash(gmail, `in:inbox unsubscribe ${safe}`, 500);
-  if (unsub > 0) { results['newsletters_unsub'] = unsub; total += unsub; }
-
-  // 7. NOREPLY IN INBOX (not banks/payments)
-  const noreply = await batchTrash(gmail, `in:inbox (from:noreply OR from:no-reply OR from:donotreply) ${safe}`, 500);
-  if (noreply > 0) { results['noreply'] = noreply; total += noreply; }
-
-  // 8. OLD INBOX EMAILS > 90 DAYS (keep last 90 days for safety)
-  const old90 = await batchTrash(gmail, `in:inbox older_than:90d ${safe} -from:gestionnovusepoxy`, 500);
-  if (old90 > 0) { results['old_90d'] = old90; total += old90; }
-
-  // 9. SPAM BYPASS
-  const mailinblac = await batchTrash(gmail, 'subject:"Protect de Mailinblac" OR subject:"Se desabonner" OR subject:"Desabonnement"', 100);
-  if (mailinblac > 0) { results['spam_bypass'] = mailinblac; total += mailinblac; }
-
-  // 10. AUTO-REPLIES & USELESS ACKNOWLEDGMENTS
-  const autoreplies = await batchTrash(gmail, 'in:inbox (subject:"Réponse automatique" OR subject:"Reponse automatique" OR subject:"Automatic reply" OR subject:"Out of office" OR subject:"Absent du bureau" OR subject:"bien reçu" OR subject:"bien recu" OR subject:"accusé de réception" OR subject:"accuse de reception")', 500);
-  if (autoreplies > 0) { results['auto_replies'] = autoreplies; total += autoreplies; }
-
-  // 11. DMARC/SPF + SURVEY BOTS + FOREIGN SPAM
-  const dmarc = await batchTrash(gmail, 'in:inbox (from:dmarcreport OR subject:"DMARC" OR subject:"Report Domain:" OR from:registre@servicesquebec.gouv.qc.ca OR from:lkpp.go.id OR from:sleepapnea.org)', 500);
-  if (dmarc > 0) { results['junk_misc'] = dmarc; total += dmarc; }
-
-  // 12B. PROSPECTING CAMPAIGN REPLIES — all replies to "Planchers époxy haut de gamme" template
-  // Keep only personal emails (@gmail.com, @hotmail, @outlook) — those are real prospects
-  const prospReplies = await batchTrash(gmail, 'in:inbox subject:"Planchers" -from:@gmail.com -from:@hotmail.com -from:@outlook.com -from:@videotron -from:@cgocable -from:@sympatico', 1000);
-  if (prospReplies > 0) { results['prospect_replies'] = prospReplies; total += prospReplies; }
-
-  // SPAM-flagged replies
-  const spamReplies = await batchTrash(gmail, 'in:inbox subject:"***SPAM***"', 500);
-  if (spamReplies > 0) { results['spam_replies'] = spamReplies; total += spamReplies; }
-
-  // 12C. TICKET SYSTEM AUTO-REPLIES (Zendesk, Freshdesk, etc.)
-  const tickets = await batchTrash(gmail, 'in:inbox (subject:"Request received" OR subject:"Votre Billet" OR subject:"We received your request" OR subject:"We\'ve received your request" OR subject:"How would you rate" OR subject:"Service Expérience Client" OR subject:"Thank you for contacting" OR subject:"received your message" OR from:zendesk OR from:freshdesk OR from:helpscout)', 1000);
-  if (tickets > 0) { results['ticket_autoreplies'] = tickets; total += tickets; }
-
-  // 12D. PROSPECTING REPLIES — business auto-replies not from personal email
-  const prospAuto = await batchTrash(gmail, 'in:inbox (subject:"question rapide" OR subject:"Santos," OR subject:"Industrial,") -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo -from:@videotron -from:@cgocable', 500);
-  if (prospAuto > 0) { results['prosp_auto_replies'] = prospAuto; total += prospAuto; }
-
-  // 12E. FOREIGN/IRRELEVANT COMPANIES that replied to our prospecting
-  const irrelevant = await batchTrash(gmail, 'in:inbox (from:ticketmaster OR from:discord.com OR from:@.au OR from:@.co.za OR from:@.co.uk OR from:@.de OR from:@.fr -from:desjardins)', 500);
-  if (irrelevant > 0) { results['foreign_irrelevant'] = irrelevant; total += irrelevant; }
-
-  // 12F. WELCOME / ONBOARDING emails (not useful)
-  const welcomes = await batchTrash(gmail, 'in:inbox (subject:"Welcome to" OR subject:"Bienvenue sur" OR subject:"verify your email" OR subject:"Confirm your" OR subject:"Discord welcome" OR subject:"Get started")', 300);
-  if (welcomes > 0) { results['welcome_onboarding'] = welcomes; total += welcomes; }
-
-  // 12G. MAILINBLACK AUTO-REPLIES — cold email system auto-replies (never real clients)
-  const mailinblackReplies = await batchTrash(gmail, 'in:inbox from:mailinblack.com OR from:invitations.mailinblack.com', 500);
-  if (mailinblackReplies > 0) { results['mailinblack'] = mailinblackReplies; total += mailinblackReplies; }
-
-  // 12H. OLD INBOX EMAILS > 7 DAYS — already handled by previous scans, safe to archive
-  const old7d = await batchArchive(gmail, `in:inbox older_than:7d ${safe} -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo`, 500);
-  if (old7d > 0) { results['old_7d_archived'] = old7d; total += old7d; }
-
-  // 12I. OLD PERSONAL EMAIL THREADS > 90 DAYS — Gmail/Hotmail conversations older than 3 months
-  // Keep up to 90 days — clients sometimes come back after 1 month
-  const old90dPersonal = await batchArchive(gmail, `in:inbox older_than:90d (from:@gmail.com OR from:@hotmail.com OR from:@outlook.com OR from:@yahoo) ${safe}`, 500);
-  if (old90dPersonal > 0) { results['old_90d_personal'] = old90dPersonal; total += old90dPersonal; }
-
-  // 12J. PROSPECTING REPLIES from non-ISP corporate emails > 3 DAYS (Aria already handled)
-  const oldProspReplies = await batchArchive(gmail, `in:inbox older_than:3d subject:"époxy" -from:@gmail.com -from:@hotmail -from:@outlook -from:@yahoo -from:@videotron -from:@cgocable -from:@sympatico ${safe}`, 300);
-  if (oldProspReplies > 0) { results['old_prosp_archived'] = oldProspReplies; total += oldProspReplies; }
-
-  // 12K. DEVIS BCC COPIES > 1 DAY — copies envoyées à nous-mêmes pour vérification, supprimées après 1 jour
-  const devisCopies = await batchTrash(gmail, 'in:inbox from:gestionnovusepoxy@gmail.com older_than:1d (subject:"Soumission Novus Epoxy" OR subject:"Solde à payer")', 200);
-  if (devisCopies > 0) { results['devis_copies_trashed'] = devisCopies; total += devisCopies; }
-
-  // 12. ARCHIVE: our own outbound system email copies (gestionnovusepoxy AND info@novusepoxy.shop)
+  // 7. ARCHIVER (PAS supprimer) nos propres copies sortantes — restent dans Tous les messages
   const systemCopies = await batchArchive(gmail, '(from:gestionnovusepoxy@gmail.com OR from:info@novusepoxy.shop) in:inbox', 500);
   if (systemCopies > 0) { results['system_copies_archived'] = systemCopies; total += systemCopies; }
+
+  // RETIRÉ (trop dangereux — supprimait de vrais clients/photos):
+  // - suppression par âge (>90j, >7j), par sujet "Planchers"/"époxy"/"question rapide",
+  //   noreply/unsubscribe dans la boîte, domaines étrangers, welcome/onboarding, tickets.
+  //   Ces règles ramassaient des clients sur domaines d'entreprise + emails avec photos.
 
   // Notify admins
   if (total > 0) {
