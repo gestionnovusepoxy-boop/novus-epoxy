@@ -146,7 +146,7 @@ export async function sendFollowUpSMS(clientPhone: string, clientName: string, q
   if (!clientPhone) return false;
   const prenom = clientName.split(' ')[0];
 
-  const msg = `Salut ${prenom}! C'est Luca de Novus Epoxy. Je voulais m'assurer que t'avais bien recu notre soumission #${quoteId}. Si t'as des questions ou tu veux qu'on en discute, n'hesite pas a m'appeler au ${LUCA_PHONE}. Bonne journee!`;
+  const msg = `Salut ${prenom}! C'est Luca de Novus Epoxy. T'as recu ta soumission #${quoteId}? Si t'as des questions, appelle-moi au ${LUCA_PHONE}, je m'en occupe!`;
   return sendSMS(clientPhone, msg);
 }
 
@@ -159,7 +159,7 @@ export async function sendDepositConfirmationSMS(clientPhone: string, clientName
     ? ` Tes dates du ${jour1Date} et ${jour2Date} sont confirmees.`
     : '';
 
-  const msg = `${prenom}, c'est Luca de Novus Epoxy! Depot bien recu, merci!${datesInfo} On a hate de transformer ton plancher! Questions? ${LUCA_PHONE}`;
+  const msg = `${prenom}, c'est Luca de Novus Epoxy. Depot bien recu, merci!${datesInfo} On te recontacte pour les details. Questions? ${LUCA_PHONE}`;
   return sendSMS(clientPhone, msg);
 }
 
@@ -168,6 +168,6 @@ export async function sendReferralSMS(clientPhone: string, clientName: string) {
   if (!clientPhone) return false;
   const prenom = clientName.split(' ')[0];
 
-  const msg = `Salut ${prenom}! C'est Luca de Novus Epoxy. Ca fait deja quelques mois qu'on a fait ton plancher — j'espere que t'en profites! Si tu connais quelqu'un qui voudrait la meme chose, on offre 100$ de rabais pour chaque reference. Passe le mot! ${LUCA_PHONE}${OPT_OUT_SUFFIX}`;
+  const msg = `Salut ${prenom}! C'est Luca de Novus Epoxy. Tu connais quelqu'un qui veut un plancher epoxy? On donne 100$ de rabais par reference. Passe le mot au ${LUCA_PHONE}!${OPT_OUT_SUFFIX}`;
   return sendSMS(clientPhone, msg);
 }
