@@ -341,9 +341,35 @@ Reponds en JSON strict (sans markdown):
 
   // 6. Send reply email via Gmail with branding + notify admins
   const reponseText = parsed.reponse ?? '';
-  if (reponseText) {
+  // APPROBATION POUR LES GROS (recherche: prix/devis/délicat = humain approuve avant envoi).
+  // priority haute = lead chaud / gros projet / cas délicat → Aria RETIENT et demande ton OK.
+  // Les simples (normale/basse) → Aria envoie auto comme avant (vitesse).
+  const needsApproval = parsed.priority === 'haute';
+  if (reponseText && needsApproval) {
     const replyHtml = brandedEmailHtml(`<p>${reponseText.replace(/\n/g, '<br/>')}</p>`);
-
+    const replySubject = subject.startsWith('Re:') ? subject : `Re: ${subject}`;
+    // Stocke le brouillon pour l'envoyer sur approbation (callback Telegram).
+    await query(
+      `INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2`,
+      [`aria_draft_${msgId}`, JSON.stringify({ to: fromEmail, subject: replySubject, html: replyHtml, leadNom })]
+    ).catch(() => {});
+    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    for (const chatId of ADMIN_CHAT_IDS()) {
+      await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: `🧠 <b>Aria — réponse à APPROUVER</b> (lead chaud)\n\n👤 ${leadNom} (${fromEmail})\n📝 ${subject}\n\n<b>Réponse proposée:</b>\n${reponseText.slice(0, 600)}`,
+          parse_mode: 'HTML',
+          reply_markup: { inline_keyboard: [[
+            { text: '✅ Envoyer', callback_data: `aria_send_${msgId}` },
+            { text: '✏️ Je gère', callback_data: `aria_skip_${msgId}` },
+          ]] },
+        }),
+      }).catch(() => {});
+    }
+  } else if (reponseText) {
+    const replyHtml = brandedEmailHtml(`<p>${reponseText.replace(/\n/g, '<br/>')}</p>`);
     let emailSent = false;
     try {
       await sendEmail({
@@ -430,14 +456,14 @@ Reponds en JSON strict (sans markdown):
         parsed.service_detecte && parsed.service_detecte !== 'null' ? `🔧 ${parsed.service_detecte}` : '',
         parsed.superficie_detectee && parsed.superficie_detectee !== 'null' ? `📐 ${parsed.superficie_detectee} pi²` : '',
         ``,
-        `Aria a deja repondu automatiquement.`,
-        `Appelle pour closer!`,
+        `🧠 Aria a préparé une réponse — approuve-la ci-dessus (☝️) ou appelle directement!`,
       ].filter(Boolean).join('\n'));
     }
   }
 
-  // 9. Mark email_logs as sent (only if reply was actually sent)
-  await query(`UPDATE email_logs SET statut = $1 WHERE resend_id = $2`, [reponseText ? 'sent' : 'skipped', `lead-${msgId}`]).catch(() => {});
+  // 9. Mark email_logs: 'sent' si envoyé auto, 'pending' si en attente d'approbation, 'skipped' sinon.
+  const logStatut = !reponseText ? 'skipped' : (needsApproval ? 'pending' : 'sent');
+  await query(`UPDATE email_logs SET statut = $1 WHERE resend_id = $2`, [logStatut, `lead-${msgId}`]).catch(() => {});
 
   // 10. If info_complete + service + superficie: create draft quote, notify admins with details
   if (

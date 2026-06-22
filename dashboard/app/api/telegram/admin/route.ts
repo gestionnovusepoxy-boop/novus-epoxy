@@ -1593,6 +1593,31 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       return NextResponse.json({ ok: true });
     }
 
+    // aria_send_<msgId> — Luca approuve la réponse d'Aria → on l'ENVOIE vraiment au client.
+    if (cbData.startsWith('aria_send_')) {
+      const msgId = cbData.replace('aria_send_', '');
+      const rows = await query(`SELECT value FROM kv_store WHERE key = $1`, [`aria_draft_${msgId}`]).catch(() => []);
+      const draft = rows[0]?.value ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) : null;
+      if (!draft?.to) { await sendTelegram(cbChatId, `⚠️ Brouillon introuvable (déjà envoyé ou expiré).`); return NextResponse.json({ ok: true }); }
+      try {
+        await sendEmail({ to: draft.to, subject: draft.subject || 'Réponse Novus Epoxy', html: draft.html || '' });
+        await query(`DELETE FROM kv_store WHERE key = $1`, [`aria_draft_${msgId}`]).catch(() => {});
+        await query(`UPDATE email_logs SET statut = 'sent' WHERE resend_id = $1`, [`lead-${msgId}`]).catch(() => {});
+        await sendTelegram(cbChatId, `✅ Réponse envoyée à ${draft.leadNom || draft.to}.`);
+      } catch {
+        await sendTelegram(cbChatId, `⚠️ Échec de l'envoi à ${draft.to}. Réponds manuellement.`);
+      }
+      return NextResponse.json({ ok: true });
+    }
+
+    // aria_skip_<msgId> — Luca gère lui-même → on jette le brouillon, Aria n'envoie rien.
+    if (cbData.startsWith('aria_skip_')) {
+      const msgId = cbData.replace('aria_skip_', '');
+      await query(`DELETE FROM kv_store WHERE key = $1`, [`aria_draft_${msgId}`]).catch(() => {});
+      await sendTelegram(cbChatId, `👍 Ok, tu gères celui-là. Aria n'envoie rien.`);
+      return NextResponse.json({ ok: true });
+    }
+
     // approve_ad_123 — Approve FB ad draft, create campaign ACTIVE in Meta
     if (cbData.startsWith('approve_ad_')) {
       const draftId = parseInt(cbData.replace('approve_ad_', ''));
