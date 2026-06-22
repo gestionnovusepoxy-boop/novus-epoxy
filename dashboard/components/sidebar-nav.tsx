@@ -65,6 +65,7 @@ const SECTIONS: NavSection[] = [
       { href: '/dashboard/campagnes', label: 'Campagnes', icon: '\u{1F4E2}' },
       { href: '/dashboard/pubs', label: 'Pubs Facebook', icon: '\u{1F525}' },
       { href: '/dashboard/stats',  label: 'Statistiques', icon: '\u{1F4C8}' },
+      { href: '/dashboard/roas',   label: 'ROAS / Rendement', icon: '\u{1F4C8}' },
       { href: '/dashboard/portfolio', label: 'Portfolio', icon: '\u{1F4F8}' },
     ],
   },
