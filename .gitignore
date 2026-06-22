@@ -44,3 +44,5 @@ dashboard/tests/gap-analysis-*.test.mjs
 dashboard/tests/coverage-audit-*.test.mjs
 dashboard/tests/infrastructure-coverage-gaps.test.mjs
 dashboard/tests/new-gap-skeletons-*.test.mjs
+
+dashboard/scripts/recover-*.mjs

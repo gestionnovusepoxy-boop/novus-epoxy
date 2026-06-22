@@ -606,6 +606,9 @@ export async function GET(req: NextRequest) {
       format: 'full',
     });
 
+    // PROTECTION: un email avec une PIÈCE JOINTE (photo client!) ne doit JAMAIS être supprimé auto.
+    const hasAttachment = (fullMsg.data.payload?.parts ?? []).some(p => !!p.filename && p.filename.length > 0);
+
     const headers = fullMsg.data.payload?.headers ?? [];
     const fromHeader = headers.find(h => h.name?.toLowerCase() === 'from')?.value ?? '';
     const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value ?? '';
@@ -690,7 +693,7 @@ export async function GET(req: NextRequest) {
       continue;
     }
 
-    if (isAutoReply) {
+    if (isAutoReply && !hasAttachment) {
       console.log(`[Email Scan] Trashing auto-reply/newsletter from ${fromEmail}: ${subject}`);
       try {
         await gmail.users.messages.trash({ userId: 'me', id: msg.id });
@@ -940,8 +943,8 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    // === SPAM: Move to trash automatically ===
-    if (analysis.type === 'spam') {
+    // === SPAM: Move to trash automatically (JAMAIS si pièce jointe = photo client possible) ===
+    if (analysis.type === 'spam' && !hasAttachment) {
       try {
         await gmail.users.messages.trash({ userId: 'me', id: msg.id });
       } catch { /* ignore */ }
