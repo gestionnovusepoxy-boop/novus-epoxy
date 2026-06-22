@@ -3,6 +3,7 @@ import { getAdminChatIds } from '@/lib/telegram-utils';
 import { query } from '@/lib/db';
 import { sendProspectEmail } from '@/lib/send-prospect-email';
 import { sendSMS } from '@/lib/sms';
+import { isBlocked } from '@/lib/lead-blocklist';
 import { getQuebecHour, getQuebecDate } from '@/lib/timezone';
 
 export const maxDuration = 60;
@@ -253,6 +254,8 @@ export async function GET(req: NextRequest) {
     for (const _lead of touch3Leads) {
       const lead = _lead as unknown as LeadRow;
       if (isBlacklisted(lead.email, lead.telephone)) continue;
+      // OPT-OUT dynamique: jamais contacter qui a demandé qu'on le laisse tranquille.
+      if (await isBlocked({ email: lead.email, phone: lead.telephone })) continue;
 
       const prenom = getPrenom(lead.nom);
       const html = buildNurture3Html(prenom, photos, promo, promoText, promoDeadline);
@@ -294,6 +297,8 @@ export async function GET(req: NextRequest) {
     for (const _lead of touch4Leads) {
       const lead = _lead as unknown as LeadRow;
       if (isBlacklisted(lead.email, lead.telephone)) continue;
+      // OPT-OUT dynamique: jamais contacter qui a demandé qu'on le laisse tranquille.
+      if (await isBlocked({ email: lead.email, phone: lead.telephone })) continue;
 
       // Check if Touch 3 was sent 7+ days ago
       const nurture3Match = (lead.notes ?? '').match(/\[Nurture-3 envoye (\d{4}-\d{2}-\d{2})\]/);
@@ -351,6 +356,8 @@ export async function GET(req: NextRequest) {
     for (const _lead of touch5Leads) {
       const lead = _lead as unknown as LeadRow;
       if (isBlacklisted(lead.email, lead.telephone)) continue;
+      // OPT-OUT dynamique: jamais contacter qui a demandé qu'on le laisse tranquille.
+      if (await isBlocked({ email: lead.email, phone: lead.telephone })) continue;
 
       // Check if Touch 4 was sent 8+ days ago
       const nurture4Match = (lead.notes ?? '').match(/\[Nurture-4 SMS (\d{4}-\d{2}-\d{2})\]/);

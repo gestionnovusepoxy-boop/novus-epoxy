@@ -5,6 +5,7 @@ import { formatMoney } from '@/lib/pricing';
 import { sendFollowUpSMS } from '@/lib/sms';
 import { escapeHtml } from '@/lib/utils';
 import { sendEmail } from '@/lib/send-email';
+import { isBlocked } from '@/lib/lead-blocklist';
 import { getQuebecHour } from '@/lib/timezone';
 
 export const maxDuration = 60;
@@ -82,6 +83,8 @@ export async function GET(req: NextRequest) {
 </div></body></html>`;
 
     if (!q.client_email) continue;
+    // OPT-OUT: ne JAMAIS relancer quelqu'un qui a demandé qu'on le laisse tranquille.
+    if (await isBlocked({ email: q.client_email as string, phone: q.client_tel as string })) continue;
     try {
       await sendEmail({ to: q.client_email as string, subject: `${prenom}, votre soumission Novus Epoxy vous attend`, html });
       await query(`UPDATE quotes SET relance_1_at = NOW() WHERE id = $1`, [q.id]);
@@ -122,6 +125,8 @@ export async function GET(req: NextRequest) {
 </div></body></html>`;
 
     if (!q.client_email) continue;
+    // OPT-OUT: ne JAMAIS relancer quelqu'un qui a demandé qu'on le laisse tranquille.
+    if (await isBlocked({ email: q.client_email as string, phone: q.client_tel as string })) continue;
     try {
       await sendEmail({ to: q.client_email as string, subject: `Dernière chance — votre projet époxy, ${prenom}`, html });
       await query(`UPDATE quotes SET relance_2_at = NOW() WHERE id = $1`, [q.id]);
