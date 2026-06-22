@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { google } from 'googleapis';
 import { query } from '@/lib/db';
-import { ensureLabels, decideLabels, lookupContact, isFactureSubject, isSystemSender, LABELS } from '@/lib/gmail-labels';
+import { ensureLabels, lookupContact, extractBodyText, evaluateEmail, labelsFromEvaluation } from '@/lib/gmail-labels';
 
 export const maxDuration = 120;
 
@@ -74,11 +74,12 @@ export async function GET(req: NextRequest) {
     const subject = headerVal(headers, 'Subject');
     const hasAttachment = (full.data.payload?.parts ?? []).some(p => !!p.filename && p.filename.length > 0);
 
+    // LIT le mail au complet + ÉVALUE intelligemment c'est quoi (avant toute action).
+    const bodyText = extractBodyText(full.data.payload);
     const contact = await lookupContact(fromEmail);
-    const isFacture = isFactureSubject(subject);
-    const isSystem = isSystemSender(fromEmail);
+    const evaluation = await evaluateEmail({ subject, bodyText, fromEmail });
 
-    const { labels, archive } = decideLabels({ hasAttachment, contact, isFacture, isFournisseur: false, isSystem });
+    const { labels, archive } = labelsFromEvaluation({ category: evaluation.category, hasAttachment, contact });
 
     for (const name of labels) counts[name] = (counts[name] ?? 0) + 1;
 

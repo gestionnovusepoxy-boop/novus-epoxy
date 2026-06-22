@@ -9,6 +9,7 @@
  */
 import type { gmail_v1 } from 'googleapis';
 import { query } from '@/lib/db';
+import { callLLM } from '@/lib/llm';
 
 type Gmail = gmail_v1.Gmail;
 
@@ -136,4 +137,77 @@ export function isFactureSubject(subject: string): boolean { return FACTURE_RE.t
 export function isSystemSender(fromEmail: string): boolean {
   const f = (fromEmail ?? '').toLowerCase();
   return SYSTEM_SENDERS.some(s => f.includes(s));
+}
+
+/** Extrait le texte complet du corps d'un email (text/plain préféré, sinon HTML nettoyé). */
+export function extractBodyText(payload: gmail_v1.Schema$MessagePart | undefined): string {
+  if (!payload) return '';
+  const decode = (data?: string | null) => data ? Buffer.from(data, 'base64url').toString('utf-8') : '';
+  let plain = '';
+  let html = '';
+  const walk = (part: gmail_v1.Schema$MessagePart) => {
+    const mime = part.mimeType ?? '';
+    if (mime === 'text/plain' && part.body?.data) plain += decode(part.body.data) + '\n';
+    else if (mime === 'text/html' && part.body?.data) html += decode(part.body.data) + '\n';
+    for (const p of (part.parts ?? [])) walk(p);
+  };
+  walk(payload);
+  const raw = plain.trim() || html.replace(/<[^>]+>/g, ' ').replace(/&[a-z]+;/gi, ' ');
+  return raw.replace(/\s+/g, ' ').trim().slice(0, 4000);
+}
+
+export type EmailCategory = 'client' | 'lead' | 'facture' | 'fournisseur' | 'rdv' | 'important' | 'systeme' | 'spam' | 'autre';
+
+/** LIT le mail au complet et ÉVALUE intelligemment c'est quoi (LLM tier smart). */
+export async function evaluateEmail(input: { subject: string; bodyText: string; fromEmail: string }): Promise<{ category: EmailCategory; action: string }> {
+  const fallback = { category: 'autre' as EmailCategory, action: 'à examiner' };
+  if (!input.bodyText && !input.subject) return fallback;
+  try {
+    const raw = await callLLM({
+      tier: 'smart',
+      maxTokens: 120,
+      jsonMode: true,
+      agent: 'gmail-organize',
+      system: `Tu classes les courriels d'une entreprise de planchers époxy (Novus Epoxy, Québec). Lis le courriel AU COMPLET et détermine EXACTEMENT ce que c'est. Réponds en JSON: {"category": "...", "action": "..."}.
+category = un de: client (un client existant/qui a un projet en cours), lead (nouveau prospect intéressé par un plancher), facture (une facture/reçu de fournisseur à payer), fournisseur (courriel d'un fournisseur de matériaux/sous-traitant), rdv (demande de rendez-vous/visite/appel), important (action humaine requise, ni client ni facture), systeme (notification automatique: Vercel, GitHub, Sentry, Google, etc.), spam (pourriel/pub non sollicitée), autre.
+action = 3-6 mots: quoi faire (ex: "répondre soumission", "payer facture", "rappeler le client", "classer", "ignorer").`,
+      messages: [{ role: 'user', content: `De: ${input.fromEmail}\nSujet: ${input.subject}\n\n${input.bodyText.slice(0, 3500)}` }],
+    });
+    const parsed = JSON.parse(raw);
+    const cat = String(parsed.category ?? '').toLowerCase() as EmailCategory;
+    const valid: EmailCategory[] = ['client', 'lead', 'facture', 'fournisseur', 'rdv', 'important', 'systeme', 'spam', 'autre'];
+    return { category: valid.includes(cat) ? cat : 'autre', action: String(parsed.action ?? '').slice(0, 60) };
+  } catch { return fallback; }
+}
+
+/** Combine l'évaluation IA + les garde-fous durs (pièce jointe, contact CRM) → labels. */
+export function labelsFromEvaluation(input: {
+  category: EmailCategory;
+  hasAttachment: boolean;
+  contact: Contact;
+}): { labels: LabelName[]; archive: boolean } {
+  const set = new Set<LabelName>();
+  let keepInInbox = false;
+
+  // GARDE-FOU DUR: pièce jointe → toujours Photos reçues + gardé en boîte (peu importe l'IA).
+  if (input.hasAttachment) { set.add(LABELS.PHOTOS); keepInInbox = true; }
+  // GARDE-FOU DUR: contact connu du CRM.
+  if (input.contact) { set.add(input.contact.kind === 'client' ? LABELS.CLIENTS : LABELS.LEADS); keepInInbox = true; }
+
+  // Évaluation IA
+  let archive = false;
+  switch (input.category) {
+    case 'client': set.add(LABELS.CLIENTS); keepInInbox = true; break;
+    case 'lead': set.add(LABELS.LEADS); keepInInbox = true; break;
+    case 'facture': set.add(LABELS.FACTURES); keepInInbox = true; break;
+    case 'fournisseur': set.add(LABELS.FOURNISSEURS); keepInInbox = true; break;
+    case 'rdv':
+    case 'important': set.add(LABELS.A_TRAITER); keepInInbox = true; break;
+    case 'systeme': if (set.size === 0) { set.add(LABELS.SYSTEME); archive = true; } break;
+    case 'spam': /* on ne label pas — laissé au cleanup (déjà protégé) */ break;
+    default: if (set.size === 0) set.add(LABELS.A_TRAITER);
+  }
+  if (set.size === 0) set.add(LABELS.A_TRAITER);
+  if (keepInInbox) archive = false; // client/photo/facture restent TOUJOURS en boîte
+  return { labels: [...set], archive };
 }
