@@ -61,7 +61,12 @@ export async function GET(req: NextRequest) {
 
   const counts: Record<string, number> = {};
   let applied = 0;
-  let trashed = 0; // doit TOUJOURS rester 0 — on ne supprime jamais ici.
+  let alerted = 0;
+  const trashed = 0; // doit TOUJOURS rester 0 — on ne supprime jamais ici.
+  const telegramToken = process.env.TELEGRAM_BOT_TOKEN ?? '';
+  const telegramChatIds = (process.env.TELEGRAM_GROUP_CHAT_ID
+    ? [process.env.TELEGRAM_GROUP_CHAT_ID]
+    : (process.env.TELEGRAM_ADMIN_CHAT_IDS ?? '').split(',').map(s => s.trim()).filter(Boolean));
 
   for (const id of ids) {
     let full;
@@ -95,6 +100,26 @@ export async function GET(req: NextRequest) {
           applied++;
         } catch { /* skip */ }
       }
+
+      // ALERTE Telegram — SEULEMENT l'important (vrai client, RDV, facture à payer).
+      // Dedup par message (jamais 2× le même) + plafond pour éviter le spam sur un gros lot.
+      if (['client', 'rdv', 'facture'].includes(evaluation.category) && alerted < 15) {
+        const alertKey = `gmail_alert_${id}`;
+        const already = await query('SELECT 1 FROM kv_store WHERE key = $1', [alertKey]).catch(() => []);
+        if (already.length === 0) {
+          const icon = evaluation.category === 'facture' ? '🧾' : evaluation.category === 'rdv' ? '🗓️' : '👤';
+          const who = contact?.nom || fromEmail;
+          const text = `${icon} <b>${evaluation.category.toUpperCase()}</b> — ${who}\n📝 ${subject.slice(0, 100)}\n➡️ ${evaluation.action}`;
+          for (const chatId of telegramChatIds) {
+            await fetch(`https://api.telegram.org/bot${telegramToken}/sendMessage`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' }),
+            }).catch(() => {});
+          }
+          await query(`INSERT INTO kv_store (key, value) VALUES ($1, $2) ON CONFLICT (key) DO NOTHING`, [alertKey, new Date().toISOString()]).catch(() => {});
+          alerted++;
+        }
+      }
     }
   }
 
@@ -103,6 +128,7 @@ export async function GET(req: NextRequest) {
     dryRun,
     scanned: ids.length,
     applied,
+    alerted, // pings Telegram envoyés (client/rdv/facture seulement)
     trashed, // garantie: 0
     counts,
     note: dryRun ? 'DRY-RUN — rien modifié. Ajoute ?dryRun=false&max=50 pour appliquer par lots.' : 'Labels appliqués (aucune suppression).',
