@@ -41,6 +41,8 @@ async function notifyTelegramHandoff(conversationId: number, visitorName: string
     transcript,
     ``,
     `<i>Le client attend une réponse humaine.</i>`,
+    ``,
+    `🔗 Répondre ici: https://novus-epoxy.vercel.app/dashboard/conversations/${conversationId}`,
   ].join('\n');
 
   const keyboard = {
