@@ -106,16 +106,23 @@ export async function POST(req: NextRequest) {
     ? type_service.trim()
     : 'soustraitance';
 
+  // La table quotes a plusieurs colonnes NOT NULL (client_email, superficie,
+  // prix_pied_carre, sous_total, tps, tvq, total, depot_requis) conçues pour un devis.
+  // Un contrat de sous-traitance n'a pas ces champs (le montant est dans contract_price),
+  // donc on les remplit à '' / 0 pour satisfaire les contraintes.
   const rows = await query(
     `INSERT INTO quotes (
-       client_nom, client_adresse, notes, type_service, statut,
-       is_subcontract, partner_id, contract_price, profit_split_pct
+       client_nom, client_email, client_adresse, notes, type_service, statut,
+       is_subcontract, partner_id, contract_price, profit_split_pct,
+       superficie, prix_pied_carre, sous_total, tps, tvq, total, depot_requis
      )
-     VALUES ($1, $2, $3, $4, 'planifie', TRUE, $5, $6, $7)
+     VALUES ($1, $2, $3, $4, $5, 'planifie', TRUE, $6, $7, $8,
+             0, 0, 0, 0, 0, 0, 0)
      RETURNING id, client_nom, client_adresse, notes, type_service, statut,
                is_subcontract, partner_id, contract_price, profit_split_pct, created_at`,
     [
       client_nom,
+      body.client_email ?? '',
       client_adresse ?? null,
       notes ?? null,
       service,
