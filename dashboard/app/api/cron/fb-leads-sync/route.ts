@@ -291,6 +291,26 @@ export async function GET(req: NextRequest) {
             await sendLeadAckEmail(email, nom);
           } catch { /* ne bloque jamais la sync */ }
         }
+        // Signal CAPI "Lead" à Meta sur chaque NOUVEAU lead FB (en plus du Purchase au dépôt).
+        // Non-bloquant + NO-OP si META_PIXEL_ID absent. value = total du devis auto si dispo.
+        // eventId déterministe (lead.id Meta) pour dédup côté Meta même si la sync repasse.
+        try {
+          const { sendConversionEvent } = await import('@/lib/meta-capi');
+          const superficieNum = superficie ? parseFloat(superficie) : NaN;
+          const leadValue = service && SERVICES[service as ServiceType] && superficieNum > 0
+            ? calculateQuote(service as ServiceType, superficieNum).total
+            : 1500;
+          await sendConversionEvent({
+            eventName: 'Lead',
+            value: leadValue,
+            email,
+            phone: telephone,
+            eventTime: lead.created_time,
+            eventId: `fblead_${lead.id}`,
+          });
+        } catch (err) {
+          console.error('[fb-leads-sync] CAPI Lead event failed (non-blocking):', err);
+        }
       } else {
         // Lead already exists — check if it needs a quote auto-created (e.g. superficie wasn't parseable before)
         if (service && superficie && SERVICES[service as ServiceType]) {

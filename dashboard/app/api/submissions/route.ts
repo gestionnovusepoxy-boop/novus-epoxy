@@ -431,6 +431,25 @@ export async function POST(req: NextRequest) {
     leadAnalysis,
   );
 
+  // Signal CAPI "Lead" à Meta — donne à l'algo le VRAI signal de conversion (en plus du Purchase
+  // existant au dépôt). Non-bloquant + NO-OP propre si META_PIXEL_ID absent (géré dans la lib).
+  // value = total du devis auto si dispo, sinon estimation conservatrice par défaut.
+  try {
+    const { sendConversionEvent } = await import('@/lib/meta-capi');
+    const leadValue = quoteId && typeof superficie === 'number'
+      ? calculateQuote(serviceType as ServiceType, superficie).total
+      : 1500;
+    await sendConversionEvent({
+      eventName: 'Lead',
+      value: leadValue,
+      email: body.email ?? null,
+      phone: body.telephone ?? null,
+      eventId: `submission_${submissionId}`,
+    });
+  } catch (err) {
+    console.error('[submissions] CAPI Lead event failed (non-blocking):', err);
+  }
+
   // Special alert for metallique — Jason must contact client for in-person color selection
   const serviceLower = (body.service ?? '').toLowerCase();
   if (serviceLower.includes('metallique') || serviceLower.includes('m\u00e9tallique')) {
