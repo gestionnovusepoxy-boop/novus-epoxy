@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { getToken } from 'next-auth/jwt';
 
 // Note: Arcjet moved to API routes (lib/arcjet.ts) — Edge Function size limit on Hobby plan
 // Rate limiting in-memory (per-endpoint limits) with automatic cleanup
@@ -34,8 +35,27 @@ function corsHeaders() {
   };
 }
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // ── ISOLATION SOUS-TRAITANT (chokepoint sécurité) ──────────────────────────
+  // Un compte 'partner' ne peut atteindre QUE /partenaire (+ son API) et l'auth.
+  // Tout le reste (dashboard Novus, 77 routes admin) → bloqué. Couvre les routes
+  // qui n'utilisent que auth() (sans requireAdmin). Fail-open prudent: si la lecture
+  // du token échoue, on ne bloque pas (les routes gardent leur propre auth).
+  const isPartnerScope = pathname.startsWith('/partenaire') || pathname.startsWith('/api/partenaire');
+  const isAuthScope = pathname.startsWith('/api/auth') || pathname.startsWith('/auth');
+  if (!isPartnerScope && !isAuthScope && (pathname.startsWith('/dashboard') || pathname.startsWith('/api/'))) {
+    try {
+      const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: process.env.NODE_ENV === 'production' });
+      if ((token as { role?: string } | null)?.role === 'partner') {
+        if (pathname.startsWith('/api/')) {
+          return NextResponse.json({ error: 'Accès refusé — sous-traitant' }, { status: 403 });
+        }
+        return NextResponse.redirect(new URL('/partenaire', req.url));
+      }
+    } catch { /* fail-open: les routes gardent leur propre garde (requireAdmin) */ }
+  }
 
   // CORS preflight for all public endpoints
   if (req.method === 'OPTIONS' && (
@@ -204,5 +224,6 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/api/track', '/api/submissions', '/api/meta/webhook', '/api/openclaw/webhook', '/api/chat', '/api/chat/history', '/api/chat/upload', '/api/chat/email', '/api/auth/:path*', '/api/bookings/:path*', '/api/telegram/admin', '/api/sms/devis', '/api/sms/incoming', '/api/quotes/:path*', '/api/leads/zapier'],
+  // Couvre les routes publiques/webhooks (rate-limit) ET /dashboard + /api/* (garde sous-traitant).
+  matcher: ['/dashboard/:path*', '/api/:path*'],
 };

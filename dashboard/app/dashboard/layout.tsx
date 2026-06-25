@@ -7,6 +7,8 @@ import { DashboardShell } from '@/components/dashboard-shell';
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const session = await auth();
   if (!session) redirect('/auth/signin');
+  // GARDE ANTI-FUITE: un sous-traitant ne doit JAMAIS atteindre le dashboard Novus.
+  if ((session.user as { role?: string })?.role === 'partner') redirect('/partenaire');
 
   const signOutAction = async () => { 'use server'; await signOut({ redirectTo: '/auth/signin' }); };
 

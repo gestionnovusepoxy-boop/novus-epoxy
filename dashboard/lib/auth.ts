@@ -59,16 +59,48 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         const match = users.find(u => u.email === email && checkPassword(password, u.password));
+        if (match) {
+          await auditLog('login', email, true, ip);
+          return { id: match.id, email: match.email, name: match.name, role: 'admin' } as { id: string; email: string; name: string };
+        }
 
-        await auditLog('login', email, !!match, ip);
+        // Sous-traitants (SUBCONTRACTOR_USERS = "email:motdepasse:Nom:partnerId" séparés par virgules).
+        // Rôle 'partner' + partnerId → accès UNIQUEMENT à /partenaire (jamais au dashboard Novus).
+        const subs = (process.env.SUBCONTRACTOR_USERS ?? '').split(',').filter(Boolean).map(u => {
+          const [e, p, n, pid] = u.split(':');
+          return { email: e?.toLowerCase().trim(), password: p, name: n ?? e?.split('@')[0], partnerId: Number(pid) };
+        });
+        const sub = subs.find(s => s.email === email && checkPassword(password, s.password) && Number.isFinite(s.partnerId));
+        if (sub) {
+          await auditLog('login', email, true, ip);
+          return { id: `partner_${sub.partnerId}`, email: sub.email, name: sub.name, role: 'partner', partnerId: sub.partnerId } as unknown as { id: string; email: string; name: string };
+        }
 
-        if (!match) return null;
-        return { id: match.id, email: match.email, name: match.name };
+        await auditLog('login', email, false, ip);
+        return null;
       },
     }),
   ],
   session: { strategy: 'jwt' },
   trustHost: true,
+  callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        const u = user as { role?: string; partnerId?: number };
+        token.role = u.role ?? 'admin';
+        if (u.partnerId !== undefined) token.partnerId = u.partnerId;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (session.user) {
+        const su = session.user as { role?: string; partnerId?: number };
+        su.role = (token as { role?: string }).role ?? 'admin';
+        su.partnerId = (token as { partnerId?: number }).partnerId;
+      }
+      return session;
+    },
+  },
   pages: {
     signIn: '/auth/signin',
   },
@@ -90,7 +122,13 @@ export async function requireAdmin(
   req: NextRequest,
 ): Promise<{ ok: true; via: 'session' | 'api-key' } | NextResponse> {
   const session = await auth();
-  if (session) return { ok: true, via: 'session' };
+  if (session) {
+    // Un sous-traitant (role 'partner') n'a JAMAIS accès aux routes admin.
+    if ((session.user as { role?: string })?.role === 'partner') {
+      return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+    }
+    return { ok: true, via: 'session' };
+  }
 
   const apiKey = req.headers.get('x-api-key') ?? '';
   const validApiKey = process.env.ADMIN_API_KEY ?? '';

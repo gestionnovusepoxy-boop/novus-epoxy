@@ -1727,6 +1727,63 @@ ${Number(q.rabais_pct) > 0 ? `<tr style="border-bottom:1px solid #e2e8f0;"><td s
       return NextResponse.json({ ok: true });
     }
 
+    // ── A1: Boutons COACH PUB (clic humain = action directe Meta) ──────────────
+    const META_V = 'v25.0';
+    const metaTok = () => process.env.META_PAGE_TOKEN ?? '';
+
+    // coach_scale_<campaignId> — monter le budget de l'adset +25% (recommandation Meta)
+    if (cbData.startsWith('coach_scale_')) {
+      const campaignId = cbData.replace('coach_scale_', '');
+      try {
+        const sets = await (await fetch(`https://graph.facebook.com/${META_V}/${campaignId}/adsets?fields=id,name,daily_budget&access_token=${metaTok()}`)).json();
+        const adset = sets.data?.[0];
+        if (!adset?.id) { await sendTelegram(cbChatId, `❌ Aucun adset trouvé pour cette campagne.`); return NextResponse.json({ ok: true }); }
+        const current = Number(adset.daily_budget || 0);
+        const next = Math.round(current * 1.25);
+        const r = await fetch(`https://graph.facebook.com/${META_V}/${adset.id}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ daily_budget: next, status: 'ACTIVE', access_token: metaTok() }),
+        });
+        const rr = await r.json();
+        await sendTelegram(cbChatId, rr.success
+          ? `💰 Budget monté: ${(current / 100).toFixed(0)}$ → ${(next / 100).toFixed(0)}$/jour ✅`
+          : `❌ Échec: ${JSON.stringify(rr.error?.message || rr).slice(0, 150)}`);
+      } catch (err) { await sendTelegram(cbChatId, `❌ Erreur scale: ${(err as Error).message.slice(0, 150)}`); }
+      return NextResponse.json({ ok: true });
+    }
+
+    // coach_relaunch_<campaignId> — réactiver l'adset stalled + repousser la date de fin (+30j)
+    if (cbData.startsWith('coach_relaunch_')) {
+      const campaignId = cbData.replace('coach_relaunch_', '');
+      try {
+        const sets = await (await fetch(`https://graph.facebook.com/${META_V}/${campaignId}/adsets?fields=id,name&access_token=${metaTok()}`)).json();
+        const adset = sets.data?.[0];
+        if (!adset?.id) { await sendTelegram(cbChatId, `❌ Aucun adset trouvé.`); return NextResponse.json({ ok: true }); }
+        const newEnd = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 19) + '+0000';
+        const r = await fetch(`https://graph.facebook.com/${META_V}/${adset.id}`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'ACTIVE', end_time: newEnd, access_token: metaTok() }),
+        });
+        const rr = await r.json();
+        await sendTelegram(cbChatId, rr.success
+          ? `🔄 Pub relancée ✅ (active jusqu'au ${newEnd.slice(0, 10)})`
+          : `❌ Échec: ${JSON.stringify(rr.error?.message || rr).slice(0, 150)}`);
+      } catch (err) { await sendTelegram(cbChatId, `❌ Erreur relaunch: ${(err as Error).message.slice(0, 150)}`); }
+      return NextResponse.json({ ok: true });
+    }
+
+    // coach_newcreative_<service> — générer une nouvelle créative et l'envoyer pour approbation
+    if (cbData.startsWith('coach_newcreative_')) {
+      const service = cbData.replace('coach_newcreative_', '') || 'flake';
+      await sendTelegram(cbChatId, `🎨 Nouvelle créative ${service} en préparation...`);
+      try {
+        const { buildAdDraft, sendDraftToTelegram } = await import('@/lib/meta-ads');
+        const draft = await buildAdDraft({ service: service as 'flake' });
+        if (process.env.TELEGRAM_GROUP_CHAT_ID) await sendDraftToTelegram(draft, process.env.TELEGRAM_GROUP_CHAT_ID);
+      } catch (err) { await sendTelegram(cbChatId, `❌ Créative échoue: ${(err as Error).message.slice(0, 150)}`); }
+      return NextResponse.json({ ok: true });
+    }
+
     return NextResponse.json({ ok: true });
   }
 
