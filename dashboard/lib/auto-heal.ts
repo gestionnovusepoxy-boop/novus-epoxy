@@ -1,4 +1,5 @@
 import { getAdminChatIds } from '@/lib/telegram-utils';
+import { getQuebecHour } from '@/lib/timezone';
 // Echo — Auto-heal system
 // Runs on every major API call. Checks all critical systems, auto-repairs, notifies group.
 // NOTHING should ever stay broken. Echo fixes it or alerts immediately.
@@ -163,9 +164,12 @@ export async function autoHeal(): Promise<void> {
       );
     }
 
-    // Full system health report every 6h
+    // Rapport système complet — 1× par jour, le matin (8h-9h Québec) seulement.
+    // (Avant: tous les 6h = trop de spam Telegram.)
     const lastReport = await getCooldown('echo_last_report');
-    if (Date.now() - lastReport >= 6 * 60 * 60 * 1000) {
+    const qHour = getQuebecHour();
+    const hoursSinceReport = (Date.now() - lastReport) / (60 * 60 * 1000);
+    if (qHour === 8 && hoursSinceReport >= 20) {
       await setCooldown('echo_last_report');
 
       const checks: string[] = [];
@@ -243,7 +247,7 @@ export async function autoHeal(): Promise<void> {
         `🔨 ${activeJobs[0]?.c || 0} travaux actifs\n` +
         `💰 ${Number(revenue[0]?.total || 0).toFixed(0)}$ encaisse total\n` +
         `📧 ${emailsToday[0]?.c || 0} emails | 📱 ${smsToday[0]?.c || 0} SMS aujourd'hui\n\n` +
-        `<i>Prochain rapport dans 6h.</i>`
+        `<i>Prochain rapport demain matin (8h).</i>`
       );
     }
   } catch {
