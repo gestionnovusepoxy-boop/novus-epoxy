@@ -60,6 +60,36 @@ export async function GET(req: NextRequest) {
   }
 
   if (!tokenDead) {
+    // ── 1b. Webhook leadgen abonné? AUTO-RÉPARE si tombé ──────────────
+    // Un abonnement leadgen qui retombe = leads Facebook perdus en silence
+    // (c'est arrivé: page abonnée à 0 champ, 26 juin). Réabonner est sûr et
+    // idempotent → on le fait automatiquement, puis on signale.
+    const PAGE_ID = '636757822863288';
+    try {
+      const ptRes = await fetch(`https://graph.facebook.com/${V}/${PAGE_ID}?fields=access_token&access_token=${encodeURIComponent(token)}`);
+      const ptJson = await ptRes.json();
+      const pageToken = ptJson?.access_token as string | undefined;
+      if (pageToken) {
+        const subRes = await fetch(`https://graph.facebook.com/${V}/${PAGE_ID}/subscribed_apps?fields=subscribed_fields&access_token=${encodeURIComponent(pageToken)}`);
+        const subJson = await subRes.json();
+        const fields: string[] = subJson?.data?.[0]?.subscribed_fields ?? [];
+        if (!fields.includes('leadgen')) {
+          // AUTO-RÉPARE
+          const fixRes = await fetch(`https://graph.facebook.com/${V}/${PAGE_ID}/subscribed_apps`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ subscribed_fields: 'leadgen,feed,messages,messaging_postbacks', access_token: pageToken }),
+          });
+          const fixJson = await fixRes.json();
+          problems.push('leadgen_unsubscribed');
+          messages.push(fixJson?.success
+            ? `🔧 <b>Webhook leadgen était tombé</b> — réparé automatiquement. Les leads FB rentrent à nouveau en temps réel.`
+            : `🚨 <b>Webhook leadgen TOMBÉ</b> — leads FB perdus, et la réparation auto a échoué. Reconnecte l'app à la page.`);
+        }
+      }
+    } catch (e) {
+      console.log('[ads-watchdog] webhook check failed:', String(e).slice(0, 120));
+    }
+
     // ── 2. Pubs rejetées / avec problème ──────────────────────────────
     try {
       const r = await fetch(`https://graph.facebook.com/${V}/act_${ACCT}/ads?fields=name,effective_status,ad_review_feedback,campaign{name,effective_status,objective}&limit=200&access_token=${encodeURIComponent(token)}`);
