@@ -25,7 +25,7 @@ export async function GET() {
       COALESCE(SUM(CASE WHEN statut = 'depot_paye' THEN total ELSE 0 END), 0)::numeric AS montant_depot_paye,
       COUNT(CASE WHEN statut = 'complete' THEN 1 END)::int AS completes,
       COALESCE(SUM(CASE WHEN statut = 'complete' THEN total ELSE 0 END), 0)::numeric AS montant_completes
-    FROM quotes`),
+    FROM quotes WHERE is_subcontract IS NOT TRUE`),
     query(`SELECT COALESCE(SUM(montant_ttc), 0)::numeric AS total FROM expenses`),
     query(`SELECT COALESCE(SUM(t.heures * e.taux_horaire), 0)::numeric AS total,
            COALESCE(SUM(t.heures), 0)::numeric AS heures
@@ -53,7 +53,7 @@ export async function GET() {
     FROM bookings b JOIN quotes q ON q.id = b.quote_id
     WHERE b.statut != 'annule' AND b.jour1_date >= CURRENT_DATE - INTERVAL '7 days'
     ORDER BY b.jour1_date ASC LIMIT 5`),
-    query(`SELECT id, client_nom, total, statut, created_at FROM quotes ORDER BY created_at DESC LIMIT 3`),
+    query(`SELECT id, client_nom, total, statut, created_at FROM quotes WHERE is_subcontract IS NOT TRUE ORDER BY created_at DESC LIMIT 3`),
     query(`SELECT id, nom, telephone, source, temperature, created_at FROM crm_leads ORDER BY created_at DESC LIMIT 3`),
     query(`SELECT categorie, COALESCE(SUM(montant_ttc), 0)::numeric AS total FROM expenses GROUP BY categorie ORDER BY total DESC`),
     query(`SELECT

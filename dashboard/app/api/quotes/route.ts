@@ -33,6 +33,8 @@ export async function GET(req: NextRequest) {
     params.push(`%${validSearch}%`);
     i++;
   }
+  // SÉPARATION: les contrats de sous-traitance ne se mélangent JAMAIS aux devis.
+  where += ` AND (is_subcontract IS NOT TRUE)`;
 
   const countRows = await query(`SELECT COUNT(*)::int AS count FROM quotes ${where}`, params);
   const total = (countRows[0]?.count as number) ?? 0;

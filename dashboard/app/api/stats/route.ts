@@ -55,19 +55,20 @@ export async function GET(req: NextRequest) {
       // Revenue current period
       db(`SELECT COALESCE(SUM(total), 0)::numeric AS revenus
           FROM quotes
-          WHERE statut NOT IN ('brouillon','refuse') AND created_at >= NOW() - $1::interval`,
+          WHERE statut NOT IN ('brouillon','refuse') AND is_subcontract IS NOT TRUE AND created_at >= NOW() - $1::interval`,
         [intervalCur]),
 
       // Revenue previous period
       db(`SELECT COALESCE(SUM(total), 0)::numeric AS revenus
           FROM quotes
-          WHERE statut NOT IN ('brouillon','refuse')
+          WHERE statut NOT IN ('brouillon','refuse') AND is_subcontract IS NOT TRUE
             AND created_at >= NOW() - $1::interval AND created_at < NOW() - $2::interval`,
         [intervalPrev, intervalCur]),
 
       // Pipeline — count of quotes by statut
       db(`SELECT statut, COUNT(*)::int AS count
           FROM quotes
+          WHERE is_subcontract IS NOT TRUE
           GROUP BY statut
           ORDER BY count DESC`),
 
