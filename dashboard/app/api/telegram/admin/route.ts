@@ -99,6 +99,22 @@ const TOOLS = [
     },
   },
   {
+    name: 'logger_vente',
+    description: 'Enregistre une VENTE conclue HORS du systeme de devis (vente qui n\'a jamais eu de soumission dans l\'app). Beaucoup de ventes ne sont pas dans le systeme — cet outil les ajoute pour que le cerveau pub apprenne sur des donnees completes. Utilise quand Luca dit "vente flake 8000", "j\'ai vendu un metallique 5000 a Marc", "log une vente commercial 12000 source facebook". Le service est obligatoire (flake, metallique, couleur_unie, quartz, antiderapant, commercial, meulage). Le montant est le revenu de la vente.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        service: { type: 'string', enum: ['flake', 'metallique', 'couleur_unie', 'quartz', 'antiderapant', 'commercial', 'meulage', 'vinyl_click'], description: 'Type de plancher vendu. "flocon"/"flake"=flake, "uni"/"couleur unie"=couleur_unie.' },
+        montant: { type: 'number', description: 'Montant de la vente (revenu en $). Ex: 8000.' },
+        client_nom: { type: 'string', description: 'Nom du client (optionnel)', default: '' },
+        source: { type: 'string', description: 'D\'ou vient la vente: facebook, reference, bouche-a-oreille, etc. (optionnel)', default: 'manuel' },
+        date_vente: { type: 'string', description: 'Date de la vente YYYY-MM-DD (optionnel, defaut aujourd\'hui)', default: '' },
+        notes: { type: 'string', description: 'Notes (optionnel)', default: '' },
+      },
+      required: ['service', 'montant'],
+    },
+  },
+  {
     name: 'stats_business',
     description: 'Recupere les statistiques du business: devis du jour, devis en attente, revenus, leads, etc.',
     input_schema: { type: 'object', properties: {}, required: [] },
@@ -488,6 +504,41 @@ async function executeTool(name: string, input: Record<string, unknown>): Promis
         description: description ? 'incluse' : 'aucune',
         sms_envoye: smsSent,
         lien_dashboard: `https://novus-epoxy.vercel.app/dashboard/devis/${quoteId}`,
+      });
+    }
+
+    case 'logger_vente': {
+      const validServices = ['flake', 'metallique', 'couleur_unie', 'quartz', 'antiderapant', 'commercial', 'meulage', 'vinyl_click'];
+      const service = String(input.service || '').trim().toLowerCase();
+      const montant = Number(input.montant);
+      if (!validServices.includes(service)) {
+        return JSON.stringify({ error: `Service invalide. Utilise: ${validServices.join(', ')}` });
+      }
+      if (!Number.isFinite(montant) || montant <= 0) {
+        return JSON.stringify({ error: 'Montant invalide. Donne un montant en $ (ex: 8000).' });
+      }
+      const clientNom = input.client_nom ? String(input.client_nom).slice(0, 160) : null;
+      const source = input.source ? String(input.source).slice(0, 60) : 'manuel';
+      const notes = input.notes ? String(input.notes).slice(0, 2000) : null;
+      const dateVente = typeof input.date_vente === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.date_vente)
+        ? input.date_vente : null;
+
+      const rows = await query(
+        `INSERT INTO manual_sales (client_nom, service, montant, source, date_vente, notes)
+         VALUES ($1, $2, $3, $4, COALESCE($5::date, CURRENT_DATE), $6)
+         RETURNING id, service, montant, source, date_vente`,
+        [clientNom, service, montant, source, dateVente, notes],
+      );
+      const v = rows[0] as Record<string, unknown>;
+      return JSON.stringify({
+        ok: true,
+        vente_id: v.id,
+        service: v.service,
+        montant: formatMoney(montant),
+        client: clientNom || '—',
+        source: v.source,
+        date: v.date_vente,
+        note: 'Vente loggée — le cerveau pub en tiendra compte dans son analyse.',
       });
     }
 
@@ -1172,6 +1223,7 @@ TU PEUX:
 - Lister les projets actifs (outil liste_projets)
 - Importer une liste de leads en bulk dans la banque CRM (outil importer_leads_liste)
 - Analyser et classer les leads/soumissions recents (chaud/tiede/froid, urgence, action suggeree)
+- Logger une vente faite HORS du systeme (outil logger_vente). Ex: "vente flake 8000", "vendu metallique 5000 a Marc source facebook". Sert a nourrir le cerveau pub avec les vraies ventes.
 - Repondre aux questions sur les clients et leur suivi
 
 IMPORTANT: Ne JAMAIS envoyer les prix/tarifs par email aux prospects. Les prix sont donnes uniquement dans les soumissions officielles.

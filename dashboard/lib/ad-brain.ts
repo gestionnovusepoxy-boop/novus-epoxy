@@ -34,13 +34,40 @@ export async function gatherAdBrainData(metaToken?: string, adAccountId?: string
      GROUP BY source ORDER BY revenu_signe DESC NULLS LAST LIMIT 10`,
   ).catch(() => []);
 
+  // Revenu par service = contrats signes (quotes) UNION ventes manuelles (hors-systeme).
+  // Luca: beaucoup de ventes ne sont pas dans le systeme — on les inclut pour ne pas
+  // sous-estimer ce qui VEND vraiment (ex: FLAKE).
   const byServiceRows = await query(
-    `SELECT type_service, COUNT(*)::int AS n, COALESCE(SUM(total), 0)::numeric AS revenu
-     FROM quotes
-     WHERE statut IN ('depot_paye','planifie','complete') AND is_subcontract IS NOT TRUE
-       AND created_at > NOW() - INTERVAL '180 days'
-     GROUP BY type_service ORDER BY revenu DESC LIMIT 8`,
+    `SELECT service AS type_service, SUM(n)::int AS n, SUM(revenu)::numeric AS revenu FROM (
+       SELECT type_service AS service, COUNT(*)::int AS n, COALESCE(SUM(total), 0)::numeric AS revenu
+       FROM quotes
+       WHERE statut IN ('depot_paye','planifie','complete') AND is_subcontract IS NOT TRUE
+         AND created_at > NOW() - INTERVAL '180 days'
+       GROUP BY type_service
+       UNION ALL
+       SELECT service, COUNT(*)::int AS n, COALESCE(SUM(montant), 0)::numeric AS revenu
+       FROM manual_sales
+       WHERE date_vente > CURRENT_DATE - INTERVAL '180 days'
+       GROUP BY service
+     ) u
+     GROUP BY service ORDER BY revenu DESC LIMIT 8`,
   ).catch(() => []);
+
+  // Ventes manuelles agregees par source (90j) — apparaissent comme sources qui signent.
+  const manualBySourceRows = await query(
+    `SELECT COALESCE(source, 'manuel') AS source,
+       COUNT(*)::int AS leads,
+       COALESCE(SUM(montant), 0)::numeric AS revenu_signe
+     FROM manual_sales
+     WHERE date_vente > CURRENT_DATE - INTERVAL '90 days'
+     GROUP BY source`,
+  ).catch(() => []);
+
+  // Total ventes manuelles signees (90j) pour ajuster deal moyen / taux.
+  const manualAggRows = await query(
+    `SELECT COUNT(*)::int AS n, COALESCE(SUM(montant), 0)::numeric AS revenu
+     FROM manual_sales WHERE date_vente > CURRENT_DATE - INTERVAL '90 days'`,
+  ).catch(() => [{ n: 0, revenu: 0 }]);
 
   const mRows = await query(
     `SELECT COALESCE(AVG(total),0)::numeric AS deal_moyen,
@@ -65,11 +92,38 @@ export async function gatherAdBrainData(metaToken?: string, adAccountId?: string
   }
 
   const m = mRows[0] as { deal_moyen: number; signes: number; total: number };
+  const manualAgg = (manualAggRows[0] ?? { n: 0, revenu: 0 }) as { n: number; revenu: number };
+  const manualN = Number(manualAgg.n);
+  const manualRevenu = Number(manualAgg.revenu);
+
+  // Fusionne les sources CRM (quotes) avec les sources des ventes manuelles (90j),
+  // en additionnant le revenu signe quand la source est la meme.
+  const sourceMap = new Map<string, SourcePerf>();
+  for (const r of bySourceRows) {
+    const key = String(r.source ?? '?');
+    sourceMap.set(key, { source: key, leads: Number(r.leads), avecDevis: Number(r.avec_devis), revenuSigne: Number(r.revenu_signe) });
+  }
+  for (const r of manualBySourceRows) {
+    const key = String(r.source ?? 'manuel');
+    const cur = sourceMap.get(key) ?? { source: key, leads: 0, avecDevis: 0, revenuSigne: 0 };
+    cur.leads += Number(r.leads);
+    cur.avecDevis += Number(r.leads); // une vente manuelle = un deal signe
+    cur.revenuSigne += Number(r.revenu_signe);
+    sourceMap.set(key, cur);
+  }
+  const bySource = [...sourceMap.values()].sort((a, b) => b.revenuSigne - a.revenuSigne).slice(0, 10);
+
+  // Deal moyen et taux ajustes pour inclure les ventes manuelles signees.
+  const signesTotal = m.signes + manualN;
+  const totalTotal = m.total + manualN;
+  const revenuSignesQuotes = Number(m.deal_moyen) * m.signes;
+  const dealMoyen = signesTotal > 0 ? (revenuSignesQuotes + manualRevenu) / signesTotal : Number(m.deal_moyen);
+
   return {
-    bySource: bySourceRows.map(r => ({ source: String(r.source ?? '?'), leads: Number(r.leads), avecDevis: Number(r.avec_devis), revenuSigne: Number(r.revenu_signe) })),
+    bySource,
     byService: byServiceRows.map(r => ({ service: String(r.type_service ?? '?'), contrats: Number(r.n), revenu: Number(r.revenu) })),
-    dealMoyen: Number(m.deal_moyen),
-    tauxSignature: m.total > 0 ? Math.round((100 * m.signes) / m.total) : 0,
+    dealMoyen,
+    tauxSignature: totalTotal > 0 ? Math.round((100 * signesTotal) / totalTotal) : 0,
     metaSpend30d,
     metaLeads30d,
   };
