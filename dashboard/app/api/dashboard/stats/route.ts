@@ -22,7 +22,7 @@ export async function GET() {
            COUNT(*)::int AS count,
            COALESCE(SUM(total), 0)::numeric AS total
     FROM quotes
-    WHERE created_at >= NOW() - INTERVAL '12 months'
+    WHERE created_at >= NOW() - INTERVAL '12 months' AND is_subcontract IS NOT TRUE
     GROUP BY mois ORDER BY mois
   `);
 
@@ -64,8 +64,8 @@ export async function GET() {
       (SELECT COUNT(*)::int FROM crm_leads) AS total_leads,
       (SELECT COUNT(*)::int FROM crm_leads WHERE statut IN ('contacte','interesse','devis_envoye','rdv_pris','gagne')) AS contactes,
       (SELECT COUNT(*)::int FROM crm_leads WHERE statut IN ('devis_envoye','rdv_pris','gagne')) AS devis_envoyes,
-      (SELECT COUNT(*)::int FROM quotes WHERE statut IN ('contrat_signe','depot_paye','planifie','complete')) AS signes,
-      (SELECT COUNT(*)::int FROM quotes WHERE statut = 'complete') AS completes,
+      (SELECT COUNT(*)::int FROM quotes WHERE statut IN ('contrat_signe','depot_paye','planifie','complete') AND is_subcontract IS NOT TRUE) AS signes,
+      (SELECT COUNT(*)::int FROM quotes WHERE statut = 'complete' AND is_subcontract IS NOT TRUE) AS completes,
       (SELECT COUNT(*)::int FROM invoices WHERE statut = 'completee') AS payes
   `);
 

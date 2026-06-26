@@ -12,7 +12,7 @@ export async function GET() {
      FROM quotes q
      LEFT JOIN bookings b ON b.quote_id = q.id
      LEFT JOIN invoices inv ON inv.quote_id = q.id
-     WHERE q.statut IN ($1, $2, $3)
+     WHERE q.statut IN ($1, $2, $3) AND q.is_subcontract IS NOT TRUE
      ORDER BY b.jour1_date ASC NULLS LAST`,
     ['depot_paye', 'planifie', 'complete']
   );
