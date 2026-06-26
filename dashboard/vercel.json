@@ -119,6 +119,10 @@
     {
       "path": "/api/cron/ads-coach",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/ad-brain",
+      "schedule": "0 12 * * *"
     }
   ],
   "headers": [
