@@ -123,6 +123,14 @@
     {
       "path": "/api/cron/ad-brain",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/meta-token-health",
+      "schedule": "0 */2 * * *"
+    },
+    {
+      "path": "/api/cron/ads-watchdog",
+      "schedule": "0 */3 * * *"
     }
   ],
   "headers": [
