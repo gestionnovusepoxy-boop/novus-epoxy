@@ -17,8 +17,9 @@ export async function GET(req: NextRequest) {
   const eqNum = equipeFilter === '1' || equipeFilter === '2' ? Number(equipeFilter) : null;
 
   const rows = await query(
-    `SELECT p.id, p.date, p.slot, p.heure_debut, p.heure_fin, p.equipe, p.jour_numero,
-            c.client_nom, c.adresse, c.ville, c.couleur, c.service, c.client_tel, c.id AS chantier_id
+    `SELECT p.id, p.date, p.slot, p.heure_debut, p.heure_fin, p.equipe, p.jour_numero, p.notes AS planning_notes,
+            c.client_nom, c.adresse, c.ville, c.couleur, c.service, c.client_tel, c.superficie,
+            c.montant_contrat, c.notes AS chantier_notes, c.id AS chantier_id
      FROM jj_planning p
      JOIN jj_chantiers c ON c.id = p.chantier_id
      ${eqNum ? 'WHERE p.equipe = $1' : ''}
@@ -64,9 +65,25 @@ export async function GET(req: NextRequest) {
     lines.push(`UID:jj-${p.id}@novusepoxy.ca`);
     lines.push(`DTSTART;TZID=America/Toronto:${dateStr}T${start}`);
     lines.push(`DTEND;TZID=America/Toronto:${dateStr}T${end}`);
-    lines.push(`SUMMARY:JJ Éq.${equipe} — ${client} (jour ${Number(p.jour_numero ?? 1)}) ${label}`);
-    lines.push(`LOCATION:${addr}`);
-    lines.push(`DESCRIPTION:Chantier JJ #${p.chantier_id}\\nClient: ${client}\\nÉquipe: ${equipe}\\nService: ${service}\\nCouleur: ${couleur}\\nTel: ${esc(p.client_tel || '')}\\nHoraire: ${label}`);
+    const tel = esc(p.client_tel || '');
+    const ville = esc(p.ville || '');
+    const sqft = p.superficie != null ? `${Number(p.superficie)} pi²` : '—';
+    const jour = Number(p.jour_numero ?? 1);
+    const notes = esc(p.chantier_notes || p.planning_notes || '');
+    lines.push(`SUMMARY:🟢 JJ Éq.${equipe} — ${client} · ${ville} (jour ${jour}) ${label}`);
+    lines.push(`LOCATION:${addr}${ville ? ', ' + ville : ''}`);
+    lines.push(
+      `DESCRIPTION:━━ CHANTIER JJ #${p.chantier_id} ━━` +
+      `\\n👤 Client: ${client}` +
+      `\\n📞 Tél: ${tel}` +
+      `\\n📍 Adresse: ${addr}${ville ? ', ' + ville : ''}` +
+      `\\n🎨 Couleur: ${couleur || '—'}` +
+      `\\n🏗️ Service: ${service || '—'}` +
+      `\\n📐 Superficie: ${sqft}` +
+      `\\n👷 Équipe: ${equipe} · Jour ${jour}` +
+      `\\n⏰ Horaire: ${label}` +
+      (notes ? `\\n📝 Notes: ${notes}` : ''),
+    );
     lines.push('STATUS:CONFIRMED');
     lines.push('BEGIN:VALARM');
     lines.push('TRIGGER:-PT12H');
