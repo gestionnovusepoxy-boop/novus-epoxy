@@ -127,7 +127,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       const fmt = (p?: string) => (p ?? '').replace(/^\+1/, '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
       const luca = fmt(process.env.ADMIN_PHONE) || '581-307-5983';
       const jason = fmt(process.env.JASON_PHONE) || '581-307-2678';
-      const msg = `✅ Job #${chantierId} terminé! Le chantier de ${c.client_nom}${ville} est complété par l'équipe Novus.\nPour plus d'info: Luca ${luca} ou Jason ${jason}. — Novus Epoxy`;
+      const msg = `Salut Raphaël! ✅ Job #${chantierId} terminé — le chantier de ${c.client_nom}${ville} est complété par l'équipe Novus.\nPour plus d'info: Luca ${luca} ou Jason ${jason}. — Novus Epoxy`;
       sendSMS(bossPhone, msg).catch(() => {});
     }
   }

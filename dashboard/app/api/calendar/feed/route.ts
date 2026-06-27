@@ -102,6 +102,46 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── Jobs Sous-traitance JJ — dans le MÊME feed (un seul abonnement) ──────
+  // Couleur par équipe: Équipe 1 = vert, Équipe 2 = rouge. (Novus = jaune ci-dessus.)
+  const jjRows = await query(
+    `SELECT p.id, p.date, p.slot, p.heure_debut, p.heure_fin, p.equipe, p.jour_numero,
+            c.client_nom, c.adresse, c.ville, c.couleur, c.service, c.client_tel, c.superficie, c.id AS chantier_id
+     FROM jj_planning p JOIN jj_chantiers c ON c.id = p.chantier_id
+     ORDER BY p.date ASC`,
+    [],
+  ).catch(() => []);
+
+  const escJJ = (s: unknown) => String(s ?? '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n');
+  const jjTimes = (slot: string, hd?: string | null, hf?: string | null): [string, string, string] => {
+    const hh = (t?: string | null) => (t ? t.replace(':', '') + '00' : null);
+    if (slot === 'custom' && hd && hf) return [hh(hd)!, hh(hf)!, `${hd}–${hf}`];
+    if (slot === 'journee') return ['080000', '160000', '8h-16h (journée)'];
+    if (slot === 'pm') return ['120000', '160000', '12h-16h (PM)'];
+    return ['080000', '120000', '8h-12h (AM)'];
+  };
+  for (const p of jjRows) {
+    const raw = p.date instanceof Date ? p.date.toISOString() : String(p.date);
+    const ds = raw.slice(0, 10).replace(/-/g, '');
+    const equipe = Number(p.equipe ?? 1);
+    const [start, end, label] = jjTimes(p.slot as string, p.heure_debut as string, p.heure_fin as string);
+    const client = escJJ(p.client_nom);
+    const ville = escJJ(p.ville || '');
+    const addr = escJJ((p.adresse as string) || (p.ville as string) || 'Adresse à confirmer');
+    const sqft = p.superficie != null ? `${Number(p.superficie)} pi²` : '—';
+    const jour = Number(p.jour_numero ?? 1);
+    lines.push('BEGIN:VEVENT');
+    lines.push(`COLOR:${equipe === 2 ? 'red' : 'green'}`);
+    lines.push(`UID:jj-${p.id}@novusepoxy.ca`);
+    lines.push(`DTSTART;TZID=America/Toronto:${ds}T${start}`);
+    lines.push(`DTEND;TZID=America/Toronto:${ds}T${end}`);
+    lines.push(`SUMMARY:${equipe === 2 ? '🔴' : '🟢'} JJ Éq.${equipe} — ${client} · ${ville} (jour ${jour}) ${label}`);
+    lines.push(`LOCATION:${addr}${ville ? ', ' + ville : ''}`);
+    lines.push(`DESCRIPTION:━━ CHANTIER JJ #${p.chantier_id} ━━\\n👤 ${client}\\n📞 ${escJJ(p.client_tel || '')}\\n📍 ${addr}${ville ? ', ' + ville : ''}\\n🎨 Couleur: ${escJJ(p.couleur || '—')}\\n🏗️ Service: ${escJJ(p.service || '—')}\\n📐 ${sqft}\\n👷 Équipe ${equipe} · Jour ${jour}\\n⏰ ${label}`);
+    lines.push('STATUS:CONFIRMED');
+    lines.push('END:VEVENT');
+  }
+
   lines.push('END:VCALENDAR');
 
   const ical = lines.join('\r\n');
