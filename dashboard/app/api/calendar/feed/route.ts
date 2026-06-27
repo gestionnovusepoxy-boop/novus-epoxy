@@ -31,6 +31,8 @@ export async function GET(req: NextRequest) {
     'METHOD:PUBLISH',
     'X-WR-CALNAME:Novus Epoxy — Travaux',
     'X-WR-TIMEZONE:America/Toronto',
+    'X-APPLE-CALENDAR-COLOR:#FFCC00', // JAUNE pour les jobs Novus
+    'COLOR:yellow',
   ];
 
   for (const b of bookings) {
@@ -83,6 +85,7 @@ export async function GET(req: NextRequest) {
       const dayLabel = totalDays > 1 ? `JOUR ${d.idx}/${totalDays}` : `JOUR ${d.idx}`;
       const phase = d.idx === 1 ? 'Preparation et premiere couche' : d.isFinition ? 'Finition et derniere couche' : 'Application';
       lines.push('BEGIN:VEVENT');
+      lines.push('COLOR:yellow');
       lines.push(`UID:novus-j${d.idx}-${b.id}@novusepoxy.ca`);
       lines.push(`DTSTART;TZID=America/Toronto:${d.iCalDate}T${start}`);
       lines.push(`DTEND;TZID=America/Toronto:${d.iCalDate}T${end}`);

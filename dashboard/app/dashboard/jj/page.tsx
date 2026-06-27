@@ -137,7 +137,8 @@ function statutBadge(s: string) {
 }
 
 function fmtDate(d: string): string {
-  const dt = new Date(d + 'T12:00:00');
+  const dt = new Date(String(d).slice(0, 10) + 'T12:00:00');
+  if (isNaN(dt.getTime())) return String(d);
   return dt.toLocaleDateString('fr-CA', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
@@ -310,7 +311,7 @@ function PlanningForm({
 function NewChantierModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [f, setF] = useState({
     client_nom: '', client_tel: '', adresse: '', ville: '', service: '', couleur: '',
-    superficie: '', montant_contrat: '', split_pct: '50', equipe: '',
+    superficie: '', montant_contrat: '', equipe: '',
     depot_recu: false, depot_montant: '', notes: '',
   });
   const [saving, setSaving] = useState(false);
@@ -334,7 +335,6 @@ function NewChantierModal({ onClose, onCreated }: { onClose: () => void; onCreat
           couleur: f.couleur.trim() || null,
           superficie: f.superficie ? Number(f.superficie) : null,
           montant_contrat: f.montant_contrat ? Number(f.montant_contrat) : 0,
-          split_pct: f.split_pct ? Number(f.split_pct) : 50,
           equipe: f.equipe === '' ? null : Number(f.equipe),
           depot_recu: f.depot_recu,
           depot_montant: f.depot_montant ? Number(f.depot_montant) : null,
@@ -388,14 +388,10 @@ function NewChantierModal({ onClose, onCreated }: { onClose: () => void; onCreat
 
         <div className="border-t border-slate-700 pt-3 space-y-3">
           <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Argent & équipe</h4>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelCls}>Contrat total ($)</label>
               <input type="number" inputMode="decimal" value={f.montant_contrat} onChange={e => upd('montant_contrat', e.target.value)} placeholder="4000" className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>Split % Novus</label>
-              <input type="number" inputMode="decimal" value={f.split_pct} onChange={e => upd('split_pct', e.target.value)} placeholder="50" min={0} max={100} className={inputCls} />
             </div>
             <div>
               <label className={labelCls}>Équipe assignée</label>
@@ -406,13 +402,6 @@ function NewChantierModal({ onClose, onCreated }: { onClose: () => void; onCreat
               </select>
             </div>
           </div>
-          {Number(f.montant_contrat) > 0 && (
-            <p className="text-xs text-slate-400">
-              Part Novus ({f.split_pct || 50}%) : <span className="text-amber-400 font-semibold">{formatMoney(Number(f.montant_contrat) * (Number(f.split_pct) || 50) / 100)}</span>
-              {' · '}
-              Part JJ : <span className="text-slate-300 font-semibold">{formatMoney(Number(f.montant_contrat) * (100 - (Number(f.split_pct) || 50)) / 100)}</span>
-            </p>
-          )}
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={f.depot_recu} onChange={e => upd('depot_recu', e.target.checked)} className="w-4 h-4 rounded accent-amber-500" />
@@ -469,7 +458,6 @@ function ChantierDrawer({
     couleur: chantier.couleur ?? '',
     superficie: chantier.superficie ? String(chantier.superficie) : '',
     montant_contrat: String(chantier.montant_contrat),
-    split_pct: String(chantier.split_pct ?? 50),
     equipe: chantier.equipe ? String(chantier.equipe) : '',
     depot_recu: chantier.depot_recu,
     depot_montant: chantier.depot_montant ? String(chantier.depot_montant) : '',
@@ -496,7 +484,6 @@ function ChantierDrawer({
           couleur: f.couleur.trim() || null,
           superficie: f.superficie ? Number(f.superficie) : null,
           montant_contrat: Number(f.montant_contrat),
-          split_pct: f.split_pct ? Number(f.split_pct) : 50,
           equipe: f.equipe === '' ? null : Number(f.equipe),
           depot_recu: f.depot_recu,
           depot_montant: f.depot_montant ? Number(f.depot_montant) : null,
@@ -618,31 +605,13 @@ function ChantierDrawer({
     onChanged();
   }
 
-  // Coûts calculés en direct (matériel = produits, main-d'œuvre = heures loggées)
+  // Split 50/50 FIXE (jamais ajustable) + 2 coûts bruts. Aucun profit/marge.
   const totalProduits = chantier.produits.reduce((s, p) => s + p.quantite * p.cout_unitaire, 0);
   const totalHeures = chantierHeures.reduce((s, h) => s + h.heures, 0);
   const totalHeuresCout = chantierHeures.reduce((s, h) => s + h.heures * h.taux_horaire, 0);
-
-  // Équité / marges — basées sur le split %. Préfère les valeurs API, sinon calcule en direct.
-  const splitPct = chantier.split_pct ?? 50;
-  const partNovus = chantier.part_novus ?? (chantier.montant_contrat * splitPct / 100);
-  const partJj = chantier.part_jj ?? (chantier.montant_contrat * (100 - splitPct) / 100);
-  const coutMo = totalHeuresCout; // main-d'œuvre = heures réelles loggées
-  const coutMat = totalProduits;  // matériel = produits réels
-  const margeNovus = partNovus - coutMo;
-  const margeJj = partJj - coutMat;
-
-  // "Équitable ?" : vert si les 2 marges sont positives et l'écart relatif est raisonnable.
-  const totalMarge = margeNovus + margeJj;
-  const ecartRelatif = totalMarge > 0 ? Math.abs(margeNovus - margeJj) / totalMarge : 1;
-  let equite: { label: string; cls: string; dot: string };
-  if (margeNovus < 0 || margeJj < 0) {
-    equite = { label: 'Déséquilibré — une marge est négative', cls: 'border-red-500/40 bg-red-500/10 text-red-300', dot: 'bg-red-400' };
-  } else if (ecartRelatif > 0.5) {
-    equite = { label: 'Inégal — ajuste le split %', cls: 'border-amber-500/40 bg-amber-500/10 text-amber-300', dot: 'bg-amber-400' };
-  } else {
-    equite = { label: 'Équitable', cls: 'border-green-500/40 bg-green-500/10 text-green-300', dot: 'bg-green-400' };
-  }
+  const coutMat = totalProduits;          // matériel = produits réels (payé par JJ)
+  const coutMo = totalHeuresCout;         // main-d'œuvre = heures réelles (payé par Novus)
+  const partMoitie = chantier.montant_contrat / 2; // 50/50 fixe
 
   const sectionTitle = 'text-white font-bold text-base flex items-center gap-2';
   const sectionCard = 'bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-3';
@@ -719,7 +688,7 @@ function ChantierDrawer({
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className={labelCls}>Statut</label>
                       <select value={f.statut} onChange={e => upd('statut', e.target.value)} className={inputCls}>
@@ -729,10 +698,6 @@ function ChantierDrawer({
                     <div>
                       <label className={labelCls}>Contrat total ($)</label>
                       <input type="number" inputMode="decimal" value={f.montant_contrat} onChange={e => upd('montant_contrat', e.target.value)} className={inputCls} />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Split % Novus</label>
-                      <input type="number" inputMode="decimal" value={f.split_pct} onChange={e => upd('split_pct', e.target.value)} min={0} max={100} className={inputCls} />
                     </div>
                   </div>
 
@@ -799,71 +764,37 @@ function ChantierDrawer({
               )}
             </div>
 
-            {/* ════ ARGENT (split %, marges, équité) ════ */}
+            {/* ════ ARGENT — split 50/50 fixe + coûts de chaque côté ════ */}
             <div className={sectionCard}>
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <h4 className={sectionTitle}>💰 Argent</h4>
-                <div className="flex items-center gap-2">
-                  <span className="text-slate-400 text-xs">Contrat {formatMoney(chantier.montant_contrat)} · Split</span>
-                  <input
-                    type="number"
-                    inputMode="decimal"
-                    value={f.split_pct}
-                    onChange={e => upd('split_pct', e.target.value)}
-                    onBlur={() => { if (Number(f.split_pct) !== splitPct) handleSave(); }}
-                    min={0}
-                    max={100}
-                    className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white text-center focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition"
-                  />
-                  <span className="text-slate-400 text-xs">% Novus</span>
-                </div>
+                <span className="text-slate-400 text-xs">Contrat {formatMoney(chantier.montant_contrat)} · split 50/50</span>
               </div>
 
-              {/* Parts (du split) */}
+              {/* NOVUS : part 50% + coût main-d'œuvre (ses employés) */}
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className={cardCls}>
-                  <div className="text-slate-500 text-xs uppercase tracking-wider">Part Novus ({splitPct}%)</div>
-                  <div className="text-amber-400 font-bold mt-1">{formatMoney(partNovus)}</div>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">Part Novus (50%)</div>
+                  <div className="text-amber-400 font-bold text-lg mt-1">{formatMoney(partMoitie)}</div>
                 </div>
                 <div className={cardCls}>
-                  <div className="text-slate-500 text-xs uppercase tracking-wider">Part JJ ({100 - splitPct}%)</div>
-                  <div className="text-slate-300 font-bold mt-1">{formatMoney(partJj)}</div>
-                </div>
-              </div>
-
-              {/* Coûts réels */}
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className={cardCls}>
-                  <div className="text-slate-500 text-xs uppercase tracking-wider">Coût main-d'œuvre (heures)</div>
-                  <div className="text-white font-bold mt-1">{formatMoney(coutMo)}</div>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">⏱️ Coût main-d'œuvre — mes employés</div>
+                  <div className="text-white font-bold text-lg mt-1">{formatMoney(coutMo)}</div>
                   <div className="text-slate-500 text-xs mt-0.5">{totalHeures}h travaillées</div>
                 </div>
-                <div className={cardCls}>
-                  <div className="text-slate-500 text-xs uppercase tracking-wider">Coût matériel (produits)</div>
-                  <div className="text-white font-bold mt-1">{formatMoney(coutMat)}</div>
-                  <div className="text-slate-500 text-xs mt-0.5">{chantier.produits.length} produit{chantier.produits.length !== 1 ? 's' : ''}</div>
-                </div>
               </div>
 
-              {/* Marges */}
+              {/* JJ : part 50% + coût matériel (payé par JJ) */}
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className={cardCls}>
-                  <div className="text-slate-500 text-xs uppercase tracking-wider">Marge Novus</div>
-                  <div className={`font-bold mt-1 ${margeNovus >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(margeNovus)}</div>
-                  <div className="text-slate-500 text-xs mt-0.5">part − main-d'œuvre</div>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">Part JJ (50%)</div>
+                  <div className="text-slate-300 font-bold text-lg mt-1">{formatMoney(partMoitie)}</div>
                 </div>
                 <div className={cardCls}>
-                  <div className="text-slate-500 text-xs uppercase tracking-wider">Marge JJ</div>
-                  <div className={`font-bold mt-1 ${margeJj >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(margeJj)}</div>
-                  <div className="text-slate-500 text-xs mt-0.5">part − matériel</div>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">📦 Coût matériel — JJ</div>
+                  <div className="text-white font-bold text-lg mt-1">{formatMoney(coutMat)}</div>
+                  <div className="text-slate-500 text-xs mt-0.5">{chantier.produits.length} produit{chantier.produits.length !== 1 ? 's' : ''}</div>
                 </div>
-              </div>
-
-              {/* Équitable ? */}
-              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${equite.cls}`}>
-                <span className={`w-2.5 h-2.5 rounded-full ${equite.dot}`}></span>
-                <span className="text-sm font-semibold">⚖️ Équitable ?</span>
-                <span className="text-sm">— {equite.label}</span>
               </div>
 
               {chantier.depot_recu && (
@@ -1479,6 +1410,16 @@ function HeuresSection({ workers, chantiers, onSummaryRefresh }: { workers: Work
   // Total à payer cette semaine (non payé) + total brut
   const totalAPayer = data.par_worker.reduce((s, pw) => s + pw.montant_non_paye, 0);
 
+  // À facturer à JJ cette semaine = somme des parts 50% des contrats ayant
+  // au moins une journée planifiée dans la semaine [lundi, dimanche].
+  const contratsAFacturer = chantiers.filter(c =>
+    c.planning.some(p => {
+      const d = String(p.date).slice(0, 10);
+      return d >= range.from && d <= range.to;
+    })
+  );
+  const totalAFacturer = contratsAFacturer.reduce((s, c) => s + c.montant_contrat / 2, 0);
+
   return (
     <>
       {ConfirmDialog}
@@ -1540,6 +1481,27 @@ function HeuresSection({ workers, chantiers, onSummaryRefresh }: { workers: Work
                 <span className="text-white font-bold text-sm uppercase tracking-wider">Total à payer cette semaine</span>
                 <span className="text-green-400 font-bold text-xl">{formatMoney(totalAPayer)}</span>
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* ════ 💵 À FACTURER À JJ CETTE SEMAINE (même semaine lundi → dimanche) ════ */}
+        <div className="rounded-xl p-4 border-2 border-amber-500/50 bg-amber-500/10 space-y-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h4 className="text-amber-200 text-sm font-bold">💵 À facturer à JJ cette semaine</h4>
+            <span className="text-amber-300 font-bold text-2xl">{formatMoney(totalAFacturer)}</span>
+          </div>
+          <p className="text-slate-400 text-xs">Somme des parts Novus (50%) des chantiers planifiés du lundi {lundiLabel} au dimanche {dimancheLabel}.</p>
+          {contratsAFacturer.length === 0 ? (
+            <p className="text-slate-500 text-sm">Aucun chantier planifié cette semaine.</p>
+          ) : (
+            <div className="space-y-1">
+              {contratsAFacturer.map(c => (
+                <div key={c.id} className="flex items-center justify-between bg-slate-900/50 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                  <span className="text-white">{c.client_nom}{c.ville ? <span className="text-slate-500"> · {c.ville}</span> : null}</span>
+                  <span className="text-amber-300 font-semibold">{formatMoney(c.montant_contrat / 2)}</span>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -1896,12 +1858,10 @@ export default function JJPage() {
       {/* ── Summary cards ── */}
       {summary && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <MoneyCard label="À recevoir de JJ" value={summary.a_recevoir} color="amber" />
-            <MoneyCard label="Reçu" value={summary.recu} color="green" />
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <MoneyCard label="À recevoir de JJ (50%)" value={summary.a_recevoir} color="amber" />
             <MoneyCard label="Coût main-d'œuvre" value={summary.cout_main_oeuvre} color="white" />
             <MoneyCard label="Coût matériel" value={summary.cout_materiel} color="white" />
-            <MoneyCard label="Marge Novus" value={summary.profit} color={summary.profit >= 0 ? 'emerald' : 'red'} />
             <MoneyCard label="À payer workers (sem.)" value={summary.a_payer_workers} color="blue" />
           </div>
 

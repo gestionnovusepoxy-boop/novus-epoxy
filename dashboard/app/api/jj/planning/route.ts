@@ -60,5 +60,13 @@ export async function POST(req: NextRequest) {
     ],
   );
 
+  // Logique: dès qu'un contrat a une journée à l'horaire, il passe de
+  // 'a_planifier' à 'planifie' automatiquement.
+  await query(
+    `UPDATE jj_chantiers SET statut = 'planifie', updated_at = NOW()
+     WHERE id = $1 AND statut = 'a_planifier'`,
+    [Number(body.chantier_id)],
+  ).catch(() => {});
+
   return NextResponse.json(rows[0], { status: 201 });
 }
