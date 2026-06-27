@@ -76,6 +76,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           return { id: `partner_${sub.partnerId}`, email: sub.email, name: sub.name, role: 'partner', partnerId: sub.partnerId } as unknown as { id: string; email: string; name: string };
         }
 
+        // Accès Sous-traitance JJ (JJ_USERS = "email:motdepasse:Nom" séparés par virgules).
+        // Rôle 'jj' → accès UNIQUEMENT à l'onglet Sous-traitance JJ (jamais le reste de Novus).
+        // Peut voir + logger des heures/photos, mais PAS changer l'argent/contrats (Luca = main finale).
+        const jjUsers = (process.env.JJ_USERS ?? '').split(',').filter(Boolean).map(u => {
+          const [e, p, n] = u.split(':');
+          return { email: e?.toLowerCase().trim(), password: p, name: n ?? e?.split('@')[0] };
+        });
+        const jj = jjUsers.find(j => j.email === email && checkPassword(password, j.password));
+        if (jj) {
+          await auditLog('login', email, true, ip);
+          return { id: `jj_${jj.email}`, email: jj.email, name: jj.name, role: 'jj' } as unknown as { id: string; email: string; name: string };
+        }
+
         await auditLog('login', email, false, ip);
         return null;
       },
@@ -123,8 +136,9 @@ export async function requireAdmin(
 ): Promise<{ ok: true; via: 'session' | 'api-key' } | NextResponse> {
   const session = await auth();
   if (session) {
-    // Un sous-traitant (role 'partner') n'a JAMAIS accès aux routes admin.
-    if ((session.user as { role?: string })?.role === 'partner') {
+    // Un sous-traitant (role 'partner') ou un accès JJ ('jj') n'a JAMAIS accès aux routes admin.
+    const r = (session.user as { role?: string })?.role;
+    if (r === 'partner' || r === 'jj') {
       return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
     }
     return { ok: true, via: 'session' };
@@ -138,6 +152,35 @@ export async function requireAdmin(
     if (a.length === b.length && timingSafeEqual(a, b)) {
       return { ok: true, via: 'api-key' };
     }
+  }
+
+  return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });
+}
+
+/**
+ * Gate pour les routes Sous-traitance JJ (/api/jj/*).
+ * Accepte: admin (session ou x-api-key) OU le rôle 'jj' (accès isolé).
+ * Retourne le rôle effectif pour que la route limite les actions:
+ *   - 'admin' → tout (créer/éditer/supprimer chantiers, argent, planning, workers, produits)
+ *   - 'jj'    → lecture + logger heures + photos seulement (PAS l'argent/contrats/structure)
+ * Le rôle 'partner' est refusé (403).
+ */
+export async function requireJJ(
+  req: NextRequest,
+): Promise<{ ok: true; role: 'admin' | 'jj' } | NextResponse> {
+  const session = await auth();
+  if (session) {
+    const role = (session.user as { role?: string })?.role;
+    if (role === 'partner') return NextResponse.json({ error: 'Accès refusé' }, { status: 403 });
+    return { ok: true, role: role === 'jj' ? 'jj' : 'admin' };
+  }
+
+  const apiKey = req.headers.get('x-api-key') ?? '';
+  const validApiKey = process.env.ADMIN_API_KEY ?? '';
+  if (validApiKey && apiKey) {
+    const a = Buffer.from(apiKey);
+    const b = Buffer.from(validApiKey);
+    if (a.length === b.length && timingSafeEqual(a, b)) return { ok: true, role: 'admin' };
   }
 
   return NextResponse.json({ error: 'Non autorisé' }, { status: 401 });

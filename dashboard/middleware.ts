@@ -44,17 +44,22 @@ export async function middleware(req: NextRequest) {
   // qui n'utilisent que auth() (sans requireAdmin). Fail-open prudent: si la lecture
   // du token échoue, on ne bloque pas (les routes gardent leur propre auth).
   const isPartnerScope = pathname.startsWith('/partenaire') || pathname.startsWith('/api/partenaire');
+  const isJJScope = pathname.startsWith('/dashboard/jj') || pathname.startsWith('/api/jj');
   const isAuthScope = pathname.startsWith('/api/auth') || pathname.startsWith('/auth');
-  if (!isPartnerScope && !isAuthScope && (pathname.startsWith('/dashboard') || pathname.startsWith('/api/'))) {
+  if (!isAuthScope && (pathname.startsWith('/dashboard') || pathname.startsWith('/api/'))) {
     try {
-      const token = await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: process.env.NODE_ENV === 'production' });
-      if ((token as { role?: string } | null)?.role === 'partner') {
-        if (pathname.startsWith('/api/')) {
-          return NextResponse.json({ error: 'Accès refusé — sous-traitant' }, { status: 403 });
-        }
+      const role = (await getToken({ req, secret: process.env.AUTH_SECRET, secureCookie: process.env.NODE_ENV === 'production' }) as { role?: string } | null)?.role;
+      // Sous-traitant 'partner' → uniquement /partenaire.
+      if (role === 'partner' && !isPartnerScope) {
+        if (pathname.startsWith('/api/')) return NextResponse.json({ error: 'Accès refusé — sous-traitant' }, { status: 403 });
         return NextResponse.redirect(new URL('/partenaire', req.url));
       }
-    } catch { /* fail-open: les routes gardent leur propre garde (requireAdmin) */ }
+      // Accès JJ 'jj' → uniquement l'onglet Sous-traitance JJ (/dashboard/jj + /api/jj).
+      if (role === 'jj' && !isJJScope) {
+        if (pathname.startsWith('/api/')) return NextResponse.json({ error: 'Accès refusé — JJ' }, { status: 403 });
+        return NextResponse.redirect(new URL('/dashboard/jj', req.url));
+      }
+    } catch { /* fail-open: les routes gardent leur propre garde (requireAdmin/requireJJ) */ }
   }
 
   // CORS preflight for all public endpoints

@@ -26,6 +26,7 @@ const SECTIONS: NavSection[] = [
       { href: '/dashboard/crm',      label: 'CRM Leads', icon: '\u{1F4C7}' },
       { href: '/dashboard/travaux',  label: 'Rapport projet',   icon: '\u{1F528}' },
       { href: '/dashboard/sous-traitance', label: 'Sous-traitance', icon: '\u{1F91D}' },
+      { href: '/dashboard/jj', label: 'Sous-traitance JJ', icon: '\u{1F3D7}\u{FE0F}' },
     ],
   },
   {
