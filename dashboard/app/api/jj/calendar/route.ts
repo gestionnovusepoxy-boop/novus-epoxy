@@ -11,13 +11,19 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  // Filtre optionnel par équipe → permet un calendrier par couleur sur le cell:
+  //   ?equipe=1 (vert) · ?equipe=2 (rouge) · sans filtre = les deux.
+  const equipeFilter = req.nextUrl.searchParams.get('equipe');
+  const eqNum = equipeFilter === '1' || equipeFilter === '2' ? Number(equipeFilter) : null;
+
   const rows = await query(
     `SELECT p.id, p.date, p.slot, p.heure_debut, p.heure_fin, p.equipe, p.jour_numero,
             c.client_nom, c.adresse, c.ville, c.couleur, c.service, c.client_tel, c.id AS chantier_id
      FROM jj_planning p
      JOIN jj_chantiers c ON c.id = p.chantier_id
+     ${eqNum ? 'WHERE p.equipe = $1' : ''}
      ORDER BY p.date ASC`,
-    [],
+    eqNum ? [eqNum] : [],
   );
 
   const esc = (s: unknown) => String(s ?? '')
@@ -36,10 +42,11 @@ export async function GET(req: NextRequest) {
     'BEGIN:VCALENDAR', 'VERSION:2.0',
     'PRODID:-//Novus Epoxy//Sous-traitance JJ//FR',
     'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
-    'X-WR-CALNAME:Sous-traitance JJ',
+    `X-WR-CALNAME:${eqNum ? `JJ Équipe ${eqNum}` : 'Sous-traitance JJ'}`,
     'X-WR-TIMEZONE:America/Toronto',
-    'X-APPLE-CALENDAR-COLOR:#34C759', // VERT pour les jobs JJ
-    'COLOR:green',
+    // Couleur du calendrier: Équipe 1 = vert, Équipe 2 = rouge (si filtré).
+    `X-APPLE-CALENDAR-COLOR:${eqNum === 2 ? '#FF3B30' : '#34C759'}`,
+    `COLOR:${eqNum === 2 ? 'red' : 'green'}`,
   ];
 
   for (const p of rows) {
@@ -52,7 +59,8 @@ export async function GET(req: NextRequest) {
     const couleur = esc(p.couleur || '');
     const service = esc(p.service || '');
     lines.push('BEGIN:VEVENT');
-    lines.push('COLOR:green');
+    // Couleur par équipe: Équipe 1 = vert, Équipe 2 = rouge.
+    lines.push(`COLOR:${equipe === 2 ? 'red' : 'green'}`);
     lines.push(`UID:jj-${p.id}@novusepoxy.ca`);
     lines.push(`DTSTART;TZID=America/Toronto:${dateStr}T${start}`);
     lines.push(`DTEND;TZID=America/Toronto:${dateStr}T${end}`);
