@@ -7,6 +7,10 @@ function num(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(req: NextRequest, { params }: Params) {
@@ -37,18 +41,28 @@ export async function GET(req: NextRequest, { params }: Params) {
     (s, p) => s + num(p.quantite) * num(p.cout_unitaire),
     0,
   );
+  const montantContrat = num(c.montant_contrat);
+  const splitPct = num(c.split_pct, 50);
+  const partNovus = montantContrat * (splitPct / 100);
+  const partJj = montantContrat * (1 - splitPct / 100);
 
   return NextResponse.json({
     data: {
       ...c,
-      montant_contrat: num(c.montant_contrat),
+      montant_contrat: montantContrat,
       montant_main_oeuvre: num(c.montant_main_oeuvre),
       montant_materiel: num(c.montant_materiel),
       depot_montant: num(c.depot_montant),
+      equipe: c.equipe != null ? Number(c.equipe) : null,
+      split_pct: splitPct,
       planning,
       produits,
-      cout_main_oeuvre: coutMO,
-      cout_materiel: coutMat,
+      cout_main_oeuvre: round2(coutMO),
+      cout_materiel: round2(coutMat),
+      part_novus: round2(partNovus),
+      part_jj: round2(partJj),
+      marge_novus: round2(partNovus - coutMO),
+      marge_jj: round2(partJj - coutMat),
       profit: num(c.montant_main_oeuvre) - coutMO,
     },
   });
@@ -57,7 +71,7 @@ export async function GET(req: NextRequest, { params }: Params) {
 const ALLOWED_PATCH = [
   'client_nom', 'client_tel', 'adresse', 'ville', 'service', 'superficie',
   'montant_contrat', 'montant_main_oeuvre', 'montant_materiel',
-  'depot_recu', 'depot_montant', 'statut', 'paye', 'date_paye', 'notes',
+  'depot_recu', 'depot_montant', 'equipe', 'couleur', 'split_pct', 'statut', 'paye', 'date_paye', 'notes',
 ] as const;
 
 export async function PATCH(req: NextRequest, { params }: Params) {

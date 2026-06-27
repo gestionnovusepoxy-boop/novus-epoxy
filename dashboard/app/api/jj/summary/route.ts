@@ -16,8 +16,8 @@ export async function GET(req: NextRequest) {
       `SELECT
          COUNT(*) AS nb_chantiers,
          COUNT(*) FILTER (WHERE statut = 'a_planifier') AS nb_a_planifier,
-         SUM(montant_main_oeuvre) FILTER (WHERE NOT paye) AS a_recevoir,
-         SUM(montant_main_oeuvre) FILTER (WHERE paye)     AS recu
+         SUM(montant_contrat * COALESCE(split_pct,50)/100) FILTER (WHERE NOT paye) AS a_recevoir,
+         SUM(montant_contrat * COALESCE(split_pct,50)/100) FILTER (WHERE paye)     AS recu
        FROM jj_chantiers`,
       [],
     ),
@@ -46,11 +46,12 @@ export async function GET(req: NextRequest) {
   const totalMO = num(coutMO[0]?.total);
   const totalMat = num(coutMat[0]?.total);
 
-  // profit = what we billed (MO invoiced to JJ) minus what we paid in labour
+  // Marge Novus = part Novus totale (contrat × split %) − ce qu'on paye en main d'œuvre.
   const recu = num(s.recu);
   const aRecevoir = num(s.a_recevoir);
-  const totalFacture = recu + aRecevoir;
-  const profit = totalFacture - totalMO;
+  const totalPartNovus = recu + aRecevoir;
+  const margeNovus = totalPartNovus - totalMO;
+  const profit = margeNovus; // alias rétro-compat
 
   const aPayer = workerStats.reduce((s2, w) => s2 + num(w.montant_du), 0);
 
@@ -60,6 +61,7 @@ export async function GET(req: NextRequest) {
     cout_main_oeuvre: totalMO,
     cout_materiel: totalMat,
     profit,
+    marge_novus: margeNovus,
     a_payer_workers: aPayer,
     nb_chantiers: Number(s.nb_chantiers ?? 0),
     nb_a_planifier: Number(s.nb_a_planifier ?? 0),

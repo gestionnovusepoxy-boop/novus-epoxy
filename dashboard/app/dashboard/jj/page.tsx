@@ -45,10 +45,11 @@ interface Chantier {
   adresse: string | null;
   ville: string | null;
   service: string | null;
+  couleur: string | null;
   superficie: number | null;
   montant_contrat: number;
-  montant_main_oeuvre: number;
-  montant_materiel: number;
+  split_pct: number;
+  equipe: 1 | 2 | null;
   depot_recu: boolean;
   depot_montant: number | null;
   statut: string;
@@ -57,7 +58,10 @@ interface Chantier {
   produits: Produit[];
   cout_main_oeuvre: number;
   cout_materiel: number;
-  profit: number;
+  part_novus: number;
+  part_jj: number;
+  marge_novus: number;
+  marge_jj: number;
   photos?: { type: 'avant' | 'apres'; url: string }[];
 }
 
@@ -305,8 +309,8 @@ function PlanningForm({
 /* ── Nouveau chantier modal ── */
 function NewChantierModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const [f, setF] = useState({
-    client_nom: '', client_tel: '', adresse: '', ville: '', service: '',
-    superficie: '', montant_contrat: '', montant_main_oeuvre: '', montant_materiel: '',
+    client_nom: '', client_tel: '', adresse: '', ville: '', service: '', couleur: '',
+    superficie: '', montant_contrat: '', split_pct: '50', equipe: '',
     depot_recu: false, depot_montant: '', notes: '',
   });
   const [saving, setSaving] = useState(false);
@@ -327,10 +331,11 @@ function NewChantierModal({ onClose, onCreated }: { onClose: () => void; onCreat
           adresse: f.adresse.trim() || null,
           ville: f.ville.trim() || null,
           service: f.service.trim() || null,
+          couleur: f.couleur.trim() || null,
           superficie: f.superficie ? Number(f.superficie) : null,
           montant_contrat: f.montant_contrat ? Number(f.montant_contrat) : 0,
-          montant_main_oeuvre: f.montant_main_oeuvre ? Number(f.montant_main_oeuvre) : 0,
-          montant_materiel: f.montant_materiel ? Number(f.montant_materiel) : 0,
+          split_pct: f.split_pct ? Number(f.split_pct) : 50,
+          equipe: f.equipe === '' ? null : Number(f.equipe),
           depot_recu: f.depot_recu,
           depot_montant: f.depot_montant ? Number(f.depot_montant) : null,
           notes: f.notes.trim() || null,
@@ -375,24 +380,39 @@ function NewChantierModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <label className={labelCls}>Superficie (pi²)</label>
             <input type="number" inputMode="decimal" value={f.superficie} onChange={e => upd('superficie', e.target.value)} placeholder="500" className={inputCls} />
           </div>
+          <div className="col-span-2">
+            <label className={labelCls}>Couleur du plancher</label>
+            <input type="text" value={f.couleur} onChange={e => upd('couleur', e.target.value)} placeholder="Ex: Gris charbon, Cuivre métallique" className={inputCls} />
+          </div>
         </div>
 
         <div className="border-t border-slate-700 pt-3 space-y-3">
-          <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Argent</h4>
+          <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Argent & équipe</h4>
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className={labelCls}>Contrat total ($)</label>
               <input type="number" inputMode="decimal" value={f.montant_contrat} onChange={e => upd('montant_contrat', e.target.value)} placeholder="4000" className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Main-d'œuvre ($)</label>
-              <input type="number" inputMode="decimal" value={f.montant_main_oeuvre} onChange={e => upd('montant_main_oeuvre', e.target.value)} placeholder="2000" className={inputCls} />
+              <label className={labelCls}>Split % Novus</label>
+              <input type="number" inputMode="decimal" value={f.split_pct} onChange={e => upd('split_pct', e.target.value)} placeholder="50" min={0} max={100} className={inputCls} />
             </div>
             <div>
-              <label className={labelCls}>Matériel ($)</label>
-              <input type="number" inputMode="decimal" value={f.montant_materiel} onChange={e => upd('montant_materiel', e.target.value)} placeholder="2000" className={inputCls} />
+              <label className={labelCls}>Équipe assignée</label>
+              <select value={f.equipe} onChange={e => upd('equipe', e.target.value)} className={inputCls}>
+                <option value="">Aucune</option>
+                <option value="1">Équipe 1</option>
+                <option value="2">Équipe 2</option>
+              </select>
             </div>
           </div>
+          {Number(f.montant_contrat) > 0 && (
+            <p className="text-xs text-slate-400">
+              Part Novus ({f.split_pct || 50}%) : <span className="text-amber-400 font-semibold">{formatMoney(Number(f.montant_contrat) * (Number(f.split_pct) || 50) / 100)}</span>
+              {' · '}
+              Part JJ : <span className="text-slate-300 font-semibold">{formatMoney(Number(f.montant_contrat) * (100 - (Number(f.split_pct) || 50)) / 100)}</span>
+            </p>
+          )}
           <div className="flex items-center gap-3">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={f.depot_recu} onChange={e => upd('depot_recu', e.target.checked)} className="w-4 h-4 rounded accent-amber-500" />
@@ -437,7 +457,6 @@ function ChantierDrawer({
   onChanged: () => void;
 }) {
   const { confirm, Dialog: ConfirmDialog } = useConfirm();
-  const [tab, setTab] = useState<'info' | 'planning' | 'produits' | 'photos'>('info');
 
   // Edit fields
   const [editMode, setEditMode] = useState(false);
@@ -447,10 +466,11 @@ function ChantierDrawer({
     adresse: chantier.adresse ?? '',
     ville: chantier.ville ?? '',
     service: chantier.service ?? '',
+    couleur: chantier.couleur ?? '',
     superficie: chantier.superficie ? String(chantier.superficie) : '',
     montant_contrat: String(chantier.montant_contrat),
-    montant_main_oeuvre: String(chantier.montant_main_oeuvre),
-    montant_materiel: String(chantier.montant_materiel),
+    split_pct: String(chantier.split_pct ?? 50),
+    equipe: chantier.equipe ? String(chantier.equipe) : '',
     depot_recu: chantier.depot_recu,
     depot_montant: chantier.depot_montant ? String(chantier.depot_montant) : '',
     statut: chantier.statut,
@@ -473,10 +493,11 @@ function ChantierDrawer({
           adresse: f.adresse.trim() || null,
           ville: f.ville.trim() || null,
           service: f.service.trim() || null,
+          couleur: f.couleur.trim() || null,
           superficie: f.superficie ? Number(f.superficie) : null,
           montant_contrat: Number(f.montant_contrat),
-          montant_main_oeuvre: Number(f.montant_main_oeuvre),
-          montant_materiel: Number(f.montant_materiel),
+          split_pct: f.split_pct ? Number(f.split_pct) : 50,
+          equipe: f.equipe === '' ? null : Number(f.equipe),
           depot_recu: f.depot_recu,
           depot_montant: f.depot_montant ? Number(f.depot_montant) : null,
           statut: f.statut,
@@ -533,6 +554,46 @@ function ChantierDrawer({
     onChanged();
   }
 
+  // Heures sur ce contrat
+  const [chantierHeures, setChantierHeures] = useState<Heure[]>([]);
+  const [teamHeures, setTeamHeures] = useState('');
+  const [teamDate, setTeamDate] = useState(toIso(new Date()));
+  const [savingTeam, setSavingTeam] = useState<1 | 2 | null>(null);
+  const [heuresMsg, setHeuresMsg] = useState('');
+
+  const loadChantierHeures = useCallback(async () => {
+    const res = await fetch(`/api/jj/heures?chantier_id=${chantier.id}`);
+    if (res.ok) { const j = await res.json(); setChantierHeures(j.data ?? []); }
+  }, [chantier.id]);
+
+  useEffect(() => { loadChantierHeures(); }, [loadChantierHeures]);
+
+  async function logTeamHours(team: 1 | 2) {
+    if (!teamHeures || !teamDate) { setHeuresMsg('⚠️ Entre les heures et la date'); return; }
+    setSavingTeam(team); setHeuresMsg('');
+    try {
+      const res = await fetch('/api/jj/heures/equipe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ equipe: team, date: teamDate, heures: parseFloat(teamHeures), chantier_id: chantier.id }),
+      });
+      if (!res.ok) { const d = await res.json().catch(() => ({})); setHeuresMsg('⚠️ ' + ((d as { error?: string }).error ?? 'Erreur')); return; }
+      const noms = workers.filter(w => w.actif && w.equipe === team).map(w => w.nom);
+      setHeuresMsg(`✅ ${teamHeures}h loggées pour Équipe ${team}${noms.length ? ` (${noms.join(', ')})` : ''}`);
+      setTeamHeures('');
+      loadChantierHeures();
+      onChanged();
+    } catch { setHeuresMsg('⚠️ Erreur réseau'); }
+    finally { setSavingTeam(null); }
+  }
+
+  async function deleteHeure(id: number) {
+    if (!(await confirm('Supprimer cette entrée d\'heures ?'))) return;
+    await fetch(`/api/jj/heures/${id}`, { method: 'DELETE' });
+    loadChantierHeures();
+    onChanged();
+  }
+
   // Photos tab
   const fileRef = useRef<HTMLInputElement>(null);
   const [photoType, setPhotoType] = useState<'avant' | 'apres'>('avant');
@@ -557,21 +618,44 @@ function ChantierDrawer({
     onChanged();
   }
 
-  // Sanity checks
+  // Coûts calculés en direct (matériel = produits, main-d'œuvre = heures loggées)
   const totalProduits = chantier.produits.reduce((s, p) => s + p.quantite * p.cout_unitaire, 0);
-  const mainOeuvreOk = chantier.cout_main_oeuvre <= chantier.montant_main_oeuvre;
-  const materielOk = totalProduits <= chantier.montant_materiel;
+  const totalHeures = chantierHeures.reduce((s, h) => s + h.heures, 0);
+  const totalHeuresCout = chantierHeures.reduce((s, h) => s + h.heures * h.taux_horaire, 0);
 
-  const tabCls = (t: string) => `px-3 py-1.5 text-xs font-medium rounded-lg transition ${tab === t ? 'bg-amber-500 text-black' : 'bg-slate-700/60 text-slate-300 hover:text-white hover:bg-slate-700'}`;
+  // Équité / marges — basées sur le split %. Préfère les valeurs API, sinon calcule en direct.
+  const splitPct = chantier.split_pct ?? 50;
+  const partNovus = chantier.part_novus ?? (chantier.montant_contrat * splitPct / 100);
+  const partJj = chantier.part_jj ?? (chantier.montant_contrat * (100 - splitPct) / 100);
+  const coutMo = totalHeuresCout; // main-d'œuvre = heures réelles loggées
+  const coutMat = totalProduits;  // matériel = produits réels
+  const margeNovus = partNovus - coutMo;
+  const margeJj = partJj - coutMat;
+
+  // "Équitable ?" : vert si les 2 marges sont positives et l'écart relatif est raisonnable.
+  const totalMarge = margeNovus + margeJj;
+  const ecartRelatif = totalMarge > 0 ? Math.abs(margeNovus - margeJj) / totalMarge : 1;
+  let equite: { label: string; cls: string; dot: string };
+  if (margeNovus < 0 || margeJj < 0) {
+    equite = { label: 'Déséquilibré — une marge est négative', cls: 'border-red-500/40 bg-red-500/10 text-red-300', dot: 'bg-red-400' };
+  } else if (ecartRelatif > 0.5) {
+    equite = { label: 'Inégal — ajuste le split %', cls: 'border-amber-500/40 bg-amber-500/10 text-amber-300', dot: 'bg-amber-400' };
+  } else {
+    equite = { label: 'Équitable', cls: 'border-green-500/40 bg-green-500/10 text-green-300', dot: 'bg-green-400' };
+  }
+
+  const sectionTitle = 'text-white font-bold text-base flex items-center gap-2';
+  const sectionCard = 'bg-slate-800/60 border border-slate-700 rounded-xl p-4 space-y-3';
 
   return (
     <>
       {ConfirmDialog}
       <div className="fixed inset-0 bg-black/80 z-50 flex" onClick={onClose}>
-        <div className="ml-auto w-full max-w-2xl bg-slate-800 h-full overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
+        <div className="ml-auto w-full max-w-2xl bg-slate-900 h-full overflow-y-auto flex flex-col" onClick={e => e.stopPropagation()}>
           {/* Header */}
-          <div className="flex items-start justify-between p-5 border-b border-slate-700 sticky top-0 bg-slate-800 z-10">
+          <div className="flex items-start justify-between p-5 border-b border-slate-700 sticky top-0 bg-slate-900 z-10">
             <div>
+              <div className="text-amber-400 text-xs font-semibold uppercase tracking-wider">Rapport projet</div>
               <h3 className="text-white font-bold text-lg">{chantier.client_nom}</h3>
               <p className="text-slate-400 text-sm">{[chantier.ville, chantier.adresse].filter(Boolean).join(' — ')}</p>
             </div>
@@ -583,333 +667,413 @@ function ChantierDrawer({
             </div>
           </div>
 
-          {/* Tabs */}
-          <div className="flex gap-2 p-4 border-b border-slate-700 flex-wrap">
-            <button onClick={() => setTab('info')} className={tabCls('info')}>Info & Argent</button>
-            <button onClick={() => setTab('planning')} className={tabCls('planning')}>Planning ({chantier.planning.length})</button>
-            <button onClick={() => setTab('produits')} className={tabCls('produits')}>Produits ({chantier.produits.length})</button>
-            <button onClick={() => setTab('photos')} className={tabCls('photos')}>Photos ({chantier.photos?.length ?? 0})</button>
-          </div>
+          <div className="p-5 space-y-6 flex-1">
 
-          <div className="p-5 space-y-5 flex-1">
+            {/* ════ INFOS ════ */}
+            <div className={sectionCard}>
+              <div className="flex items-center justify-between">
+                <h4 className={sectionTitle}>📋 Infos</h4>
+                {!editMode && (
+                  <button onClick={() => setEditMode(true)} className="text-xs px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition">Modifier</button>
+                )}
+              </div>
 
-            {/* ── Tab info ── */}
-            {tab === 'info' && (
-              <div className="space-y-4">
-                {/* Sanity checks */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className={`rounded-lg p-3 border ${mainOeuvreOk ? 'border-green-500/40 bg-green-500/10' : 'border-red-500/40 bg-red-500/10'}`}>
-                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Main-d'œuvre</div>
-                    <div className={`text-sm font-bold ${mainOeuvreOk ? 'text-green-400' : 'text-red-400'}`}>
-                      {mainOeuvreOk ? '✓ OK' : '⚠ Dépassé'}
+              {editMode ? (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Nom client</label>
+                      <input type="text" value={f.client_nom} onChange={e => upd('client_nom', e.target.value)} className={inputCls} />
                     </div>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      Coût réel: {formatMoney(chantier.cout_main_oeuvre)} / Budget: {formatMoney(chantier.montant_main_oeuvre)}
+                    <div>
+                      <label className={labelCls}>Téléphone</label>
+                      <input type="tel" value={f.client_tel} onChange={e => upd('client_tel', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Adresse</label>
+                      <input type="text" value={f.adresse} onChange={e => upd('adresse', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Ville</label>
+                      <input type="text" value={f.ville} onChange={e => upd('ville', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Service</label>
+                      <input type="text" value={f.service} onChange={e => upd('service', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Couleur du plancher</label>
+                      <input type="text" value={f.couleur} onChange={e => upd('couleur', e.target.value)} placeholder="Gris charbon..." className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Superficie (pi²)</label>
+                      <input type="number" inputMode="decimal" value={f.superficie} onChange={e => upd('superficie', e.target.value)} className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Équipe assignée</label>
+                      <select value={f.equipe} onChange={e => upd('equipe', e.target.value)} className={inputCls}>
+                        <option value="">Aucune</option>
+                        <option value="1">Équipe 1</option>
+                        <option value="2">Équipe 2</option>
+                      </select>
                     </div>
                   </div>
-                  <div className={`rounded-lg p-3 border ${materielOk ? 'border-green-500/40 bg-green-500/10' : 'border-red-500/40 bg-red-500/10'}`}>
-                    <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">Matériel</div>
-                    <div className={`text-sm font-bold ${materielOk ? 'text-green-400' : 'text-red-400'}`}>
-                      {materielOk ? '✓ OK' : '⚠ Dépassé'}
-                    </div>
-                    <div className="text-xs text-slate-500 mt-0.5">
-                      Coût réel: {formatMoney(totalProduits)} / Budget JJ: {formatMoney(chantier.montant_materiel)}
-                    </div>
-                  </div>
-                </div>
 
-                {editMode ? (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className={labelCls}>Nom client</label>
-                        <input type="text" value={f.client_nom} onChange={e => upd('client_nom', e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Téléphone</label>
-                        <input type="tel" value={f.client_tel} onChange={e => upd('client_tel', e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Adresse</label>
-                        <input type="text" value={f.adresse} onChange={e => upd('adresse', e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Ville</label>
-                        <input type="text" value={f.ville} onChange={e => upd('ville', e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Service</label>
-                        <input type="text" value={f.service} onChange={e => upd('service', e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Superficie (pi²)</label>
-                        <input type="number" inputMode="decimal" value={f.superficie} onChange={e => upd('superficie', e.target.value)} className={inputCls} />
-                      </div>
-                    </div>
-
+                  <div className="grid grid-cols-3 gap-3">
                     <div>
                       <label className={labelCls}>Statut</label>
                       <select value={f.statut} onChange={e => upd('statut', e.target.value)} className={inputCls}>
                         {STATUTS_CHANTIER.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                       </select>
                     </div>
-
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className={labelCls}>Contrat total ($)</label>
-                        <input type="number" inputMode="decimal" value={f.montant_contrat} onChange={e => upd('montant_contrat', e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Main-d'œuvre ($)</label>
-                        <input type="number" inputMode="decimal" value={f.montant_main_oeuvre} onChange={e => upd('montant_main_oeuvre', e.target.value)} className={inputCls} />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Matériel ($)</label>
-                        <input type="number" inputMode="decimal" value={f.montant_materiel} onChange={e => upd('montant_materiel', e.target.value)} className={inputCls} />
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={f.depot_recu} onChange={e => upd('depot_recu', e.target.checked)} className="w-4 h-4 rounded accent-amber-500" />
-                        <span className="text-sm text-slate-300">Dépôt reçu de JJ</span>
-                      </label>
-                      {f.depot_recu && (
-                        <input type="number" inputMode="decimal" value={f.depot_montant} onChange={e => upd('depot_montant', e.target.value)} placeholder="Montant" className={`${inputCls} max-w-[130px]`} />
-                      )}
-                    </div>
-
                     <div>
-                      <label className={labelCls}>Notes</label>
-                      <textarea value={f.notes} onChange={e => upd('notes', e.target.value)} rows={3} className={inputCls} />
+                      <label className={labelCls}>Contrat total ($)</label>
+                      <input type="number" inputMode="decimal" value={f.montant_contrat} onChange={e => upd('montant_contrat', e.target.value)} className={inputCls} />
                     </div>
-
-                    {err && <p className="text-red-400 text-sm">{err}</p>}
-
-                    <div className="flex gap-2 justify-end">
-                      <button onClick={() => setEditMode(false)} className="px-4 py-2 text-sm rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition">Annuler</button>
-                      <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black transition">
-                        {saving ? 'Sauvegarde...' : 'Sauvegarder'}
-                      </button>
+                    <div>
+                      <label className={labelCls}>Split % Novus</label>
+                      <input type="number" inputMode="decimal" value={f.split_pct} onChange={e => upd('split_pct', e.target.value)} min={0} max={100} className={inputCls} />
                     </div>
                   </div>
-                ) : (
-                  <div className="space-y-3">
-                    <div className="grid grid-cols-2 gap-3 text-sm">
-                      <div className="space-y-1">
-                        <div className="text-slate-500 text-xs uppercase tracking-wider">Client</div>
-                        <div className="text-white font-medium">{chantier.client_nom}</div>
-                        {chantier.client_tel && <div className="text-slate-400">{chantier.client_tel}</div>}
-                      </div>
-                      <div className="space-y-1">
-                        <div className="text-slate-500 text-xs uppercase tracking-wider">Chantier</div>
-                        <div className="text-white">{chantier.ville || '—'}</div>
-                        {chantier.adresse && <div className="text-slate-400 text-xs">{chantier.adresse}</div>}
-                      </div>
-                      {chantier.service && (
-                        <div>
-                          <div className="text-slate-500 text-xs uppercase tracking-wider">Service</div>
-                          <div className="text-white">{chantier.service}</div>
-                        </div>
-                      )}
-                      {chantier.superficie && (
-                        <div>
-                          <div className="text-slate-500 text-xs uppercase tracking-wider">Superficie</div>
-                          <div className="text-white">{chantier.superficie} pi²</div>
-                        </div>
-                      )}
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-2 text-sm pt-2 border-t border-slate-700">
-                      <div className={cardCls}>
-                        <div className="text-slate-500 text-xs uppercase tracking-wider">Contrat</div>
-                        <div className="text-white font-bold mt-1">{formatMoney(chantier.montant_contrat)}</div>
-                      </div>
-                      <div className={cardCls}>
-                        <div className="text-slate-500 text-xs uppercase tracking-wider">Notre part</div>
-                        <div className="text-amber-400 font-bold mt-1">{formatMoney(chantier.montant_main_oeuvre)}</div>
-                      </div>
-                      <div className={cardCls}>
-                        <div className="text-slate-500 text-xs uppercase tracking-wider">Part JJ</div>
-                        <div className="text-slate-300 font-bold mt-1">{formatMoney(chantier.montant_materiel)}</div>
-                      </div>
-                    </div>
-
-                    {chantier.depot_recu && (
-                      <div className="flex items-center gap-2 text-sm">
-                        <span className="w-2 h-2 rounded-full bg-green-400 inline-block"></span>
-                        <span className="text-green-400">Dépôt reçu de JJ</span>
-                        {chantier.depot_montant && <span className="text-white font-semibold">{formatMoney(chantier.depot_montant)}</span>}
-                      </div>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input type="checkbox" checked={f.depot_recu} onChange={e => upd('depot_recu', e.target.checked)} className="w-4 h-4 rounded accent-amber-500" />
+                      <span className="text-sm text-slate-300">Dépôt reçu de JJ</span>
+                    </label>
+                    {f.depot_recu && (
+                      <input type="number" inputMode="decimal" value={f.depot_montant} onChange={e => upd('depot_montant', e.target.value)} placeholder="Montant" className={`${inputCls} max-w-[130px]`} />
                     )}
+                  </div>
 
-                    {chantier.notes && (
-                      <div className="bg-slate-900/60 rounded-lg p-3 text-sm text-slate-300 border border-slate-700">{chantier.notes}</div>
-                    )}
+                  <div>
+                    <label className={labelCls}>Notes</label>
+                    <textarea value={f.notes} onChange={e => upd('notes', e.target.value)} rows={2} className={inputCls} />
+                  </div>
 
-                    <div className="flex gap-2 pt-2">
-                      <button onClick={() => setEditMode(true)} className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition">
-                        Modifier
-                      </button>
-                      {chantier.statut !== 'paye' && (
-                        <button
-                          onClick={async () => {
-                            await fetch(`/api/jj/chantiers/${chantier.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'paye' }) });
-                            onChanged();
-                          }}
-                          className="px-4 py-2 text-sm font-semibold rounded-lg bg-green-600 hover:bg-green-500 text-white transition"
-                        >
-                          Marquer payé
-                        </button>
-                      )}
+                  {err && <p className="text-red-400 text-sm">{err}</p>}
+
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEditMode(false)} className="px-4 py-2 text-sm rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition">Annuler</button>
+                    <button onClick={handleSave} disabled={saving} className="px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black transition">
+                      {saving ? 'Sauvegarde...' : 'Sauvegarder'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
+                    <div>
+                      <div className="text-slate-500 text-xs uppercase tracking-wider">Client</div>
+                      <div className="text-white font-medium">{chantier.client_nom}</div>
+                      {chantier.client_tel && <div className="text-slate-400 text-xs">{chantier.client_tel}</div>}
+                    </div>
+                    <div>
+                      <div className="text-slate-500 text-xs uppercase tracking-wider">Ville</div>
+                      <div className="text-white">{chantier.ville || '—'}</div>
+                      {chantier.adresse && <div className="text-slate-400 text-xs">{chantier.adresse}</div>}
+                    </div>
+                    <div>
+                      <div className="text-slate-500 text-xs uppercase tracking-wider">Service</div>
+                      <div className="text-white">{chantier.service || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500 text-xs uppercase tracking-wider">Couleur</div>
+                      <div className="text-white">{chantier.couleur || '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500 text-xs uppercase tracking-wider">Superficie</div>
+                      <div className="text-white">{chantier.superficie ? `${chantier.superficie} pi²` : '—'}</div>
+                    </div>
+                    <div>
+                      <div className="text-slate-500 text-xs uppercase tracking-wider">Équipe</div>
+                      <div className={chantier.equipe === 1 ? 'text-blue-300 font-semibold' : chantier.equipe === 2 ? 'text-violet-300 font-semibold' : 'text-slate-400'}>
+                        {chantier.equipe ? `Équipe ${chantier.equipe}` : 'Aucune'}
+                      </div>
                     </div>
                   </div>
-                )}
+                  {chantier.notes && (
+                    <div className="bg-slate-900/60 rounded-lg p-3 text-sm text-slate-300 border border-slate-700">{chantier.notes}</div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* ════ ARGENT (split %, marges, équité) ════ */}
+            <div className={sectionCard}>
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h4 className={sectionTitle}>💰 Argent</h4>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400 text-xs">Contrat {formatMoney(chantier.montant_contrat)} · Split</span>
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={f.split_pct}
+                    onChange={e => upd('split_pct', e.target.value)}
+                    onBlur={() => { if (Number(f.split_pct) !== splitPct) handleSave(); }}
+                    min={0}
+                    max={100}
+                    className="w-16 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-sm text-white text-center focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition"
+                  />
+                  <span className="text-slate-400 text-xs">% Novus</span>
+                </div>
               </div>
-            )}
 
-            {/* ── Tab planning ── */}
-            {tab === 'planning' && (
-              <div className="space-y-4">
-                {chantier.planning.length === 0 ? (
-                  <p className="text-slate-500 text-sm">Aucune journée planifiée</p>
-                ) : (
-                  <div className="space-y-2">
-                    {chantier.planning.map(p => (
-                      <div key={p.id} className="flex items-center justify-between bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2">
-                        <div>
-                          <div className="text-white text-sm font-medium">Jour {p.jour_numero} — {fmtDate(p.date)}</div>
-                          <div className="text-slate-400 text-xs mt-0.5">
-                            Équipe {p.equipe} &nbsp;·&nbsp;
-                            {p.slot === 'custom' && p.heure_debut && p.heure_fin ? `${p.heure_debut}–${p.heure_fin}` : SLOT_LABEL[p.slot]}
-                            {p.notes && ` · ${p.notes}`}
-                          </div>
-                        </div>
-                        <button onClick={() => deletePlanning(p.id)} className="text-red-400 hover:text-red-300 text-lg transition ml-3">&times;</button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {showPlanForm ? (
-                  <PlanningForm chantiers={[]} defaultChantierId={chantier.id} onSaved={() => { setShowPlanForm(false); onChanged(); }} onCancel={() => setShowPlanForm(false)} />
-                ) : (
-                  <button onClick={() => setShowPlanForm(true)} className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition">
-                    + Ajouter une journée
-                  </button>
-                )}
+              {/* Parts (du split) */}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className={cardCls}>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">Part Novus ({splitPct}%)</div>
+                  <div className="text-amber-400 font-bold mt-1">{formatMoney(partNovus)}</div>
+                </div>
+                <div className={cardCls}>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">Part JJ ({100 - splitPct}%)</div>
+                  <div className="text-slate-300 font-bold mt-1">{formatMoney(partJj)}</div>
+                </div>
               </div>
-            )}
 
-            {/* ── Tab produits ── */}
-            {tab === 'produits' && (
-              <div className="space-y-4">
-                {chantier.produits.length > 0 && (
-                  <div>
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="text-slate-400 text-xs uppercase border-b border-slate-700">
-                          <th className="text-left pb-2">Produit</th>
-                          <th className="text-right pb-2">Qté</th>
-                          <th className="text-right pb-2">Prix unit.</th>
-                          <th className="text-right pb-2">Total</th>
-                          <th className="pb-2"></th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {chantier.produits.map(p => (
-                          <tr key={p.id} className="border-b border-slate-800">
-                            <td className="py-2 text-white">{p.nom}</td>
-                            <td className="py-2 text-right text-slate-300">{p.quantite}</td>
-                            <td className="py-2 text-right text-slate-300">{formatMoney(p.cout_unitaire)}</td>
-                            <td className="py-2 text-right text-white font-medium">{formatMoney(p.quantite * p.cout_unitaire)}</td>
-                            <td className="py-2 pl-2">
-                              <button onClick={() => deleteProduit(p.id)} className="text-red-400 hover:text-red-300 text-lg transition">&times;</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          <td colSpan={3} className="pt-2 text-slate-400 text-xs uppercase font-semibold">Total matériel</td>
-                          <td className="pt-2 text-right text-white font-bold">{formatMoney(totalProduits)}</td>
-                          <td></td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                )}
+              {/* Coûts réels */}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className={cardCls}>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">Coût main-d'œuvre (heures)</div>
+                  <div className="text-white font-bold mt-1">{formatMoney(coutMo)}</div>
+                  <div className="text-slate-500 text-xs mt-0.5">{totalHeures}h travaillées</div>
+                </div>
+                <div className={cardCls}>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">Coût matériel (produits)</div>
+                  <div className="text-white font-bold mt-1">{formatMoney(coutMat)}</div>
+                  <div className="text-slate-500 text-xs mt-0.5">{chantier.produits.length} produit{chantier.produits.length !== 1 ? 's' : ''}</div>
+                </div>
+              </div>
 
-                {/* Add product */}
-                <div className="bg-slate-900/60 rounded-lg p-4 border border-slate-700 space-y-3">
-                  <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Ajouter un produit</h4>
-                  <div>
-                    <label className={labelCls}>Catalogue (optionnel)</label>
+              {/* Marges */}
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className={cardCls}>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">Marge Novus</div>
+                  <div className={`font-bold mt-1 ${margeNovus >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(margeNovus)}</div>
+                  <div className="text-slate-500 text-xs mt-0.5">part − main-d'œuvre</div>
+                </div>
+                <div className={cardCls}>
+                  <div className="text-slate-500 text-xs uppercase tracking-wider">Marge JJ</div>
+                  <div className={`font-bold mt-1 ${margeJj >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(margeJj)}</div>
+                  <div className="text-slate-500 text-xs mt-0.5">part − matériel</div>
+                </div>
+              </div>
+
+              {/* Équitable ? */}
+              <div className={`flex items-center gap-2 rounded-lg px-3 py-2 border ${equite.cls}`}>
+                <span className={`w-2.5 h-2.5 rounded-full ${equite.dot}`}></span>
+                <span className="text-sm font-semibold">⚖️ Équitable ?</span>
+                <span className="text-sm">— {equite.label}</span>
+              </div>
+
+              {chantier.depot_recu && (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="w-2 h-2 rounded-full bg-green-400 inline-block"></span>
+                  <span className="text-green-400">Dépôt reçu de JJ</span>
+                  {chantier.depot_montant && <span className="text-white font-semibold">{formatMoney(chantier.depot_montant)}</span>}
+                </div>
+              )}
+              {chantier.statut !== 'paye' && (
+                <button
+                  onClick={async () => {
+                    await fetch(`/api/jj/chantiers/${chantier.id}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ statut: 'paye' }) });
+                    onChanged();
+                  }}
+                  className="px-4 py-2 text-sm font-semibold rounded-lg bg-green-600 hover:bg-green-500 text-white transition"
+                >
+                  Marquer payé
+                </button>
+              )}
+            </div>
+
+            {/* ════ 📦 MATÉRIEL / KITS UTILISÉS (quick-add centerpiece) ════ */}
+            <div className={sectionCard}>
+              <h4 className={sectionTitle}>📦 Matériel / kits utilisés</h4>
+
+              {/* Quick add: catalogue + quantité + Ajouter */}
+              <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700 space-y-3">
+                <div className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-7">
+                    <label className={labelCls}>Produit (catalogue)</label>
                     <select value={prodCatId} onChange={e => selectCatalogue(e.target.value)} className={inputCls}>
-                      <option value="">Sélectionner du catalogue...</option>
+                      <option value="">Choisir un produit...</option>
                       {catalogue.map(c => <option key={c.id} value={c.id}>{c.nom} ({c.unite ?? 'unité'}) — {formatMoney(c.cout_unitaire)}</option>)}
                     </select>
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="col-span-3 sm:col-span-1">
-                      <label className={labelCls}>Nom produit</label>
-                      <input type="text" value={prodNom} onChange={e => setProdNom(e.target.value)} placeholder="Ex: Époxy flake" className={inputCls} />
+                  <div className="col-span-3">
+                    <label className={labelCls}>Quantité</label>
+                    <input type="number" inputMode="decimal" value={prodQte} onChange={e => setProdQte(e.target.value)} min={1} className={inputCls} />
+                  </div>
+                  <div className="col-span-2">
+                    <button onClick={addProduit} disabled={savingProd || !prodNom.trim()} className="w-full px-3 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black transition">
+                      {savingProd ? '...' : 'Ajouter'}
+                    </button>
+                  </div>
+                </div>
+                {/* Produit hors catalogue (optionnel) */}
+                {!prodCatId && (
+                  <div className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-7">
+                      <label className={labelCls}>...ou nom manuel</label>
+                      <input type="text" value={prodNom} onChange={e => setProdNom(e.target.value)} placeholder="Ex: Kit époxy" className={inputCls} />
                     </div>
-                    <div>
-                      <label className={labelCls}>Quantité</label>
-                      <input type="number" inputMode="decimal" value={prodQte} onChange={e => setProdQte(e.target.value)} min={1} className={inputCls} />
-                    </div>
-                    <div>
+                    <div className="col-span-3">
                       <label className={labelCls}>Coût unit. ($)</label>
                       <input type="number" inputMode="decimal" value={prodPrix} onChange={e => setProdPrix(e.target.value)} placeholder="0" className={inputCls} />
                     </div>
                   </div>
-                  <button onClick={addProduit} disabled={savingProd || !prodNom.trim()} className="px-4 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black transition">
-                    {savingProd ? 'Ajout...' : 'Ajouter'}
+                )}
+              </div>
+
+              {/* Liste des produits de ce contrat */}
+              {chantier.produits.length === 0 ? (
+                <p className="text-slate-500 text-sm">Aucun matériel ajouté. Choisis un produit ci-haut → quantité → Ajouter.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {chantier.produits.map(p => (
+                    <div key={p.id} className="flex items-center justify-between bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2">
+                      <div className="text-sm">
+                        <span className="text-white font-medium">{p.nom}</span>
+                        <span className="text-slate-400 ml-2">× {p.quantite}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-white text-sm font-semibold">{formatMoney(p.quantite * p.cout_unitaire)}</span>
+                        <button onClick={() => deleteProduit(p.id)} className="text-red-400 hover:text-red-300 text-lg leading-none">&times;</button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex justify-between pt-2 border-t border-slate-700 text-sm">
+                    <span className="text-slate-400 font-semibold uppercase text-xs tracking-wider">Coût matériel</span>
+                    <span className="text-white font-bold">{formatMoney(totalProduits)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ════ ⏱️ HEURES SUR CE CONTRAT (quick-add centerpiece) ════ */}
+            <div className={sectionCard}>
+              <h4 className={sectionTitle}>⏱️ Heures sur ce contrat</h4>
+
+              {heuresMsg && (
+                <div className="rounded-lg px-3 py-2 bg-green-500/15 border border-green-500/40 text-green-200 text-sm font-medium">{heuresMsg}</div>
+              )}
+
+              {/* Quick log par équipe → tied to this chantier */}
+              <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700 space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={labelCls}>Date</label>
+                    <input type="date" value={teamDate} onChange={e => setTeamDate(e.target.value)} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Heures</label>
+                    <input type="number" inputMode="decimal" value={teamHeures} onChange={e => setTeamHeures(e.target.value)} placeholder="8" step={0.5} min={0} className={inputCls} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button onClick={() => logTeamHours(1)} disabled={savingTeam !== null} className="py-3 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition flex flex-col items-center gap-0.5">
+                    <span>{savingTeam === 1 ? '...' : 'Logger Équipe 1'}</span>
+                    <span className="text-blue-200 text-[10px] font-normal">{workers.filter(w => w.actif && w.equipe === 1).map(w => w.nom).join(', ') || 'personne'}</span>
+                  </button>
+                  <button onClick={() => logTeamHours(2)} disabled={savingTeam !== null} className="py-3 rounded-lg bg-violet-600 hover:bg-violet-500 disabled:opacity-50 text-white font-bold text-sm transition flex flex-col items-center gap-0.5">
+                    <span>{savingTeam === 2 ? '...' : 'Logger Équipe 2'}</span>
+                    <span className="text-violet-200 text-[10px] font-normal">{workers.filter(w => w.actif && w.equipe === 2).map(w => w.nom).join(', ') || 'personne'}</span>
                   </button>
                 </div>
               </div>
-            )}
 
-            {/* ── Tab photos ── */}
-            {tab === 'photos' && (
-              <div className="space-y-4">
-                {chantier.photos && chantier.photos.length > 0 ? (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                    {chantier.photos.map((ph, i) => (
-                      <div key={i} className="relative group rounded-lg overflow-hidden border border-slate-700">
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={ph.url} alt={ph.type} className="w-full aspect-square object-cover" />
-                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-end p-2">
-                          <span className="text-xs text-white font-semibold uppercase bg-slate-800/80 rounded px-1.5 py-0.5">{ph.type}</span>
-                          <button onClick={() => deletePhoto(ph.type, ph.url)} className="ml-auto text-red-400 hover:text-red-300 text-lg">&times;</button>
-                        </div>
+              {/* Heures déjà loggées sur ce chantier */}
+              {chantierHeures.length === 0 ? (
+                <p className="text-slate-500 text-sm">Aucune heure loggée sur ce contrat.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {chantierHeures.map(h => (
+                    <div key={h.id} className="flex items-center justify-between bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+                      <div>
+                        <span className="text-white font-medium">{h.worker_nom}</span>
+                        <span className="text-slate-400 ml-2">{fmtDate(h.date)} · {h.heures}h</span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-slate-500 text-sm">Aucune photo pour ce chantier</p>
-                )}
-
-                <div className="bg-slate-900/60 rounded-lg p-4 border border-slate-700 space-y-3">
-                  <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Ajouter une photo</h4>
-                  <div className="flex gap-3 items-end flex-wrap">
-                    <div>
-                      <label className={labelCls}>Type</label>
-                      <select value={photoType} onChange={e => setPhotoType(e.target.value as 'avant' | 'apres')} className={inputCls}>
-                        <option value="avant">Avant</option>
-                        <option value="apres">Après</option>
-                      </select>
+                      <div className="flex items-center gap-3">
+                        <span className="text-white font-semibold">{formatMoney(h.heures * h.taux_horaire)}</span>
+                        <button onClick={() => deleteHeure(h.id)} className="text-red-400 hover:text-red-300 text-lg leading-none">&times;</button>
+                      </div>
                     </div>
-                    <div>
-                      <label className={labelCls}>Photo</label>
-                      <input ref={fileRef} type="file" accept="image/*" onChange={uploadPhoto} className="text-sm text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-amber-500 file:text-black file:text-xs file:font-semibold hover:file:bg-amber-400 transition" />
-                    </div>
-                    {uploadingPhoto && <span className="text-slate-400 text-sm">Téléversement...</span>}
+                  ))}
+                  <div className="flex justify-between pt-2 border-t border-slate-700 text-sm">
+                    <span className="text-slate-400 font-semibold uppercase text-xs tracking-wider">Coût main-d'œuvre ({totalHeures}h)</span>
+                    <span className="text-white font-bold">{formatMoney(totalHeuresCout)}</span>
                   </div>
                 </div>
+              )}
+            </div>
+
+            {/* ════ 📸 PHOTOS AVANT / APRÈS ════ */}
+            <div className={sectionCard}>
+              <h4 className={sectionTitle}>📸 Photos avant / après</h4>
+              {chantier.photos && chantier.photos.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {chantier.photos.map((ph, i) => (
+                    <div key={i} className="relative group rounded-lg overflow-hidden border border-slate-700">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={ph.url} alt={ph.type} className="w-full aspect-square object-cover" />
+                      <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition flex items-end p-2">
+                        <span className="text-xs text-white font-semibold uppercase bg-slate-800/80 rounded px-1.5 py-0.5">{ph.type}</span>
+                        <button onClick={() => deletePhoto(ph.type, ph.url)} className="ml-auto text-red-400 hover:text-red-300 text-lg">&times;</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-slate-500 text-sm">Aucune photo pour ce contrat.</p>
+              )}
+              <div className="flex gap-3 items-end flex-wrap bg-slate-900/60 rounded-lg p-3 border border-slate-700">
+                <div>
+                  <label className={labelCls}>Type</label>
+                  <select value={photoType} onChange={e => setPhotoType(e.target.value as 'avant' | 'apres')} className={inputCls}>
+                    <option value="avant">Avant</option>
+                    <option value="apres">Après</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Photo</label>
+                  <input ref={fileRef} type="file" accept="image/*" onChange={uploadPhoto} className="text-sm text-slate-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-amber-500 file:text-black file:text-xs file:font-semibold hover:file:bg-amber-400 transition" />
+                </div>
+                {uploadingPhoto && <span className="text-slate-400 text-sm">Téléversement...</span>}
               </div>
-            )}
+            </div>
+
+            {/* ════ 📅 PLANNING ════ */}
+            <div className={sectionCard}>
+              <h4 className={sectionTitle}>📅 Planning</h4>
+              {chantier.planning.length === 0 ? (
+                <p className="text-slate-500 text-sm">Aucune journée planifiée</p>
+              ) : (
+                <div className="space-y-2">
+                  {chantier.planning.map(p => (
+                    <div key={p.id} className="flex items-center justify-between bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2">
+                      <div>
+                        <div className="text-white text-sm font-medium">Jour {p.jour_numero} — {fmtDate(p.date)}</div>
+                        <div className="text-slate-400 text-xs mt-0.5">
+                          Équipe {p.equipe} &nbsp;·&nbsp;
+                          {p.slot === 'custom' && p.heure_debut && p.heure_fin ? `${p.heure_debut}–${p.heure_fin}` : SLOT_LABEL[p.slot]}
+                          {p.notes && ` · ${p.notes}`}
+                        </div>
+                      </div>
+                      <button onClick={() => deletePlanning(p.id)} className="text-red-400 hover:text-red-300 text-lg transition ml-3">&times;</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {showPlanForm ? (
+                <PlanningForm chantiers={[]} defaultChantierId={chantier.id} onSaved={() => { setShowPlanForm(false); onChanged(); }} onCancel={() => setShowPlanForm(false)} />
+              ) : (
+                <button onClick={() => setShowPlanForm(true)} className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition">
+                  + Ajouter une journée
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       </div>
@@ -1306,25 +1470,79 @@ function HeuresSection({ workers, chantiers, onSummaryRefresh }: { workers: Work
 
   const activeWorkers = workers.filter(w => w.actif);
 
+  // Navigation semaine lundi → dimanche
+  function prevWeek() { setRange(r => { const d = new Date(r.from + 'T12:00:00'); d.setDate(d.getDate() - 7); const mon = weekStart(d); return { from: toIso(mon), to: toIso(addDays(mon, 6)) }; }); }
+  function nextWeek() { setRange(r => { const d = new Date(r.to + 'T12:00:00'); d.setDate(d.getDate() + 1); const mon = weekStart(d); return { from: toIso(mon), to: toIso(addDays(mon, 6)) }; }); }
+  const lundiLabel = new Date(range.from + 'T12:00:00').toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' });
+  const dimancheLabel = new Date(range.to + 'T12:00:00').toLocaleDateString('fr-CA', { day: 'numeric', month: 'short' });
+
+  // Total à payer cette semaine (non payé) + total brut
+  const totalAPayer = data.par_worker.reduce((s, pw) => s + pw.montant_non_paye, 0);
+
   return (
     <>
       {ConfirmDialog}
       <div className={`${cardCls} space-y-5`}>
-        <div className="flex items-center justify-between flex-wrap gap-2">
-          <h3 className="text-white font-semibold">⏱️ Heures travaillées</h3>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setRange(r => { const d = new Date(r.from + 'T12:00:00'); d.setDate(d.getDate() - 7); const mon = weekStart(d); return { from: toIso(mon), to: toIso(addDays(mon, 6)) }; })} className="text-slate-300 hover:text-white px-2">◀</button>
-            <span className="text-slate-400 text-xs font-medium">{range.from} → {range.to}</span>
-            <button onClick={() => setRange(r => { const d = new Date(r.to + 'T12:00:00'); d.setDate(d.getDate() + 1); const mon = weekStart(d); return { from: toIso(mon), to: toIso(addDays(mon, 6)) }; })} className="text-slate-300 hover:text-white px-2">▶</button>
-          </div>
-        </div>
-
         {/* Toast */}
         {toast && (
           <div className="rounded-lg px-4 py-3 bg-green-500/15 border border-green-500/40 text-green-200 text-sm font-medium">
             {toast}
           </div>
         )}
+
+        {/* ════ 💰 PAIE DE LA SEMAINE (lundi → dimanche) — bloc principal ════ */}
+        <div className="rounded-xl p-4 border-2 border-green-500/40 bg-green-500/5 space-y-4">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h4 className="text-green-300 text-sm font-bold">💰 Paie de la semaine (lundi → dimanche)</h4>
+            <div className="flex items-center gap-2">
+              <button onClick={prevWeek} className="text-slate-300 hover:text-white px-2 text-lg">◀</button>
+              <span className="text-slate-300 text-xs font-medium whitespace-nowrap">Semaine du lundi {lundiLabel} au dimanche {dimancheLabel}</span>
+              <button onClick={nextWeek} className="text-slate-300 hover:text-white px-2 text-lg">▶</button>
+            </div>
+          </div>
+
+          {loading ? (
+            <p className="text-slate-500 text-sm">Chargement...</p>
+          ) : data.par_worker.length === 0 ? (
+            <p className="text-slate-500 text-sm">Aucune heure loggée cette semaine.</p>
+          ) : (
+            <div className="space-y-2">
+              {data.par_worker.map(pw => {
+                const unpaidEntries = data.data.filter(h => h.worker_id === pw.worker_id && !h.paye);
+                const dejaPaye = pw.montant_non_paye <= 0;
+                return (
+                  <div key={pw.worker_id} className="flex items-center justify-between gap-3 bg-slate-900/60 border border-slate-700 rounded-lg px-4 py-3">
+                    <div className="min-w-0">
+                      <div className="text-white text-sm font-semibold truncate">{pw.nom}</div>
+                      <div className="text-slate-400 text-xs">{pw.total_heures}h cette semaine</div>
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <div className="text-right">
+                        <div className={`text-base font-bold ${dejaPaye ? 'text-green-400' : 'text-white'}`}>{formatMoney(pw.total_montant)}</div>
+                        {!dejaPaye && pw.montant_non_paye !== pw.total_montant && (
+                          <div className="text-red-400 text-xs">À payer: {formatMoney(pw.montant_non_paye)}</div>
+                        )}
+                      </div>
+                      {dejaPaye ? (
+                        <span className="text-green-400 text-xs font-semibold whitespace-nowrap">✓ Payé</span>
+                      ) : (
+                        <button onClick={() => marquerPaye(unpaidEntries.map(e => e.id))} className="text-xs font-semibold px-3 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white transition whitespace-nowrap">
+                          Marquer payé
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* TOTAL */}
+              <div className="flex items-center justify-between pt-3 mt-1 border-t border-slate-700">
+                <span className="text-white font-bold text-sm uppercase tracking-wider">Total à payer cette semaine</span>
+                <span className="text-green-400 font-bold text-xl">{formatMoney(totalAPayer)}</span>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* ── Logger par équipe (action principale) ── */}
         <div className="rounded-xl p-4 border-2 border-amber-500/40 bg-amber-500/5 space-y-4">
@@ -1365,27 +1583,6 @@ function HeuresSection({ workers, chantiers, onSummaryRefresh }: { workers: Work
             </button>
           </div>
         </div>
-
-        {/* Résumé par worker */}
-        {data.par_worker.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {data.par_worker.map(pw => {
-              const unpaidEntries = data.data.filter(h => h.worker_id === pw.worker_id && !h.paye);
-              return (
-                <div key={pw.worker_id} className="bg-slate-900/60 border border-slate-700 rounded-lg p-3">
-                  <div className="text-white text-sm font-medium">{pw.nom}</div>
-                  <div className="text-slate-400 text-xs">{pw.total_heures}h · {formatMoney(pw.total_montant)}</div>
-                  {pw.montant_non_paye > 0 && (
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="text-red-400 text-xs font-semibold">À payer: {formatMoney(pw.montant_non_paye)}</span>
-                      <button onClick={() => marquerPaye(unpaidEntries.map(e => e.id))} className="text-xs px-2 py-1 rounded bg-green-700 hover:bg-green-600 text-white transition">Payé</button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
 
         {/* Form log heures — option secondaire (1 worker à la fois) */}
         <div className="bg-slate-900/60 rounded-lg p-4 border border-slate-700 space-y-3">
@@ -1433,7 +1630,8 @@ function HeuresSection({ workers, chantiers, onSummaryRefresh }: { workers: Work
           </button>
         </div>
 
-        {/* Table */}
+        {/* Détail des entrées de la semaine */}
+        <h4 className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Détail des heures (semaine du lundi {lundiLabel} au dimanche {dimancheLabel})</h4>
         {loading ? (
           <p className="text-slate-500 text-sm">Chargement...</p>
         ) : data.data.length === 0 ? (
@@ -1703,7 +1901,7 @@ export default function JJPage() {
             <MoneyCard label="Reçu" value={summary.recu} color="green" />
             <MoneyCard label="Coût main-d'œuvre" value={summary.cout_main_oeuvre} color="white" />
             <MoneyCard label="Coût matériel" value={summary.cout_materiel} color="white" />
-            <MoneyCard label="Profit net" value={summary.profit} color={summary.profit >= 0 ? 'emerald' : 'red'} />
+            <MoneyCard label="Marge Novus" value={summary.profit} color={summary.profit >= 0 ? 'emerald' : 'red'} />
             <MoneyCard label="À payer workers (sem.)" value={summary.a_payer_workers} color="blue" />
           </div>
 
@@ -1766,7 +1964,7 @@ export default function JJPage() {
                     <div>
                       <div className="text-white font-medium">{c.client_nom}</div>
                       <div className="text-slate-400 text-sm">{[c.ville, c.adresse].filter(Boolean).join(' — ')}</div>
-                      <div className="text-slate-500 text-xs mt-0.5">{c.service} {c.superficie ? `· ${c.superficie} pi²` : ''} · {formatMoney(c.montant_main_oeuvre)} main-d'œuvre</div>
+                      <div className="text-slate-500 text-xs mt-0.5">{[c.service, c.couleur, c.superficie ? `${c.superficie} pi²` : null].filter(Boolean).join(' · ')} · contrat {formatMoney(c.montant_contrat)}</div>
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => setSelectedChantier(c)} className="px-3 py-1.5 text-xs rounded-lg bg-slate-700 hover:bg-slate-600 text-slate-300 transition">Voir détail</button>
@@ -1797,8 +1995,8 @@ export default function JJPage() {
                     <tr className="border-b border-slate-700 text-slate-400 text-xs uppercase tracking-wider">
                       <th className="text-left py-2 pr-3">Client</th>
                       <th className="text-left py-2 pr-3">Ville</th>
-                      <th className="text-right py-2 pr-3">Main-d'œuvre</th>
-                      <th className="text-right py-2 pr-3">Profit</th>
+                      <th className="text-right py-2 pr-3">Contrat</th>
+                      <th className="text-center py-2 pr-3">Équipe</th>
                       <th className="text-center py-2 pr-3">Planning</th>
                       <th className="text-center py-2">Statut</th>
                     </tr>
@@ -1813,8 +2011,14 @@ export default function JJPage() {
                             {c.client_tel && <div className="text-slate-500 text-xs">{c.client_tel}</div>}
                           </td>
                           <td className="py-2.5 pr-3 text-slate-300">{c.ville || '—'}</td>
-                          <td className="py-2.5 pr-3 text-right text-amber-400 font-semibold">{formatMoney(c.montant_main_oeuvre)}</td>
-                          <td className={`py-2.5 pr-3 text-right font-semibold ${c.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>{formatMoney(c.profit)}</td>
+                          <td className="py-2.5 pr-3 text-right text-white font-semibold">{formatMoney(c.montant_contrat)}</td>
+                          <td className="py-2.5 pr-3 text-center">
+                            {c.equipe ? (
+                              <span className={`text-xs font-medium ${c.equipe === 1 ? 'text-blue-300' : 'text-violet-300'}`}>Éq. {c.equipe}</span>
+                            ) : (
+                              <span className="text-slate-600 text-xs">—</span>
+                            )}
+                          </td>
                           <td className="py-2.5 pr-3 text-center text-slate-400 text-xs">
                             {c.planning.length > 0 ? (
                               <span className="text-cyan-400">{c.planning.length} jour{c.planning.length > 1 ? 's' : ''}</span>
