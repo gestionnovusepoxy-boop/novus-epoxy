@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin, requireJJ } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { sendSMS } from '@/lib/sms';
 
 function num(v: unknown, fallback = 0): number {
   const n = typeof v === 'number' ? v : Number(v);
@@ -87,6 +88,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const body = await req.json().catch(() => null);
   if (!body) return NextResponse.json({ error: 'Corps invalide' }, { status: 400 });
 
+  // Détecte la transition vers 'complete' pour aviser le boss de JJ par texto.
+  let wasComplete = false;
+  if (body.statut === 'complete') {
+    const prev = await query(`SELECT statut FROM jj_chantiers WHERE id = $1`, [chantierId]).catch(() => []);
+    wasComplete = prev[0]?.statut === 'complete';
+  }
+
   const setClauses: string[] = ['updated_at = NOW()'];
   const vals: unknown[] = [];
 
@@ -108,6 +116,22 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   );
 
   if (rows.length === 0) return NextResponse.json({ error: 'Chantier introuvable' }, { status: 404 });
+
+  // Job marqué terminé → texto au boss de JJ (numéro dans JJ_BOSS_PHONE).
+  if (body.statut === 'complete' && !wasComplete) {
+    const c = rows[0] as Record<string, unknown>;
+    // Raphaël, boss de JJ — défaut, surchargeable via JJ_BOSS_PHONE.
+    const bossPhone = process.env.JJ_BOSS_PHONE || '+14189992226';
+    if (bossPhone) {
+      const ville = c.ville ? ` à ${c.ville}` : '';
+      const fmt = (p?: string) => (p ?? '').replace(/^\+1/, '').replace(/(\d{3})(\d{3})(\d{4})/, '$1-$2-$3');
+      const luca = fmt(process.env.ADMIN_PHONE) || '581-307-5983';
+      const jason = fmt(process.env.JASON_PHONE) || '581-307-2678';
+      const msg = `✅ Job #${chantierId} terminé! Le chantier de ${c.client_nom}${ville} est complété par l'équipe Novus.\nPour plus d'info: Luca ${luca} ou Jason ${jason}. — Novus Epoxy`;
+      sendSMS(bossPhone, msg).catch(() => {});
+    }
+  }
+
   return NextResponse.json(rows[0]);
 }
 
