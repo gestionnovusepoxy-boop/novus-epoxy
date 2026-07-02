@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin, requireJJ } from '@/lib/auth';
+import { requireJJ } from '@/lib/auth';
 import { query } from '@/lib/db';
 
 export async function GET(req: NextRequest) {
@@ -31,7 +31,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireAdmin(req);
+  const gate = await requireJJ(req);
   if (gate instanceof NextResponse) return gate;
 
   const body = await req.json().catch(() => null);

@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   const gate = await requireJJ(req);
   if (gate instanceof NextResponse) return gate;
 
-  const [chantierStats, coutMO, coutMat, workerStats] = await Promise.all([
+  const [chantierStats, coutMO, coutMat, workerStats, projetsStats, depensesStats] = await Promise.all([
     query(
       `SELECT
          COUNT(*) AS nb_chantiers,
@@ -40,6 +40,17 @@ export async function GET(req: NextRequest) {
        ORDER BY w.nom ASC`,
       [],
     ),
+    query(
+      `SELECT COALESCE(SUM(montant_contrat),0) AS sous_total_projets FROM jj_chantiers`,
+      [],
+    ),
+    query(
+      `SELECT
+         COALESCE(SUM(sous_total) FILTER (WHERE NOT rembourse),0) AS jj_a_rembourser,
+         COALESCE(SUM(sous_total) FILTER (WHERE rembourse),0)     AS jj_deja_rembourse
+       FROM jj_depenses`,
+      [],
+    ),
   ]);
 
   const s = chantierStats[0] ?? {};
@@ -55,7 +66,14 @@ export async function GET(req: NextRequest) {
 
   const aPayer = workerStats.reduce((s2, w) => s2 + num(w.montant_du), 0);
 
+  const sousTotalProjets = num(projetsStats[0]?.sous_total_projets);
+  const jjARembourser = num(depensesStats[0]?.jj_a_rembourser);
+  const jjDejaRembourse = num(depensesStats[0]?.jj_deja_rembourse);
+  // Ce que JJ doit à Novus = la part Novus non payée (50%) + les dépenses matériel à rembourser.
+  const totalDuParJj = aRecevoir + jjARembourser;
+
   return NextResponse.json({
+    role: gate.role,
     a_recevoir: aRecevoir,
     recu,
     cout_main_oeuvre: totalMO,
@@ -63,6 +81,10 @@ export async function GET(req: NextRequest) {
     profit,
     marge_novus: margeNovus,
     a_payer_workers: aPayer,
+    sous_total_projets: sousTotalProjets,
+    jj_a_rembourser: jjARembourser,
+    jj_deja_rembourse: jjDejaRembourse,
+    total_du_par_jj: totalDuParJj,
     nb_chantiers: Number(s.nb_chantiers ?? 0),
     nb_a_planifier: Number(s.nb_a_planifier ?? 0),
     par_worker: workerStats.map(w => ({

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin, requireJJ } from '@/lib/auth';
+import { requireJJ } from '@/lib/auth';
 import { query } from '@/lib/db';
 import { sendSMS } from '@/lib/sms';
 
@@ -28,14 +28,19 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (rows.length === 0) return NextResponse.json({ error: 'Chantier introuvable' }, { status: 404 });
   const c = rows[0];
 
-  const [planning, produits, heures] = await Promise.all([
+  const [planning, produits, heures, depenses] = await Promise.all([
     query(`SELECT * FROM jj_planning WHERE chantier_id = $1 ORDER BY date ASC`, [chantierId]),
     query(`SELECT * FROM jj_produits WHERE chantier_id = $1`, [chantierId]),
     query(
       `SELECT SUM(heures * taux_horaire) AS cout FROM jj_heures WHERE chantier_id = $1`,
       [chantierId],
     ),
+    query(`SELECT * FROM jj_depenses WHERE chantier_id = $1 ORDER BY created_at DESC`, [chantierId]),
   ]);
+
+  const duRembourser = (depenses as Array<Record<string, unknown>>)
+    .filter(d => !d.rembourse)
+    .reduce((s, d) => s + num(d.sous_total), 0);
 
   const coutMO = num(heures[0]?.cout);
   const coutMat = (produits as Array<Record<string, unknown>>).reduce(
@@ -58,6 +63,8 @@ export async function GET(req: NextRequest, { params }: Params) {
       split_pct: splitPct,
       planning,
       produits,
+      depenses: (depenses as Array<Record<string, unknown>>).map(d => ({ ...d, sous_total: num(d.sous_total) })),
+      du_rembourser: round2(duRembourser),
       cout_main_oeuvre: round2(coutMO),
       cout_materiel: round2(coutMat),
       part_novus: round2(partNovus),
@@ -76,7 +83,7 @@ const ALLOWED_PATCH = [
 ] as const;
 
 export async function PATCH(req: NextRequest, { params }: Params) {
-  const gate = await requireAdmin(req);
+  const gate = await requireJJ(req);
   if (gate instanceof NextResponse) return gate;
 
   const { id } = await params;
@@ -136,7 +143,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 }
 
 export async function DELETE(req: NextRequest, { params }: Params) {
-  const gate = await requireAdmin(req);
+  const gate = await requireJJ(req);
   if (gate instanceof NextResponse) return gate;
 
   const { id } = await params;

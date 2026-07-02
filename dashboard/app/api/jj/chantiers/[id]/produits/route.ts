@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin } from '@/lib/auth';
+import { requireJJ } from '@/lib/auth';
 import { query } from '@/lib/db';
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function POST(req: NextRequest, { params }: Params) {
-  const gate = await requireAdmin(req);
+  const gate = await requireJJ(req);
   if (gate instanceof NextResponse) return gate;
 
   const { id } = await params;

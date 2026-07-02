@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAdmin, requireJJ } from '@/lib/auth';
+import { requireJJ } from '@/lib/auth';
 import { query } from '@/lib/db';
 
 function num(v: unknown, fallback = 0): number {
@@ -94,7 +94,7 @@ const ALLOWED_CREATE = [
 ] as const;
 
 export async function POST(req: NextRequest) {
-  const gate = await requireAdmin(req);
+  const gate = await requireJJ(req);
   if (gate instanceof NextResponse) return gate;
 
   const body = await req.json().catch(() => null);

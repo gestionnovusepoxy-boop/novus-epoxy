@@ -12,6 +12,9 @@ interface Summary {
   cout_materiel: number;
   profit: number;
   a_payer_workers: number;
+  sous_total_projets: number;
+  jj_a_rembourser: number;
+  total_du_par_jj: number;
   par_worker: { worker_id: number; nom: string; heures_non_payees: number; montant_du: number }[];
   nb_chantiers: number;
   nb_a_planifier: number;
@@ -56,6 +59,7 @@ interface Chantier {
   notes: string | null;
   planning: Planning[];
   produits: Produit[];
+  depenses?: Depense[];
   cout_main_oeuvre: number;
   cout_materiel: number;
   part_novus: number;
@@ -63,6 +67,13 @@ interface Chantier {
   marge_novus: number;
   marge_jj: number;
   photos?: { type: 'avant' | 'apres'; url: string }[];
+}
+
+interface Depense {
+  id: number;
+  description: string;
+  sous_total: number;
+  rembourse: boolean;
 }
 
 interface Worker {
@@ -381,8 +392,9 @@ function NewChantierModal({ onClose, onCreated }: { onClose: () => void; onCreat
             <input type="number" inputMode="decimal" value={f.superficie} onChange={e => upd('superficie', e.target.value)} placeholder="500" className={inputCls} />
           </div>
           <div className="col-span-2">
-            <label className={labelCls}>Couleur du plancher</label>
-            <input type="text" value={f.couleur} onChange={e => upd('couleur', e.target.value)} placeholder="Ex: Gris charbon, Cuivre métallique" className={inputCls} />
+            <label className={labelCls}>Couleur(s) du plancher</label>
+            <input type="text" value={f.couleur} onChange={e => upd('couleur', e.target.value)} placeholder="ex: Gris charbon, ou mélange flake" className={inputCls} />
+            <p className="text-slate-500 text-xs mt-1">Les couleurs appliquées sur la job (texte libre, plusieurs couleurs OK).</p>
           </div>
         </div>
 
@@ -541,6 +553,40 @@ function ChantierDrawer({
     onChanged();
   }
 
+  // Factures avancées par Novus (matériel payé de sa poche, remboursé par JJ)
+  const [depDesc, setDepDesc] = useState('');
+  const [depMontant, setDepMontant] = useState('');
+  const [savingDep, setSavingDep] = useState(false);
+
+  async function addDepense() {
+    if (!depDesc.trim() || !depMontant) return;
+    setSavingDep(true);
+    try {
+      await fetch(`/api/jj/chantiers/${chantier.id}/depenses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: depDesc.trim(), sous_total: Number(depMontant) || 0 }),
+      });
+      setDepDesc(''); setDepMontant('');
+      onChanged();
+    } finally { setSavingDep(false); }
+  }
+
+  async function toggleDepense(d: Depense) {
+    await fetch(`/api/jj/depenses/${d.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ rembourse: !d.rembourse }),
+    });
+    onChanged();
+  }
+
+  async function deleteDepense(id: number) {
+    if (!(await confirm('Supprimer cette facture ?'))) return;
+    await fetch(`/api/jj/depenses/${id}`, { method: 'DELETE' });
+    onChanged();
+  }
+
   // Heures sur ce contrat
   const [chantierHeures, setChantierHeures] = useState<Heure[]>([]);
   const [teamHeures, setTeamHeures] = useState('');
@@ -611,6 +657,11 @@ function ChantierDrawer({
   const totalHeuresCout = chantierHeures.reduce((s, h) => s + h.heures * h.taux_horaire, 0);
   const coutMat = totalProduits;          // matériel = produits réels (payé par JJ)
   const coutMo = totalHeuresCout;         // main-d'œuvre = heures réelles (payé par Novus)
+
+  // Factures avancées par Novus (JJ rembourse) — sous-totaux seulement, sans taxes.
+  const depenses = chantier.depenses ?? [];
+  const jjADevoir = depenses.filter(d => !d.rembourse).reduce((s, d) => s + Number(d.sous_total), 0);
+  const dejaRembourse = depenses.filter(d => d.rembourse).reduce((s, d) => s + Number(d.sous_total), 0);
   const partMoitie = chantier.montant_contrat / 2; // 50/50 fixe
 
   const sectionTitle = 'text-white font-bold text-base flex items-center gap-2';
@@ -671,8 +722,8 @@ function ChantierDrawer({
                       <input type="text" value={f.service} onChange={e => upd('service', e.target.value)} className={inputCls} />
                     </div>
                     <div>
-                      <label className={labelCls}>Couleur du plancher</label>
-                      <input type="text" value={f.couleur} onChange={e => upd('couleur', e.target.value)} placeholder="Gris charbon..." className={inputCls} />
+                      <label className={labelCls}>Couleur(s) du plancher</label>
+                      <input type="text" value={f.couleur} onChange={e => upd('couleur', e.target.value)} placeholder="ex: Gris charbon, ou mélange flake" className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Superficie (pi²)</label>
@@ -743,8 +794,8 @@ function ChantierDrawer({
                       <div className="text-white">{chantier.service || '—'}</div>
                     </div>
                     <div>
-                      <div className="text-slate-500 text-xs uppercase tracking-wider">Couleur</div>
-                      <div className="text-white">{chantier.couleur || '—'}</div>
+                      <div className="text-slate-500 text-xs uppercase tracking-wider">Couleur(s) du plancher</div>
+                      <div className={chantier.couleur ? 'text-amber-300 font-medium' : 'text-slate-500'}>{chantier.couleur || '—'}</div>
                     </div>
                     <div>
                       <div className="text-slate-500 text-xs uppercase tracking-wider">Superficie</div>
@@ -876,6 +927,69 @@ function ChantierDrawer({
                   <div className="flex justify-between pt-2 border-t border-slate-700 text-sm">
                     <span className="text-slate-400 font-semibold uppercase text-xs tracking-wider">Coût matériel</span>
                     <span className="text-white font-bold">{formatMoney(totalProduits)}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* ════ 🧾 FACTURES AVANCÉES PAR NOVUS — JJ REMBOURSE ════ */}
+            <div className={sectionCard}>
+              <h4 className={sectionTitle}>🧾 Factures avancées par Novus — JJ rembourse</h4>
+              <p className="text-slate-400 text-sm">Matériel que j&apos;ai payé de ma poche (Canac, etc.) que JJ doit me rembourser.</p>
+
+              {/* Quick-add */}
+              <div className="bg-slate-900/60 rounded-lg p-3 border border-slate-700 space-y-2">
+                <div className="grid grid-cols-12 gap-2 items-end">
+                  <div className="col-span-7">
+                    <label className={labelCls}>Description</label>
+                    <input type="text" value={depDesc} onChange={e => setDepDesc(e.target.value)} placeholder="Ex: Sacs de flake — Canac" className={inputCls} />
+                  </div>
+                  <div className="col-span-3">
+                    <label className={labelCls}>Sous-total ($)</label>
+                    <input type="number" inputMode="decimal" value={depMontant} onChange={e => setDepMontant(e.target.value)} placeholder="0" className={inputCls} />
+                  </div>
+                  <div className="col-span-2">
+                    <button onClick={addDepense} disabled={savingDep || !depDesc.trim() || !depMontant} className="w-full px-3 py-2 text-sm font-semibold rounded-lg bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-black transition">
+                      {savingDep ? '...' : 'Ajouter'}
+                    </button>
+                  </div>
+                </div>
+                <p className="text-slate-500 text-xs">Les taxes s&apos;ajoutent sur ta facture finale à JJ.</p>
+              </div>
+
+              {/* Liste des factures */}
+              {depenses.length === 0 ? (
+                <p className="text-slate-500 text-sm">Aucune facture avancée. Ajoute une dépense payée de ta poche ci-haut.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {depenses.map(d => (
+                    <div key={d.id} className="flex items-center justify-between gap-3 bg-slate-900/60 border border-slate-700 rounded-lg px-3 py-2">
+                      <div className="min-w-0 text-sm">
+                        <span className="text-white font-medium truncate">{d.description}</span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-white text-sm font-bold">{formatMoney(Number(d.sous_total))}</span>
+                        <button
+                          onClick={() => toggleDepense(d)}
+                          className={`text-xs font-semibold px-3 py-1.5 rounded-lg transition whitespace-nowrap ${d.rembourse ? 'bg-green-600 hover:bg-green-500 text-white' : 'bg-slate-700 hover:bg-slate-600 text-slate-300'}`}
+                        >
+                          {d.rembourse ? '✓ Remboursé' : 'À rembourser'}
+                        </button>
+                        <button onClick={() => deleteDepense(d.id)} className="text-red-400 hover:text-red-300 text-lg leading-none">&times;</button>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex flex-col gap-1 pt-2 border-t border-slate-700 text-sm">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-400 font-semibold uppercase text-xs tracking-wider">JJ me doit</span>
+                      <span className="text-amber-400 font-bold text-lg">{formatMoney(jjADevoir)}</span>
+                    </div>
+                    {dejaRembourse > 0 && (
+                      <div className="flex justify-between items-center">
+                        <span className="text-slate-500 text-xs">Déjà remboursé</span>
+                        <span className="text-slate-500">{formatMoney(dejaRembourse)}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
@@ -1644,6 +1758,104 @@ function HeuresSection({ workers, chantiers, onSummaryRefresh }: { workers: Work
   );
 }
 
+/* ── Facturation à JJ (jobs terminés à facturer) ── */
+interface FacturationJob {
+  id: number;
+  client_nom: string;
+  ville: string | null;
+  part_novus: number;
+  remboursements: number;
+  du: number;
+}
+interface FacturationData {
+  jobs: FacturationJob[];
+  total: number;
+}
+
+function FacturationSection({ onChanged }: { onChanged: () => void }) {
+  const { confirm, Dialog: ConfirmDialog } = useConfirm();
+  const [data, setData] = useState<FacturationData>({ jobs: [], total: 0 });
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const res = await fetch('/api/jj/facturation');
+    if (res.ok) { const j = await res.json(); setData({ jobs: j.jobs ?? [], total: j.total ?? 0 }); }
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function marquerFacture(job: FacturationJob) {
+    if (!(await confirm(`Marquer « ${job.client_nom} » comme facturé à JJ ? Il sera retiré de la liste.`))) return;
+    setBusyId(job.id);
+    try {
+      await fetch(`/api/jj/chantiers/${job.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paye: true }),
+      });
+      await load();
+      onChanged();
+    } finally { setBusyId(null); }
+  }
+
+  return (
+    <>
+      {ConfirmDialog}
+      <div className={`${cardCls} space-y-4`}>
+        <div>
+          <h3 className="text-white font-semibold">🧾 Facturation à JJ — jobs terminés</h3>
+          <p className="text-slate-400 text-sm mt-0.5">Jobs complétés pas encore facturés. Envoie ta facture à JJ, puis « Marquer facturé ».</p>
+        </div>
+
+        {loading ? (
+          <p className="text-slate-500 text-sm">Chargement...</p>
+        ) : data.jobs.length === 0 ? (
+          <p className="text-slate-500 text-sm">Aucun job terminé à facturer pour l&apos;instant.</p>
+        ) : (
+          <div className="space-y-2">
+            {data.jobs.map(job => (
+              <div key={job.id} className="flex items-center justify-between gap-3 bg-slate-900/60 border border-slate-700 rounded-lg px-4 py-3">
+                <div className="min-w-0">
+                  <div className="text-white text-sm font-medium truncate">
+                    {job.client_nom}
+                    {job.ville && <span className="text-slate-500"> ({job.ville})</span>}
+                  </div>
+                  <div className="text-slate-500 text-xs mt-0.5">
+                    dont 50%: {formatMoney(Number(job.part_novus))}
+                    {Number(job.remboursements) > 0 && <> + remb: {formatMoney(Number(job.remboursements))}</>}
+                  </div>
+                </div>
+                <div className="flex items-center gap-3 shrink-0">
+                  <span className="text-amber-400 text-base font-bold whitespace-nowrap">{formatMoney(Number(job.du))}</span>
+                  <button
+                    onClick={() => marquerFacture(job)}
+                    disabled={busyId === job.id}
+                    className="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-200 transition whitespace-nowrap"
+                  >
+                    {busyId === job.id ? '...' : 'Marquer facturé'}
+                  </button>
+                </div>
+              </div>
+            ))}
+
+            {/* Total */}
+            <div className="flex items-center justify-between pt-3 mt-1 border-t border-slate-700">
+              <div>
+                <div className="text-white font-bold text-sm uppercase tracking-wider">Total à facturer à JJ</div>
+                <div className="text-slate-500 text-xs">(+ taxes sur ta facture finale)</div>
+              </div>
+              <span className="text-amber-400 font-bold text-2xl">{formatMoney(Number(data.total))}</span>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
 /* ─────────────────────────── WEEK VIEW ─────────────────────────── */
 
 function WeekView({ chantiers, onChantierClick }: { chantiers: Chantier[]; onChantierClick: (c: Chantier) => void }) {
@@ -1771,7 +1983,7 @@ export default function JJPage() {
   const [planFormId, setPlanFormId] = useState<number | null>(null);
 
   // Active tab/section
-  const [section, setSection] = useState<'semaine' | 'chantiers' | 'workers' | 'heures' | 'catalogue'>('semaine');
+  const [section, setSection] = useState<'semaine' | 'chantiers' | 'facturation' | 'workers' | 'heures' | 'catalogue'>('semaine');
 
   const loadSummary = useCallback(async () => {
     const res = await fetch('/api/jj/summary');
@@ -1858,8 +2070,14 @@ export default function JJPage() {
       {/* ── Summary cards ── */}
       {summary && (
         <div className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <MoneyCard label="À recevoir de JJ (50%)" value={summary.a_recevoir} color="amber" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+            <MoneyCard
+              label="À recevoir de JJ"
+              value={summary.total_du_par_jj}
+              color="amber"
+              sub={summary.jj_a_rembourser > 0 ? `dont remboursements: ${formatMoney(summary.jj_a_rembourser)}` : undefined}
+            />
+            <MoneyCard label="Sous-total contrats" value={summary.sous_total_projets} color="white" />
             <MoneyCard label="Coût main-d'œuvre" value={summary.cout_main_oeuvre} color="white" />
             <MoneyCard label="Coût matériel" value={summary.cout_materiel} color="white" />
             <MoneyCard label="À payer workers (sem.)" value={summary.a_payer_workers} color="blue" />
@@ -1901,6 +2119,7 @@ export default function JJPage() {
         <button onClick={() => setSection('chantiers')} className={navTabCls('chantiers')}>
           📋 Chantiers {aPlanifier.length > 0 && <span className="ml-1.5 bg-red-500 text-white text-xs rounded-full w-5 h-5 inline-flex items-center justify-center">{aPlanifier.length}</span>}
         </button>
+        <button onClick={() => setSection('facturation')} className={navTabCls('facturation')}>🧾 Facturation à JJ</button>
         <button onClick={() => setSection('heures')} className={navTabCls('heures')}>⏱️ Heures</button>
         <button onClick={() => setSection('workers')} className={navTabCls('workers')}>👷 Workers</button>
         <button onClick={() => setSection('catalogue')} className={navTabCls('catalogue')}>📦 Catalogue</button>
@@ -2003,6 +2222,11 @@ export default function JJPage() {
       {/* ── Section: Heures ── */}
       {section === 'heures' && (
         <HeuresSection workers={workers} chantiers={chantiers} onSummaryRefresh={loadSummary} />
+      )}
+
+      {/* ── Section: Facturation à JJ ── */}
+      {section === 'facturation' && (
+        <FacturationSection onChanged={loadAll} />
       )}
 
       {/* ── Section: Workers ── */}
